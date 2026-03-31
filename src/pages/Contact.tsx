@@ -104,13 +104,13 @@ const Contact = () => {
                       <p className="text-sm">(409) 977-1515</p>
                     </div>
                   </a>
-                  <a href="mailto:joshuaqua@gmail.com" className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                  <a href="mailto:joshuaquao@gmail.com" className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
                     <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
                       <Mail className="w-5 h-5 text-sky-foreground" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">Email</p>
-                      <p className="text-sm">joshuaqua@gmail.com</p>
+                      <p className="text-sm">joshuaquao@gmail.com</p>
                     </div>
                   </a>
                   <div className="flex items-center gap-3 text-muted-foreground">
