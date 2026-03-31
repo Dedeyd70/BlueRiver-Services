@@ -49,8 +49,8 @@ const Footer = () => (
         <div>
           <h4 className="font-display font-semibold mb-4">Contact Us</h4>
           <div className="flex flex-col gap-3">
-            <a href="tel:+18005551234" className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
-              <Phone className="w-4 h-4" /> (800) 555-1234
+            <a href="tel:+14099771515" className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
+              <Phone className="w-4 h-4" /> (409) 977-1515
             </a>
             <a href="mailto:info@blueriverservices.com" className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
               <Mail className="w-4 h-4" /> info@blueriverservices.com
