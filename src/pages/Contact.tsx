@@ -5,16 +5,43 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Phone, Mail, MapPin, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useQuery } from "@tanstack/react-query";
 
 const Contact = () => {
   const { toast } = useToast();
+  const { data: settings } = useSiteSettings();
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", service: "", message: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fetch services for dropdown
+  const { data: services } = useQuery({
+    queryKey: ["public-services-contact"],
+    queryFn: async () => {
+      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
+      return data ?? [];
+    },
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
       toast({ title: "Please fill in all required fields.", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.from("contact_submissions").insert({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || null,
+      service_type: form.service || null,
+      message: form.message.trim(),
+    });
+    setLoading(false);
+    if (error) {
+      toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
       return;
     }
     setSubmitted(true);
@@ -24,9 +51,14 @@ const Contact = () => {
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const phone = settings?.phone || "(409) 977-1515";
+  const phoneLink = settings?.phone_link || "+14099771515";
+  const email = settings?.email || "joshuaquao@gmail.com";
+  const serviceArea = settings?.service_area || "Serving the United States";
+  const stripeLink = settings?.stripe_payment_link;
+
   return (
     <div>
-      {/* Header */}
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
@@ -40,7 +72,6 @@ const Contact = () => {
       <section className="py-20 md:py-28">
         <div className="container">
           <div className="grid lg:grid-cols-5 gap-12 max-w-5xl mx-auto">
-            {/* Form */}
             <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="lg:col-span-3">
               {submitted ? (
                 <div className="text-center py-16">
@@ -71,11 +102,10 @@ const Contact = () => {
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Service Needed</label>
                       <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                         <option value="">Select a service</option>
-                        <option>Residential Cleaning</option>
-                        <option>Commercial Cleaning</option>
-                        <option>Deep Cleaning</option>
-                        <option>Move-in / Move-out Cleaning</option>
-                        <option>Other</option>
+                        {(services ?? []).map((s) => (
+                          <option key={s.title} value={s.title}>{s.title}</option>
+                        ))}
+                        <option value="Other">Other</option>
                       </select>
                     </div>
                   </div>
@@ -83,34 +113,40 @@ const Contact = () => {
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Message *</label>
                     <Textarea placeholder="Tell us about your cleaning needs..." rows={5} value={form.message} onChange={update("message")} maxLength={1000} />
                   </div>
-                  <Button type="submit" variant="hero" size="lg" className="w-full sm:w-auto">
-                    Request a Quote
-                  </Button>
+                  <div className="flex flex-wrap gap-3">
+                    <Button type="submit" variant="hero" size="lg" disabled={loading}>
+                      {loading ? "Submitting..." : "Request a Quote"}
+                    </Button>
+                    {stripeLink && (
+                      <Button variant="outline" size="lg" asChild>
+                        <a href={stripeLink} target="_blank" rel="noopener noreferrer">Pay Now</a>
+                      </Button>
+                    )}
+                  </div>
                 </form>
               )}
             </motion.div>
 
-            {/* Contact info */}
             <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="lg:col-span-2 space-y-8">
               <div>
                 <h3 className="font-display font-semibold text-foreground mb-4">Contact Information</h3>
                 <div className="space-y-4">
-                  <a href="tel:+14099771515" className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                  <a href={`tel:${phoneLink}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
                     <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
                       <Phone className="w-5 h-5 text-sky-foreground" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">Phone</p>
-                      <p className="text-sm">(409) 977-1515</p>
+                      <p className="text-sm">{phone}</p>
                     </div>
                   </a>
-                  <a href="mailto:joshuaquao@gmail.com" className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                  <a href={`mailto:${email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
                     <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
                       <Mail className="w-5 h-5 text-sky-foreground" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">Email</p>
-                      <p className="text-sm">joshuaquao@gmail.com</p>
+                      <p className="text-sm">{email}</p>
                     </div>
                   </a>
                   <div className="flex items-center gap-3 text-muted-foreground">
@@ -119,7 +155,7 @@ const Contact = () => {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">Service Area</p>
-                      <p className="text-sm">Serving the United States</p>
+                      <p className="text-sm">{serviceArea}</p>
                     </div>
                   </div>
                 </div>
