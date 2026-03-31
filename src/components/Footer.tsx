@@ -52,8 +52,8 @@ const Footer = () => (
             <a href="tel:+14099771515" className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
               <Phone className="w-4 h-4" /> (409) 977-1515
             </a>
-            <a href="mailto:joshuaqua@gmail.com" className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
-              <Mail className="w-4 h-4" /> joshuaqua@gmail.com
+            <a href="mailto:joshuaquao@gmail.com" className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
+              <Mail className="w-4 h-4" /> joshuaquao@gmail.com
             </a>
             <span className="flex items-center gap-2 text-sm text-navy-foreground/70">
               <MapPin className="w-4 h-4" /> Serving the United States
