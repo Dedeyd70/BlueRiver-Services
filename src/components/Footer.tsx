@@ -17,9 +17,9 @@ const Footer = () => (
             Professional cleaning services for homes and businesses across the United States. Trusted by thousands.
           </p>
           <div className="flex gap-3">
-            {[Facebook, Instagram, Twitter].map((Icon, i) => (
-              <a key={i} href="#" className="w-9 h-9 rounded-full bg-navy-foreground/10 flex items-center justify-center hover:bg-primary transition-colors">
-                <Icon className="w-4 h-4" />
+            {["FB", "IG", "X"].map((label, i) => (
+              <a key={i} href="#" className="w-9 h-9 rounded-full bg-navy-foreground/10 flex items-center justify-center hover:bg-primary transition-colors text-xs font-semibold">
+                {label}
               </a>
             ))}
           </div>
