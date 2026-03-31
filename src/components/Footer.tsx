@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Droplets, Phone, Mail, MapPin, Facebook, Instagram, Twitter } from "lucide-react";
+import { Droplets, Phone, Mail, MapPin } from "lucide-react";
 
 const Footer = () => (
   <footer className="bg-navy text-navy-foreground">
