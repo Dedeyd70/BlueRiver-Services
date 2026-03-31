@@ -95,13 +95,13 @@ const Contact = () => {
               <div>
                 <h3 className="font-display font-semibold text-foreground mb-4">Contact Information</h3>
                 <div className="space-y-4">
-                  <a href="tel:+18005551234" className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                  <a href="tel:+14099771515" className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
                     <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
                       <Phone className="w-5 h-5 text-sky-foreground" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">Phone</p>
-                      <p className="text-sm">(800) 555-1234</p>
+                      <p className="text-sm">(409) 977-1515</p>
                     </div>
                   </a>
                   <a href="mailto:info@blueriverservices.com" className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
