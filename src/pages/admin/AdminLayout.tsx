@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Droplets, LayoutDashboard, MessageSquare, Wrench, FileText, Settings, LogOut } from "lucide-react";
+import { Droplets, LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { label: "Services", path: "/admin/services", icon: Wrench },
   { label: "Testimonials", path: "/admin/testimonials", icon: FileText },
   { label: "Settings", path: "/admin/settings", icon: Settings },
+  { label: "Account", path: "/admin/account", icon: Shield },
 ];
 
 const AdminLayout = () => {
