@@ -18,6 +18,8 @@ import Submissions from "./pages/admin/Submissions";
 import ServicesAdmin from "./pages/admin/ServicesAdmin";
 import TestimonialsAdmin from "./pages/admin/TestimonialsAdmin";
 import SettingsAdmin from "./pages/admin/SettingsAdmin";
+import AccountSettings from "./pages/admin/AccountSettings";
+import ResetPassword from "./pages/admin/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +33,7 @@ const App = () => (
           <Routes>
             {/* Admin routes — no Navbar/Footer */}
             <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/reset-password" element={<ResetPassword />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="submissions" element={<Submissions />} />
