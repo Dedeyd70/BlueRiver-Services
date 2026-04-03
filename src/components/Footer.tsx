@@ -20,6 +20,13 @@ const Footer = () => {
   const serviceArea = settings?.service_area || "Serving the United States";
   const tagline = settings?.footer_tagline || "Professional cleaning services for homes and businesses across the United States. Trusted by thousands.";
 
+  const handleHomeClick = (e: React.MouseEvent) => {
+    if (window.location.pathname === "/") {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   return (
     <footer className="bg-navy text-navy-foreground">
       <div className="container py-16">
@@ -32,20 +39,20 @@ const Footer = () => {
               <span className="text-lg font-display font-bold">BlueRiver</span>
             </div>
             <p className="text-sm text-navy-foreground/70 leading-relaxed">{tagline}</p>
-            <div className="flex gap-3">
-              {["FB", "IG", "X"].map((label, i) => (
-                <a key={i} href="#" className="w-9 h-9 rounded-full bg-navy-foreground/10 flex items-center justify-center hover:bg-primary transition-colors text-xs font-semibold">
-                  {label}
-                </a>
-              ))}
-            </div>
           </div>
 
           <div>
             <h4 className="font-display font-semibold mb-4">Quick Links</h4>
             <div className="flex flex-col gap-2">
-              {[["Home", "/"], ["About Us", "/about"], ["Services", "/services"], ["Contact", "/contact"], ["Admin", "/admin/login"]].map(([label, path]) => (
-                <Link key={path} to={path} className="text-sm text-navy-foreground/70 hover:text-primary transition-colors">{label}</Link>
+              {[["Home", "/"], ["About Us", "/about"], ["Services", "/services"], ["Gallery", "/gallery"], ["Contact", "/contact"], ["Admin", "/admin/login"]].map(([label, path]) => (
+                <Link
+                  key={path}
+                  to={path}
+                  onClick={path === "/" ? handleHomeClick : undefined}
+                  className="text-sm text-navy-foreground/70 hover:text-primary transition-colors"
+                >
+                  {label}
+                </Link>
               ))}
             </div>
           </div>

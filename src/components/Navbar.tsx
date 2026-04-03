@@ -7,6 +7,7 @@ const navLinks = [
   { label: "Home", path: "/" },
   { label: "About", path: "/about" },
   { label: "Services", path: "/services" },
+  { label: "Gallery", path: "/gallery" },
   { label: "Contact", path: "/contact" },
 ];
 
@@ -23,6 +24,13 @@ const Navbar = () => {
 
   useEffect(() => setOpen(false), [location]);
 
+  const handleHomeClick = (e: React.MouseEvent, path: string) => {
+    if (path === "/" && location.pathname === "/") {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -30,7 +38,7 @@ const Navbar = () => {
       }`}
     >
       <div className="container flex items-center justify-between h-16 md:h-20">
-        <Link to="/" className="flex items-center gap-2 group">
+        <Link to="/" className="flex items-center gap-2 group" onClick={(e) => handleHomeClick(e, "/")}>
           <div className="w-9 h-9 rounded-lg bg-hero-gradient flex items-center justify-center">
             <Droplets className="w-5 h-5 text-primary-foreground" />
           </div>
@@ -45,6 +53,7 @@ const Navbar = () => {
             <Link
               key={link.path}
               to={link.path}
+              onClick={(e) => handleHomeClick(e, link.path)}
               className={`text-sm font-medium transition-colors hover:text-primary ${
                 location.pathname === link.path ? "text-primary" : "text-muted-foreground"
               }`}
@@ -71,6 +80,7 @@ const Navbar = () => {
               <Link
                 key={link.path}
                 to={link.path}
+                onClick={(e) => handleHomeClick(e, link.path)}
                 className={`py-2 text-sm font-medium transition-colors ${
                   location.pathname === link.path ? "text-primary" : "text-muted-foreground"
                 }`}
