@@ -2,25 +2,19 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Save } from "lucide-react";
+import { Save, DollarSign } from "lucide-react";
 
-const settingsDef = [
-  { key: "phone", label: "Business Phone", type: "input" },
-  { key: "phone_link", label: "Phone Link (tel format)", type: "input", placeholder: "+14099771515" },
-  { key: "email", label: "Business Email", type: "input" },
-  { key: "service_area", label: "Service Area", type: "input" },
-  { key: "footer_tagline", label: "Footer Tagline", type: "textarea" },
-  { key: "hero_headline", label: "Hero Headline", type: "input" },
-  { key: "hero_subheadline", label: "Hero Subheadline", type: "textarea" },
-  { key: "about_mission_title", label: "About - Mission Title", type: "input" },
-  { key: "about_mission_p1", label: "About - Mission Paragraph 1", type: "textarea" },
-  { key: "about_mission_p2", label: "About - Mission Paragraph 2", type: "textarea" },
+const paymentKeys = [
+  { key: "payment_methods", label: "Accepted Payment Methods", type: "input", placeholder: "Cash, Zelle" },
+  { key: "payment_policy", label: "Payment Policy", type: "textarea", placeholder: "Payment is typically made after service completion." },
+  { key: "deposit_info", label: "Deposit Requirements", type: "textarea", placeholder: "A deposit may be required for large or specialized jobs." },
+  { key: "zelle_info", label: "Zelle Information", type: "input", placeholder: "Send to: email@example.com or phone number" },
 ];
 
-const SettingsAdmin = () => {
+const PaymentSettingsAdmin = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState<Record<string, string>>({});
@@ -42,15 +36,18 @@ const SettingsAdmin = () => {
 
   const save = useMutation({
     mutationFn: async () => {
-      const promises = settingsDef.map(({ key }) =>
-        supabase.from("site_settings").upsert({ setting_key: key, setting_value: form[key] || "" }, { onConflict: "setting_key" })
+      const promises = paymentKeys.map(({ key }) =>
+        supabase.from("site_settings").upsert(
+          { setting_key: key, setting_value: form[key] || "" },
+          { onConflict: "setting_key" }
+        )
       );
       await Promise.all(promises);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-settings"] });
       qc.invalidateQueries({ queryKey: ["site-settings"] });
-      toast({ title: "Settings saved" });
+      toast({ title: "Payment settings saved" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -59,15 +56,18 @@ const SettingsAdmin = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-2xl font-display font-bold text-foreground">Site Settings</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-5 h-5 text-primary" />
+          <h1 className="text-2xl font-display font-bold text-foreground">Payment Settings</h1>
+        </div>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
-          <Save className="w-4 h-4 mr-2" /> Save All
+          <Save className="w-4 h-4 mr-2" /> Save
         </Button>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-4 sm:p-6 space-y-5">
-        {settingsDef.map((s) => (
+      <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+        {paymentKeys.map((s) => (
           <div key={s.key}>
             <label className="text-sm font-medium text-foreground mb-1.5 block">{s.label}</label>
             {s.type === "textarea" ? (
@@ -91,4 +91,4 @@ const SettingsAdmin = () => {
   );
 };
 
-export default SettingsAdmin;
+export default PaymentSettingsAdmin;

@@ -41,8 +41,6 @@ const IndexPage = () => {
     },
   });
 
-  const stripeLink = settings?.stripe_payment_link;
-
   return (
     <div className="overflow-hidden">
       {/* Hero */}
@@ -65,18 +63,11 @@ const IndexPage = () => {
               </p>
               <div className="flex flex-wrap gap-4">
                 <Button variant="hero" size="xl" asChild>
-                  <Link to="/contact">Get a Quote</Link>
+                  <Link to="/contact">Request a Quote</Link>
                 </Button>
-                {stripeLink && (
-                  <Button variant="hero-outline" size="xl" asChild>
-                    <a href={stripeLink} target="_blank" rel="noopener noreferrer">Pay Now</a>
-                  </Button>
-                )}
-                {!stripeLink && (
-                  <Button variant="hero-outline" size="xl" asChild>
-                    <Link to="/contact">Book Now</Link>
-                  </Button>
-                )}
+                <Button variant="hero-outline" size="xl" asChild>
+                  <Link to="/contact">Book Service</Link>
+                </Button>
               </div>
             </motion.div>
           </div>
@@ -95,9 +86,13 @@ const IndexPage = () => {
               return (
                 <motion.div key={s.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
                   <Link to="/services" className="group block p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
-                    <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4 group-hover:bg-hero-gradient group-hover:text-primary-foreground transition-all duration-300">
-                      <Icon className="w-6 h-6 text-sky-foreground group-hover:text-primary-foreground" />
-                    </div>
+                    {s.image_url ? (
+                      <img src={s.image_url} alt={s.title} className="w-full h-32 object-cover rounded-xl mb-4" loading="lazy" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4 group-hover:bg-hero-gradient group-hover:text-primary-foreground transition-all duration-300">
+                        <Icon className="w-6 h-6 text-sky-foreground group-hover:text-primary-foreground" />
+                      </div>
+                    )}
                     <h3 className="font-display font-semibold text-card-foreground mb-2">{s.title}</h3>
                     <p className="text-sm text-muted-foreground">{s.description}</p>
                   </Link>
@@ -126,8 +121,37 @@ const IndexPage = () => {
         </div>
       </section>
 
+      {/* Payment Info */}
+      {(settings?.payment_methods || settings?.payment_policy) && (
+        <section className="py-20 md:py-28">
+          <div className="container">
+            <SectionHeading badge="Payment" title="Payment Information" />
+            <div className="max-w-2xl mx-auto bg-card border border-border rounded-2xl p-8 space-y-4">
+              {settings?.payment_methods && (
+                <div>
+                  <h3 className="font-display font-semibold text-foreground mb-1">Accepted Methods</h3>
+                  <p className="text-muted-foreground text-sm">{settings.payment_methods}</p>
+                </div>
+              )}
+              {settings?.payment_policy && (
+                <div>
+                  <h3 className="font-display font-semibold text-foreground mb-1">Payment Policy</h3>
+                  <p className="text-muted-foreground text-sm">{settings.payment_policy}</p>
+                </div>
+              )}
+              {settings?.deposit_info && (
+                <div>
+                  <h3 className="font-display font-semibold text-foreground mb-1">Deposit Information</h3>
+                  <p className="text-muted-foreground text-sm">{settings.deposit_info}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Testimonials */}
-      <section className="py-20 md:py-28">
+      <section className="py-20 md:py-28 bg-muted/50">
         <div className="container">
           <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it — hear from the people who trust BlueRiver." />
           <div className="grid md:grid-cols-3 gap-6">

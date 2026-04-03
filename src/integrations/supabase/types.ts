@@ -50,6 +50,36 @@ export type Database = {
         }
         Relationships: []
       }
+      gallery: {
+        Row: {
+          caption: string | null
+          created_at: string
+          display_order: number
+          id: string
+          image_url: string
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          image_url: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       page_content: {
         Row: {
           content: Json
@@ -85,6 +115,7 @@ export type Database = {
           features: string[]
           icon: string
           id: string
+          image_url: string | null
           is_active: boolean
           price_starting: string | null
           title: string
@@ -97,6 +128,7 @@ export type Database = {
           features?: string[]
           icon?: string
           id?: string
+          image_url?: string | null
           is_active?: boolean
           price_starting?: string | null
           title: string
@@ -109,6 +141,7 @@ export type Database = {
           features?: string[]
           icon?: string
           id?: string
+          image_url?: string | null
           is_active?: boolean
           price_starting?: string | null
           title?: string

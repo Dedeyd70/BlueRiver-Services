@@ -5,7 +5,6 @@ import SectionHeading from "@/components/SectionHeading";
 import { Home, Building2, SprayCan, Truck, Droplets, Wind, Sparkles, CheckCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 const iconMap: Record<string, any> = { Home, Building2, SprayCan, Truck, Droplets, Wind, Sparkles };
 
@@ -17,7 +16,6 @@ const fadeUp = {
 };
 
 const Services = () => {
-  const { data: settings } = useSiteSettings();
   const { data: services } = useQuery({
     queryKey: ["public-services"],
     queryFn: async () => {
@@ -28,7 +26,6 @@ const Services = () => {
 
   const mainServices = (services ?? []).filter((s) => s.features && s.features.length > 0);
   const addons = (services ?? []).filter((s) => !s.features || s.features.length === 0);
-  const stripeLink = settings?.stripe_payment_link;
 
   return (
     <div>
@@ -63,8 +60,14 @@ const Services = () => {
                     ))}
                   </ul>
                 </div>
-                <div className="flex-1 w-full rounded-2xl bg-sky/50 h-56 md:h-64 flex items-center justify-center">
-                  <Icon className="w-20 h-20 text-sky-foreground/40" />
+                <div className="flex-1 w-full rounded-2xl overflow-hidden h-56 md:h-64">
+                  {s.image_url ? (
+                    <img src={s.image_url} alt={s.title} className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full bg-sky/50 flex items-center justify-center">
+                      <Icon className="w-20 h-20 text-sky-foreground/40" />
+                    </div>
+                  )}
                 </div>
               </motion.div>
             );
@@ -81,9 +84,13 @@ const Services = () => {
                 const Icon = iconMap[a.icon] || Sparkles;
                 return (
                   <motion.div key={a.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="p-6 rounded-2xl bg-card border border-border">
-                    <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4">
-                      <Icon className="w-6 h-6 text-sky-foreground" />
-                    </div>
+                    {a.image_url ? (
+                      <img src={a.image_url} alt={a.title} className="w-full h-32 object-cover rounded-xl mb-4" loading="lazy" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4">
+                        <Icon className="w-6 h-6 text-sky-foreground" />
+                      </div>
+                    )}
                     <h3 className="font-display font-semibold text-card-foreground mb-2">{a.title}</h3>
                     <p className="text-sm text-muted-foreground">{a.description}</p>
                   </motion.div>
@@ -99,16 +106,9 @@ const Services = () => {
           <motion.div {...fadeUp}>
             <h2 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-4">Need a Custom Cleaning Plan?</h2>
             <p className="text-primary-foreground/80 mb-8 max-w-lg mx-auto">Contact us for a personalized quote tailored to your space and schedule.</p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button variant="hero" size="xl" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90" asChild>
-                <Link to="/contact">Request a Quote</Link>
-              </Button>
-              {stripeLink && (
-                <Button variant="hero-outline" size="xl" asChild>
-                  <a href={stripeLink} target="_blank" rel="noopener noreferrer">Pay Now</a>
-                </Button>
-              )}
-            </div>
+            <Button variant="hero" size="xl" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90" asChild>
+              <Link to="/contact">Request a Quote</Link>
+            </Button>
           </motion.div>
         </div>
       </section>
