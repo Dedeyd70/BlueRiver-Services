@@ -16,7 +16,6 @@ const Contact = () => {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", service: "", message: "" });
 
-  // Fetch services for dropdown
   const { data: services } = useQuery({
     queryKey: ["public-services-contact"],
     queryFn: async () => {
@@ -55,7 +54,6 @@ const Contact = () => {
   const phoneLink = settings?.phone_link || "+14099771515";
   const email = settings?.email || "joshuaquao@gmail.com";
   const serviceArea = settings?.service_area || "Serving the United States";
-  const stripeLink = settings?.stripe_payment_link;
 
   return (
     <div>
@@ -113,16 +111,9 @@ const Contact = () => {
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Message *</label>
                     <Textarea placeholder="Tell us about your cleaning needs..." rows={5} value={form.message} onChange={update("message")} maxLength={1000} />
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Button type="submit" variant="hero" size="lg" disabled={loading}>
-                      {loading ? "Submitting..." : "Request a Quote"}
-                    </Button>
-                    {stripeLink && (
-                      <Button variant="outline" size="lg" asChild>
-                        <a href={stripeLink} target="_blank" rel="noopener noreferrer">Pay Now</a>
-                      </Button>
-                    )}
-                  </div>
+                  <Button type="submit" variant="hero" size="lg" disabled={loading}>
+                    {loading ? "Submitting..." : "Request a Quote"}
+                  </Button>
                 </form>
               )}
             </motion.div>
@@ -160,6 +151,18 @@ const Contact = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Payment Info */}
+              {(settings?.payment_methods || settings?.zelle_info) && (
+                <div className="p-6 rounded-2xl bg-sky/50">
+                  <h4 className="font-display font-semibold text-foreground mb-2">Payment Information</h4>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    {settings?.payment_methods && <p><strong>Accepted:</strong> {settings.payment_methods}</p>}
+                    {settings?.zelle_info && <p><strong>Zelle:</strong> {settings.zelle_info}</p>}
+                    {settings?.deposit_info && <p>{settings.deposit_info}</p>}
+                  </div>
+                </div>
+              )}
 
               <div className="p-6 rounded-2xl bg-sky/50">
                 <h4 className="font-display font-semibold text-foreground mb-2">Business Hours</h4>
