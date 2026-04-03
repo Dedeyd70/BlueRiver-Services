@@ -12,7 +12,6 @@ const settingsDef = [
   { key: "phone_link", label: "Phone Link (tel format)", type: "input", placeholder: "+14099771515" },
   { key: "email", label: "Business Email", type: "input" },
   { key: "service_area", label: "Service Area", type: "input" },
-  { key: "stripe_payment_link", label: "Stripe Payment Link", type: "input", placeholder: "https://buy.stripe.com/..." },
   { key: "footer_tagline", label: "Footer Tagline", type: "textarea" },
   { key: "hero_headline", label: "Hero Headline", type: "input" },
   { key: "hero_subheadline", label: "Hero Subheadline", type: "textarea" },
@@ -43,8 +42,8 @@ const SettingsAdmin = () => {
 
   const save = useMutation({
     mutationFn: async () => {
-      const promises = Object.entries(form).map(([key, value]) =>
-        supabase.from("site_settings").upsert({ setting_key: key, setting_value: value }, { onConflict: "setting_key" })
+      const promises = settingsDef.map(({ key }) =>
+        supabase.from("site_settings").upsert({ setting_key: key, setting_value: form[key] || "" }, { onConflict: "setting_key" })
       );
       await Promise.all(promises);
     },
@@ -60,14 +59,14 @@ const SettingsAdmin = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold text-foreground">Site Settings</h1>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
           <Save className="w-4 h-4 mr-2" /> Save All
         </Button>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      <div className="bg-card border border-border rounded-xl p-4 sm:p-6 space-y-5">
         {settingsDef.map((s) => (
           <div key={s.key}>
             <label className="text-sm font-medium text-foreground mb-1.5 block">{s.label}</label>
