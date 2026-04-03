@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -42,34 +41,64 @@ const Submissions = () => {
         ) : !submissions?.length ? (
           <p className="p-6 text-muted-foreground">No submissions yet.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Message</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Name</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Email</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Phone</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Service</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Message</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Date</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {submissions.map((s) => (
+                    <tr key={s.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 text-sm font-medium">{s.name}</td>
+                      <td className="px-4 py-3 text-sm">{s.email}</td>
+                      <td className="px-4 py-3 text-sm">{s.phone || "—"}</td>
+                      <td className="px-4 py-3 text-sm">{s.service_type || "—"}</td>
+                      <td className="px-4 py-3 text-sm max-w-[200px] truncate">{s.message}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{new Date(s.created_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={s.status === "pending" ? "secondary" : "default"}>{s.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        {s.status === "pending" ? (
+                          <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: s.id, status: "contacted" })}>
+                            Mark Contacted
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: s.id, status: "pending" })}>
+                            Mark Pending
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-border">
               {submissions.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.email}</TableCell>
-                  <TableCell>{s.phone || "—"}</TableCell>
-                  <TableCell>{s.service_type || "—"}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">{s.message}</TableCell>
-                  <TableCell className="whitespace-nowrap">{new Date(s.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Badge variant={s.status === "pending" ? "secondary" : "default"}>
-                      {s.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
+                <div key={s.id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm text-foreground">{s.name}</span>
+                    <Badge variant={s.status === "pending" ? "secondary" : "default"}>{s.status}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{s.email} {s.phone ? `· ${s.phone}` : ""}</p>
+                  {s.service_type && <p className="text-xs text-primary">{s.service_type}</p>}
+                  <p className="text-sm text-muted-foreground line-clamp-2">{s.message}</p>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</span>
                     {s.status === "pending" ? (
                       <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: s.id, status: "contacted" })}>
                         Mark Contacted
@@ -79,11 +108,11 @@ const Submissions = () => {
                         Mark Pending
                       </Button>
                     )}
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </>
         )}
       </div>
     </div>
