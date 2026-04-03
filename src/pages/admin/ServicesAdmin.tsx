@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import ImageUpload from "@/components/ImageUpload";
 
 interface ServiceForm {
   title: string;
@@ -16,9 +17,10 @@ interface ServiceForm {
   features: string;
   price_starting: string;
   is_active: boolean;
+  image_url: string;
 }
 
-const defaultForm: ServiceForm = { title: "", description: "", icon: "Sparkles", features: "", price_starting: "", is_active: true };
+const defaultForm: ServiceForm = { title: "", description: "", icon: "Sparkles", features: "", price_starting: "", is_active: true, image_url: "" };
 
 const ServicesAdmin = () => {
   const { toast } = useToast();
@@ -45,6 +47,7 @@ const ServicesAdmin = () => {
         features: form.features.split("\n").filter(Boolean),
         price_starting: form.price_starting || null,
         is_active: form.is_active,
+        image_url: form.image_url,
         display_order: editId ? undefined : (services?.length ?? 0) + 1,
       };
       if (editId) {
@@ -85,6 +88,7 @@ const ServicesAdmin = () => {
       features: (s.features || []).join("\n"),
       price_starting: s.price_starting || "",
       is_active: s.is_active,
+      image_url: s.image_url || "",
     });
     setDialogOpen(true);
   };
@@ -97,13 +101,13 @@ const ServicesAdmin = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold text-foreground">Services</h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Add Service</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editId ? "Edit Service" : "New Service"}</DialogTitle>
             </DialogHeader>
@@ -115,6 +119,10 @@ const ServicesAdmin = () => {
               <div>
                 <label className="text-sm font-medium mb-1 block">Description</label>
                 <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Service Image</label>
+                <ImageUpload value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} folder="services" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -128,7 +136,7 @@ const ServicesAdmin = () => {
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Features (one per line)</label>
-                <Textarea value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} rows={4} placeholder="Feature 1&#10;Feature 2" />
+                <Textarea value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} rows={4} placeholder={"Feature 1\nFeature 2"} />
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
@@ -149,11 +157,14 @@ const ServicesAdmin = () => {
           <p className="text-muted-foreground">No services yet.</p>
         ) : (
           services.map((s) => (
-            <div key={s.id} className="flex items-center gap-4 bg-card border border-border rounded-xl p-4">
-              <GripVertical className="w-4 h-4 text-muted-foreground" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-foreground">{s.title}</h3>
+            <div key={s.id} className="flex items-center gap-3 sm:gap-4 bg-card border border-border rounded-xl p-3 sm:p-4">
+              <GripVertical className="w-4 h-4 text-muted-foreground hidden sm:block" />
+              {s.image_url && (
+                <img src={s.image_url} alt={s.title} className="w-12 h-12 rounded-lg object-cover hidden sm:block" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-medium text-foreground truncate">{s.title}</h3>
                   {!s.is_active && <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">Inactive</span>}
                 </div>
                 <p className="text-sm text-muted-foreground line-clamp-1">{s.description}</p>
