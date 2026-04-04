@@ -82,8 +82,9 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-navy-foreground/10 text-center text-sm text-navy-foreground/50">
-          © {new Date().getFullYear()} BlueRiver Services. All rights reserved.
+        <div className="mt-12 pt-8 border-t border-navy-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-navy-foreground/50">
+          <span>© {new Date().getFullYear()} BlueRiver Services. All rights reserved.</span>
+          <Link to="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link>
         </div>
       </div>
     </footer>

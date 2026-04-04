@@ -12,6 +12,7 @@ const navItems = [
   { label: "Gallery", path: "/admin/gallery", icon: Image },
   { label: "Testimonials", path: "/admin/testimonials", icon: FileText },
   { label: "Payment", path: "/admin/payment", icon: DollarSign },
+  { label: "Privacy Policy", path: "/admin/privacy-policy", icon: ScrollText },
   { label: "Settings", path: "/admin/settings", icon: Settings },
   { label: "Account", path: "/admin/account", icon: Shield },
 ];
