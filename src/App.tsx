@@ -50,6 +50,7 @@ const App = () => (
               <Route path="payment" element={<PaymentSettingsAdmin />} />
               <Route path="settings" element={<SettingsAdmin />} />
               <Route path="account" element={<AccountSettings />} />
+              <Route path="privacy-policy" element={<PrivacyPolicyAdmin />} />
             </Route>
 
             {/* Public routes */}
