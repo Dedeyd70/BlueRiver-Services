@@ -24,6 +24,8 @@ import SettingsAdmin from "./pages/admin/SettingsAdmin";
 import PaymentSettingsAdmin from "./pages/admin/PaymentSettingsAdmin";
 import AccountSettings from "./pages/admin/AccountSettings";
 import ResetPassword from "./pages/admin/ResetPassword";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import PrivacyPolicyAdmin from "./pages/admin/PrivacyPolicyAdmin";
 
 const queryClient = new QueryClient();
 
