@@ -152,17 +152,15 @@ const Contact = () => {
                 </div>
               </div>
 
-              {/* Payment Info */}
-              {(settings?.payment_methods || settings?.zelle_info) && (
-                <div className="p-6 rounded-2xl bg-sky/50">
-                  <h4 className="font-display font-semibold text-foreground mb-2">Payment Information</h4>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    {settings?.payment_methods && <p><strong>Accepted:</strong> {settings.payment_methods}</p>}
-                    {settings?.zelle_info && <p><strong>Zelle:</strong> {settings.zelle_info}</p>}
-                    {settings?.deposit_info && <p>{settings.deposit_info}</p>}
-                  </div>
+              <div className="p-6 rounded-2xl bg-sky/50">
+                <h4 className="font-display font-semibold text-foreground mb-3">Payment Information</h4>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p><strong className="text-foreground">Accepted:</strong> {settings?.payment_methods || "Cash, Zelle"}</p>
+                  {settings?.zelle_info && <p><strong className="text-foreground">Zelle:</strong> {settings.zelle_info}</p>}
+                  <p>{settings?.payment_policy || "Payment is typically made after service completion."}</p>
+                  {settings?.deposit_info && <p>{settings.deposit_info}</p>}
                 </div>
-              )}
+              </div>
 
               <div className="p-6 rounded-2xl bg-sky/50">
                 <h4 className="font-display font-semibold text-foreground mb-2">Business Hours</h4>
