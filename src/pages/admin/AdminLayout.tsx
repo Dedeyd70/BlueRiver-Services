@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Droplets, LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, X } from "lucide-react";
+import { Droplets, LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, X, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -12,6 +12,7 @@ const navItems = [
   { label: "Gallery", path: "/admin/gallery", icon: Image },
   { label: "Testimonials", path: "/admin/testimonials", icon: FileText },
   { label: "Payment", path: "/admin/payment", icon: DollarSign },
+  { label: "Privacy Policy", path: "/admin/privacy-policy", icon: ScrollText },
   { label: "Settings", path: "/admin/settings", icon: Settings },
   { label: "Account", path: "/admin/account", icon: Shield },
 ];

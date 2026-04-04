@@ -24,6 +24,8 @@ import SettingsAdmin from "./pages/admin/SettingsAdmin";
 import PaymentSettingsAdmin from "./pages/admin/PaymentSettingsAdmin";
 import AccountSettings from "./pages/admin/AccountSettings";
 import ResetPassword from "./pages/admin/ResetPassword";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import PrivacyPolicyAdmin from "./pages/admin/PrivacyPolicyAdmin";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,7 @@ const App = () => (
               <Route path="payment" element={<PaymentSettingsAdmin />} />
               <Route path="settings" element={<SettingsAdmin />} />
               <Route path="account" element={<AccountSettings />} />
+              <Route path="privacy-policy" element={<PrivacyPolicyAdmin />} />
             </Route>
 
             {/* Public routes */}
@@ -63,6 +66,7 @@ const App = () => (
                       <Route path="/services" element={<Services />} />
                       <Route path="/gallery" element={<Gallery />} />
                       <Route path="/contact" element={<Contact />} />
+                      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
