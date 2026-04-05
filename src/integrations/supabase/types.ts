@@ -14,6 +14,99 @@ export type Database = {
   }
   public: {
     Tables: {
+      availability_settings: {
+        Row: {
+          created_at: string
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setting_key: string
+          setting_value?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      blocked_dates: {
+        Row: {
+          blocked_date: string
+          created_at: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          blocked_date: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          blocked_date?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      bookings: {
+        Row: {
+          address: string
+          booking_date: string
+          consent_given: boolean
+          created_at: string
+          email: string
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          service_type: string | null
+          status: string
+          time_slot: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          booking_date: string
+          consent_given?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          service_type?: string | null
+          status?: string
+          time_slot: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          booking_date?: string
+          consent_given?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          service_type?: string | null
+          status?: string
+          time_slot?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contact_submissions: {
         Row: {
           created_at: string
@@ -103,6 +196,54 @@ export type Database = {
           id?: string
           page_name?: string
           section_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      quote_requests: {
+        Row: {
+          address: string | null
+          attachment_url: string | null
+          consent_given: boolean
+          created_at: string
+          description: string
+          email: string
+          id: string
+          name: string
+          phone: string | null
+          preferred_contact: string | null
+          service_type: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          attachment_url?: string | null
+          consent_given?: boolean
+          created_at?: string
+          description: string
+          email: string
+          id?: string
+          name: string
+          phone?: string | null
+          preferred_contact?: string | null
+          service_type?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          attachment_url?: string | null
+          consent_given?: boolean
+          created_at?: string
+          description?: string
+          email?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          preferred_contact?: string | null
+          service_type?: string | null
+          status?: string
           updated_at?: string
         }
         Relationships: []

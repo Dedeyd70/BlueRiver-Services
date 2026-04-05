@@ -52,13 +52,16 @@ const Services = () => {
                   <h2 className="text-2xl font-display font-bold text-foreground mb-3">{s.title}</h2>
                   <p className="text-muted-foreground leading-relaxed mb-4">{s.description}</p>
                   {s.price_starting && <p className="text-sm font-medium text-primary mb-4">Starting at {s.price_starting}</p>}
-                  <ul className="space-y-2">
+                  <ul className="space-y-2 mb-6">
                     {(s.features || []).map((b: string) => (
                       <li key={b} className="flex items-center gap-2 text-sm text-muted-foreground">
                         <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" /> {b}
                       </li>
                     ))}
                   </ul>
+                  <Button variant="hero" size="sm" asChild>
+                    <Link to={`/book?service=${encodeURIComponent(s.title)}`}>Book Now</Link>
+                  </Button>
                 </div>
                 <div className="flex-1 w-full rounded-2xl overflow-hidden h-56 md:h-64">
                   {s.image_url ? (
@@ -92,7 +95,10 @@ const Services = () => {
                       </div>
                     )}
                     <h3 className="font-display font-semibold text-card-foreground mb-2">{a.title}</h3>
-                    <p className="text-sm text-muted-foreground">{a.description}</p>
+                    <p className="text-sm text-muted-foreground mb-4">{a.description}</p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/book?service=${encodeURIComponent(a.title)}`}>Book Now</Link>
+                    </Button>
                   </motion.div>
                 );
               })}
@@ -106,9 +112,14 @@ const Services = () => {
           <motion.div {...fadeUp}>
             <h2 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-4">Need a Custom Cleaning Plan?</h2>
             <p className="text-primary-foreground/80 mb-8 max-w-lg mx-auto">Contact us for a personalized quote tailored to your space and schedule.</p>
-            <Button variant="hero" size="xl" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90" asChild>
-              <Link to="/contact">Request a Quote</Link>
-            </Button>
+            <div className="flex flex-wrap justify-center gap-4">
+              <Button variant="hero" size="xl" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90" asChild>
+                <Link to="/quote">Request a Quote</Link>
+              </Button>
+              <Button variant="hero-outline" size="xl" asChild>
+                <Link to="/book">Book Now</Link>
+              </Button>
+            </div>
           </motion.div>
         </div>
       </section>
