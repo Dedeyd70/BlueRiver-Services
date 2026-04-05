@@ -1,0 +1,251 @@
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { format, isBefore, startOfDay, getDay } from "date-fns";
+
+const BookService = () => {
+  const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const prefilledService = searchParams.get("service") || "";
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedSlot, setSelectedSlot] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", service: prefilledService, notes: "" });
+
+  useEffect(() => {
+    if (prefilledService) setForm((f) => ({ ...f, service: prefilledService }));
+  }, [prefilledService]);
+
+  const { data: services } = useQuery({
+    queryKey: ["public-services-booking"],
+    queryFn: async () => {
+      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
+      return data ?? [];
+    },
+  });
+
+  const { data: availability } = useQuery({
+    queryKey: ["availability-settings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("availability_settings").select("*");
+      const map: Record<string, any> = {};
+      data?.forEach((r: any) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+
+  const { data: blockedDates } = useQuery({
+    queryKey: ["blocked-dates"],
+    queryFn: async () => {
+      const { data } = await supabase.from("blocked_dates").select("blocked_date");
+      return (data ?? []).map((d: any) => d.blocked_date);
+    },
+  });
+
+  const workingDays: number[] = availability?.working_days?.days ?? [1, 2, 3, 4, 5, 6];
+  const workingHours = availability?.working_hours ?? { start: "07:00", end: "19:00" };
+  const saturdayHours = availability?.saturday_hours ?? { start: "08:00", end: "17:00" };
+  const slotDuration = availability?.time_slot_duration?.minutes ?? 60;
+
+  const generateTimeSlots = (date: Date | undefined) => {
+    if (!date) return [];
+    const dayOfWeek = getDay(date); // 0=Sun
+    if (!workingDays.includes(dayOfWeek)) return [];
+    const hours = dayOfWeek === 6 ? saturdayHours : workingHours;
+    const [startH, startM] = hours.start.split(":").map(Number);
+    const [endH, endM] = hours.end.split(":").map(Number);
+    const startMin = startH * 60 + startM;
+    const endMin = endH * 60 + endM;
+    const slots: string[] = [];
+    for (let m = startMin; m + slotDuration <= endMin; m += slotDuration) {
+      const h = Math.floor(m / 60);
+      const mm = m % 60;
+      const endSlot = m + slotDuration;
+      const eh = Math.floor(endSlot / 60);
+      const em = endSlot % 60;
+      const fmt = (hr: number, mi: number) => {
+        const ampm = hr >= 12 ? "PM" : "AM";
+        const h12 = hr % 12 || 12;
+        return `${h12}:${mi.toString().padStart(2, "0")} ${ampm}`;
+      };
+      slots.push(`${fmt(h, mm)} - ${fmt(eh, em)}`);
+    }
+    return slots;
+  };
+
+  const isDateDisabled = (date: Date) => {
+    if (isBefore(date, startOfDay(new Date()))) return true;
+    const dayOfWeek = getDay(date);
+    if (!workingDays.includes(dayOfWeek)) return true;
+    const dateStr = format(date, "yyyy-MM-dd");
+    if (blockedDates?.includes(dateStr)) return true;
+    return false;
+  };
+
+  const timeSlots = generateTimeSlots(selectedDate);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.email.trim() || !form.address.trim() || !selectedDate || !selectedSlot) {
+      toast({ title: "Please fill in all required fields.", variant: "destructive" });
+      return;
+    }
+    if (!consent) {
+      toast({ title: "Please agree to be contacted.", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.from("bookings").insert({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || null,
+      address: form.address.trim(),
+      service_type: form.service || null,
+      booking_date: format(selectedDate, "yyyy-MM-dd"),
+      time_slot: selectedSlot,
+      notes: form.notes.trim() || null,
+      consent_given: consent,
+    });
+    setLoading(false);
+    if (error) {
+      toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
+      return;
+    }
+    setSubmitted(true);
+    toast({ title: "Booking submitted!", description: "We'll confirm your appointment soon." });
+  };
+
+  const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  return (
+    <div>
+      <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
+        <div className="container">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-sky text-sky-foreground text-xs font-semibold tracking-wider uppercase mb-4">Schedule Service</span>
+            <h1 className="text-4xl md:text-5xl font-display font-extrabold text-foreground mb-4">Book a Service</h1>
+            <p className="text-muted-foreground leading-relaxed">Select your preferred date and time. We'll confirm your appointment shortly.</p>
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="py-20 md:py-28">
+        <div className="container max-w-4xl mx-auto">
+          {submitted ? (
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16">
+              <div className="w-16 h-16 rounded-full bg-hero-gradient flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-primary-foreground" />
+              </div>
+              <h3 className="text-2xl font-display font-bold text-foreground mb-2">Booking Received!</h3>
+              <p className="text-muted-foreground">We've received your booking for {selectedDate && format(selectedDate, "MMMM d, yyyy")} at {selectedSlot}. We'll confirm shortly.</p>
+            </motion.div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Left: form fields */}
+                <div className="space-y-5">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Name *</label>
+                    <Input placeholder="Your full name" value={form.name} onChange={update("name")} maxLength={100} />
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label>
+                      <Input type="email" placeholder="you@email.com" value={form.email} onChange={update("email")} maxLength={255} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Phone</label>
+                      <Input type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={update("phone")} maxLength={20} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Address *</label>
+                    <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Service</label>
+                    <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <option value="">Select a service</option>
+                      {(services ?? []).map((s) => (
+                        <option key={s.title} value={s.title}>{s.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Additional Notes</label>
+                    <Textarea placeholder="Any special instructions..." rows={3} value={form.notes} onChange={update("notes")} maxLength={500} />
+                  </div>
+                </div>
+
+                {/* Right: calendar and time slots */}
+                <div className="space-y-5">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Select Date *</label>
+                    <div className="bg-card border border-border rounded-xl p-3 inline-block">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={(d) => { setSelectedDate(d); setSelectedSlot(""); }}
+                        disabled={isDateDisabled}
+                        className="pointer-events-auto"
+                      />
+                    </div>
+                  </div>
+                  {selectedDate && timeSlots.length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Select Time *</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {timeSlots.map((slot) => (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                              selectedSlot === slot
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-card border-border text-foreground hover:border-primary/50"
+                            }`}
+                          >
+                            {slot}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedDate && timeSlots.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No time slots available for this date.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <Checkbox id="consent" checked={consent} onCheckedChange={(v) => setConsent(!!v)} />
+                <label htmlFor="consent" className="text-sm text-muted-foreground leading-tight cursor-pointer">
+                  I agree to be contacted regarding my request. My information will be kept private.
+                </label>
+              </div>
+
+              <Button type="submit" variant="hero" size="lg" disabled={loading || !selectedDate || !selectedSlot || !consent}>
+                {loading ? "Submitting..." : "Confirm Booking"}
+              </Button>
+            </form>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default BookService;

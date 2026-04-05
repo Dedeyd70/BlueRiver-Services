@@ -1,0 +1,232 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CheckCircle, Upload } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { Phone, Mail, MapPin } from "lucide-react";
+import imageCompression from "browser-image-compression";
+
+const RequestQuote = () => {
+  const { toast } = useToast();
+  const { data: settings } = useSiteSettings();
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [form, setForm] = useState({
+    name: "", email: "", phone: "", address: "", service: "", description: "", preferred_contact: "email",
+  });
+
+  const { data: services } = useQuery({
+    queryKey: ["public-services-quote"],
+    queryFn: async () => {
+      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
+      return data ?? [];
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File must be under 10MB", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      let fileToUpload: File | Blob = file;
+      if (file.type.startsWith("image/")) {
+        fileToUpload = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true });
+      }
+      const ext = file.name.split(".").pop();
+      const fileName = `quotes/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("site-images").upload(fileName, fileToUpload);
+      if (error) {
+        toast({ title: "Upload failed", description: error.message, variant: "destructive" });
+      } else {
+        const { data: urlData } = supabase.storage.from("site-images").getPublicUrl(fileName);
+        setAttachmentUrl(urlData.publicUrl);
+        toast({ title: "File uploaded successfully" });
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    }
+    setUploading(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.email.trim() || !form.description.trim()) {
+      toast({ title: "Please fill in all required fields.", variant: "destructive" });
+      return;
+    }
+    if (!consent) {
+      toast({ title: "Please agree to be contacted.", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.from("quote_requests").insert({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || null,
+      address: form.address.trim() || null,
+      service_type: form.service || null,
+      description: form.description.trim(),
+      preferred_contact: form.preferred_contact,
+      attachment_url: attachmentUrl || null,
+      consent_given: consent,
+    });
+    setLoading(false);
+    if (error) {
+      toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
+      return;
+    }
+    setSubmitted(true);
+    toast({ title: "Quote request submitted!", description: "We'll get back to you within 24 hours." });
+  };
+
+  const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const phone = settings?.phone || "(409) 977-1515";
+  const phoneLink = settings?.phone_link || "+14099771515";
+  const email = settings?.email || "joshuaquao@gmail.com";
+  const serviceArea = settings?.service_area || "Serving the United States";
+
+  return (
+    <div>
+      <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
+        <div className="container">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-sky text-sky-foreground text-xs font-semibold tracking-wider uppercase mb-4">Free Estimate</span>
+            <h1 className="text-4xl md:text-5xl font-display font-extrabold text-foreground mb-4">Request a Quote</h1>
+            <p className="text-muted-foreground leading-relaxed">Tell us about your cleaning needs and we'll provide a customised estimate.</p>
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="py-20 md:py-28">
+        <div className="container">
+          <div className="grid lg:grid-cols-5 gap-12 max-w-5xl mx-auto">
+            <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="lg:col-span-3">
+              {submitted ? (
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 rounded-full bg-hero-gradient flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-8 h-8 text-primary-foreground" />
+                  </div>
+                  <h3 className="text-2xl font-display font-bold text-foreground mb-2">Thank You!</h3>
+                  <p className="text-muted-foreground">We've received your quote request and will be in touch within 24 hours.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Name *</label>
+                      <Input placeholder="Your name" value={form.name} onChange={update("name")} maxLength={100} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label>
+                      <Input type="email" placeholder="you@email.com" value={form.email} onChange={update("email")} maxLength={255} />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Phone</label>
+                      <Input type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={update("phone")} maxLength={20} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Preferred Contact Method</label>
+                      <select value={form.preferred_contact} onChange={update("preferred_contact")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <option value="email">Email</option>
+                        <option value="phone">Phone</option>
+                        <option value="either">Either</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Address</label>
+                    <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Service Type</label>
+                    <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <option value="">Select a service</option>
+                      {(services ?? []).map((s) => (
+                        <option key={s.title} value={s.title}>{s.title}</option>
+                      ))}
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Description of Request *</label>
+                    <Textarea placeholder="Describe your cleaning needs, size of space, frequency, etc..." rows={5} value={form.description} onChange={update("description")} maxLength={2000} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Attach Photo (optional)</label>
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                      <Button type="button" variant="outline" size="sm" disabled={uploading} asChild>
+                        <span><Upload className="w-4 h-4 mr-2" /> {uploading ? "Uploading..." : attachmentUrl ? "Change Photo" : "Upload Photo"}</span>
+                      </Button>
+                    </label>
+                    {attachmentUrl && (
+                      <img src={attachmentUrl} alt="Attachment" className="mt-2 w-24 h-24 rounded-lg object-cover border border-border" />
+                    )}
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Checkbox id="quote-consent" checked={consent} onCheckedChange={(v) => setConsent(!!v)} />
+                    <label htmlFor="quote-consent" className="text-sm text-muted-foreground leading-tight cursor-pointer">
+                      I agree to be contacted regarding my request. My information will be kept private.
+                    </label>
+                  </div>
+                  <Button type="submit" variant="hero" size="lg" disabled={loading || !consent}>
+                    {loading ? "Submitting..." : "Request a Quote"}
+                  </Button>
+                </form>
+              )}
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="lg:col-span-2 space-y-8">
+              <div>
+                <h3 className="font-display font-semibold text-foreground mb-4">Contact Information</h3>
+                <div className="space-y-4">
+                  <a href={`tel:${phoneLink}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0"><Phone className="w-5 h-5 text-sky-foreground" /></div>
+                    <div><p className="text-sm font-medium text-foreground">Phone</p><p className="text-sm">{phone}</p></div>
+                  </a>
+                  <a href={`mailto:${email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0"><Mail className="w-5 h-5 text-sky-foreground" /></div>
+                    <div><p className="text-sm font-medium text-foreground">Email</p><p className="text-sm">{email}</p></div>
+                  </a>
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0"><MapPin className="w-5 h-5 text-sky-foreground" /></div>
+                    <div><p className="text-sm font-medium text-foreground">Service Area</p><p className="text-sm">{serviceArea}</p></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-sky/50">
+                <h4 className="font-display font-semibold text-foreground mb-3">Payment Information</h4>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p><strong className="text-foreground">Accepted:</strong> {settings?.payment_methods || "Cash, Zelle"}</p>
+                  {settings?.zelle_info && <p><strong className="text-foreground">Zelle:</strong> {settings.zelle_info}</p>}
+                  <p>{settings?.payment_policy || "Payment is typically made after service completion."}</p>
+                  {settings?.deposit_info && <p>{settings.deposit_info}</p>}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default RequestQuote;
