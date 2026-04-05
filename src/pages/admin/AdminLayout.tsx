@@ -1,18 +1,23 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Droplets, LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, X, ScrollText } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, ScrollText, CalendarDays, FileQuestion, Clock, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import logo from "@/assets/blueriver-logo.png";
 
 const navItems = [
   { label: "Dashboard", path: "/admin", icon: LayoutDashboard },
+  { label: "Bookings", path: "/admin/bookings", icon: CalendarDays },
+  { label: "Quotes", path: "/admin/quotes", icon: FileQuestion },
   { label: "Submissions", path: "/admin/submissions", icon: MessageSquare },
   { label: "Services", path: "/admin/services", icon: Wrench },
   { label: "Gallery", path: "/admin/gallery", icon: Image },
   { label: "Testimonials", path: "/admin/testimonials", icon: FileText },
+  { label: "Availability", path: "/admin/availability", icon: Clock },
   { label: "Payment", path: "/admin/payment", icon: DollarSign },
   { label: "Privacy Policy", path: "/admin/privacy-policy", icon: ScrollText },
+  { label: "Terms of Service", path: "/admin/terms", icon: Scale },
   { label: "Settings", path: "/admin/settings", icon: Settings },
   { label: "Account", path: "/admin/account", icon: Shield },
 ];
@@ -21,10 +26,8 @@ const SidebarContent = ({ location, signOut, onNavClick }: { location: ReturnTyp
   <>
     <div className="p-4 border-b border-border">
       <Link to="/" className="flex items-center gap-2" onClick={onNavClick}>
-        <div className="w-8 h-8 rounded-lg bg-hero-gradient flex items-center justify-center">
-          <Droplets className="w-4 h-4 text-primary-foreground" />
-        </div>
-        <span className="font-display font-bold text-foreground text-sm">BlueRiver Admin</span>
+        <img src={logo} alt="BlueRiver" className="h-8 w-auto object-contain" />
+        <span className="font-display font-bold text-foreground text-sm">Admin</span>
       </Link>
     </div>
     <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -98,9 +101,7 @@ const AdminLayout = () => {
             </SheetContent>
           </Sheet>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-hero-gradient flex items-center justify-center">
-              <Droplets className="w-3.5 h-3.5 text-primary-foreground" />
-            </div>
+            <img src={logo} alt="BlueRiver" className="h-7 w-auto object-contain" />
             <span className="font-display font-bold text-foreground text-sm">Admin</span>
           </div>
         </header>

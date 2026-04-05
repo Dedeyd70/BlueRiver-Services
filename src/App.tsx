@@ -12,6 +12,10 @@ import About from "./pages/About";
 import Services from "./pages/Services";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
+import BookService from "./pages/BookService";
+import RequestQuote from "./pages/RequestQuote";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/Login";
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -24,8 +28,11 @@ import SettingsAdmin from "./pages/admin/SettingsAdmin";
 import PaymentSettingsAdmin from "./pages/admin/PaymentSettingsAdmin";
 import AccountSettings from "./pages/admin/AccountSettings";
 import ResetPassword from "./pages/admin/ResetPassword";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
 import PrivacyPolicyAdmin from "./pages/admin/PrivacyPolicyAdmin";
+import BookingsAdmin from "./pages/admin/BookingsAdmin";
+import QuotesAdmin from "./pages/admin/QuotesAdmin";
+import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
+import TermsAdmin from "./pages/admin/TermsAdmin";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +58,10 @@ const App = () => (
               <Route path="settings" element={<SettingsAdmin />} />
               <Route path="account" element={<AccountSettings />} />
               <Route path="privacy-policy" element={<PrivacyPolicyAdmin />} />
+              <Route path="bookings" element={<BookingsAdmin />} />
+              <Route path="quotes" element={<QuotesAdmin />} />
+              <Route path="availability" element={<AvailabilityAdmin />} />
+              <Route path="terms" element={<TermsAdmin />} />
             </Route>
 
             {/* Public routes */}
@@ -66,7 +77,10 @@ const App = () => (
                       <Route path="/services" element={<Services />} />
                       <Route path="/gallery" element={<Gallery />} />
                       <Route path="/contact" element={<Contact />} />
+                      <Route path="/book" element={<BookService />} />
+                      <Route path="/quote" element={<RequestQuote />} />
                       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                      <Route path="/terms-of-service" element={<TermsOfService />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>

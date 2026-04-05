@@ -63,10 +63,10 @@ const IndexPage = () => {
               </p>
               <div className="flex flex-wrap gap-4">
                 <Button variant="hero" size="xl" asChild>
-                  <Link to="/contact">Request a Quote</Link>
+                  <Link to="/quote">Get a Free Quote</Link>
                 </Button>
                 <Button variant="hero-outline" size="xl" asChild>
-                  <Link to="/contact">Book Service</Link>
+                  <Link to="/book">Book Now</Link>
                 </Button>
               </div>
             </motion.div>
@@ -85,7 +85,7 @@ const IndexPage = () => {
               const Icon = iconMap[s.icon] || Sparkles;
               return (
                 <motion.div key={s.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
-                  <Link to="/services" className="group block p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
+                  <div className="group block p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
                     {s.image_url ? (
                       <img src={s.image_url} alt={s.title} className="w-full h-32 object-cover rounded-xl mb-4" loading="lazy" />
                     ) : (
@@ -94,17 +94,47 @@ const IndexPage = () => {
                       </div>
                     )}
                     <h3 className="font-display font-semibold text-card-foreground mb-2">{s.title}</h3>
-                    <p className="text-sm text-muted-foreground">{s.description}</p>
-                  </Link>
+                    <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/book?service=${encodeURIComponent(s.title)}`}>Book Now</Link>
+                    </Button>
+                  </div>
                 </motion.div>
               );
             })}
+          </div>
+          <div className="text-center mt-8">
+            <Button variant="outline" asChild>
+              <Link to="/services">View All Services</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-20 md:py-28 bg-muted/50">
+        <div className="container">
+          <SectionHeading badge="How It Works" title="Simple Steps to a Cleaner Space" description="Getting started is easy — just follow these three steps." />
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            {[
+              { step: "1", title: "Request a Quote or Book", desc: "Tell us about your space and needs through our booking form or quote request." },
+              { step: "2", title: "We Confirm & Schedule", desc: "Our team reviews your request, confirms availability, and locks in your appointment." },
+              { step: "3", title: "Enjoy a Spotless Space", desc: "Sit back and relax while our pros deliver a thorough, professional clean." },
+            ].map((item, i) => (
+              <motion.div key={item.step} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.15 }} className="text-center p-6">
+                <div className="w-14 h-14 rounded-full bg-hero-gradient flex items-center justify-center mx-auto mb-4">
+                  <span className="text-xl font-display font-bold text-primary-foreground">{item.step}</span>
+                </div>
+                <h3 className="font-display font-semibold text-foreground mb-2">{item.title}</h3>
+                <p className="text-sm text-muted-foreground">{item.desc}</p>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Why choose us */}
-      <section className="py-20 md:py-28 bg-muted/50">
+      <section className="py-20 md:py-28">
         <div className="container">
           <SectionHeading badge="Why BlueRiver" title="Why Clients Choose Us" description="We go above and beyond to earn your trust and deliver results that speak for themselves." />
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -121,57 +151,30 @@ const IndexPage = () => {
         </div>
       </section>
 
-      {/* Payment Info */}
-      {(settings?.payment_methods || settings?.payment_policy) && (
-        <section className="py-20 md:py-28">
+      {/* Testimonials */}
+      {(testimonials ?? []).length > 0 && (
+        <section className="py-20 md:py-28 bg-muted/50">
           <div className="container">
-            <SectionHeading badge="Payment" title="Payment Information" />
-            <div className="max-w-2xl mx-auto bg-card border border-border rounded-2xl p-8 space-y-4">
-              {settings?.payment_methods && (
-                <div>
-                  <h3 className="font-display font-semibold text-foreground mb-1">Accepted Methods</h3>
-                  <p className="text-muted-foreground text-sm">{settings.payment_methods}</p>
-                </div>
-              )}
-              {settings?.payment_policy && (
-                <div>
-                  <h3 className="font-display font-semibold text-foreground mb-1">Payment Policy</h3>
-                  <p className="text-muted-foreground text-sm">{settings.payment_policy}</p>
-                </div>
-              )}
-              {settings?.deposit_info && (
-                <div>
-                  <h3 className="font-display font-semibold text-foreground mb-1">Deposit Information</h3>
-                  <p className="text-muted-foreground text-sm">{settings.deposit_info}</p>
-                </div>
-              )}
+            <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it — hear from the people who trust BlueRiver." />
+            <div className="grid md:grid-cols-3 gap-6">
+              {(testimonials ?? []).map((t, i) => (
+                <motion.div key={t.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.15 }} className="p-6 rounded-2xl bg-card border border-border">
+                  <div className="flex gap-1 mb-4">
+                    {Array.from({ length: t.rating }).map((_, j) => (
+                      <Star key={j} className="w-4 h-4 fill-primary text-primary" />
+                    ))}
+                  </div>
+                  <p className="text-muted-foreground text-sm leading-relaxed mb-4">"{t.content}"</p>
+                  <div>
+                    <p className="font-display font-semibold text-card-foreground text-sm">{t.author_name}</p>
+                    <p className="text-xs text-muted-foreground">{t.author_role}</p>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </section>
       )}
-
-      {/* Testimonials */}
-      <section className="py-20 md:py-28 bg-muted/50">
-        <div className="container">
-          <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it — hear from the people who trust BlueRiver." />
-          <div className="grid md:grid-cols-3 gap-6">
-            {(testimonials ?? []).map((t, i) => (
-              <motion.div key={t.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.15 }} className="p-6 rounded-2xl bg-card border border-border">
-                <div className="flex gap-1 mb-4">
-                  {Array.from({ length: t.rating }).map((_, j) => (
-                    <Star key={j} className="w-4 h-4 fill-primary text-primary" />
-                  ))}
-                </div>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-4">"{t.content}"</p>
-                <div>
-                  <p className="font-display font-semibold text-card-foreground text-sm">{t.author_name}</p>
-                  <p className="text-xs text-muted-foreground">{t.author_role}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* CTA */}
       <section className="py-20 md:py-28 bg-hero-gradient">
@@ -181,10 +184,10 @@ const IndexPage = () => {
             <p className="text-primary-foreground/80 mb-8 max-w-lg mx-auto">Get in touch today for a free estimate. No obligations, no hidden fees.</p>
             <div className="flex flex-wrap justify-center gap-4">
               <Button variant="hero" size="xl" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90" asChild>
-                <Link to="/contact">Get a Free Quote</Link>
+                <Link to="/quote">Get a Free Quote</Link>
               </Button>
               <Button variant="hero-outline" size="xl" asChild>
-                <a href={`tel:${settings?.phone_link || "+14099771515"}`} className="flex items-center gap-2"><Phone className="w-5 h-5" /> Call Us Now</a>
+                <Link to="/book">Book Now</Link>
               </Button>
             </div>
           </motion.div>

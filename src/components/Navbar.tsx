@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Droplets } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import logo from "@/assets/blueriver-logo.png";
 
 const navLinks = [
   { label: "Home", path: "/" },
   { label: "About", path: "/about" },
   { label: "Services", path: "/services" },
   { label: "Gallery", path: "/gallery" },
+  { label: "Book Now", path: "/book" },
   { label: "Contact", path: "/contact" },
 ];
 
@@ -39,16 +41,11 @@ const Navbar = () => {
     >
       <div className="container flex items-center justify-between h-16 md:h-20">
         <Link to="/" className="flex items-center gap-2 group" onClick={(e) => handleHomeClick(e, "/")}>
-          <div className="w-9 h-9 rounded-lg bg-hero-gradient flex items-center justify-center">
-            <Droplets className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-display font-bold text-foreground">
-            Blue<span className="text-gradient">River</span>
-          </span>
+          <img src={logo} alt="BlueRiver Services" className="h-9 md:h-10 w-auto object-contain" />
         </Link>
 
         {/* Desktop */}
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-6">
           {navLinks.map((link) => (
             <Link
               key={link.path}
@@ -62,7 +59,7 @@ const Navbar = () => {
             </Link>
           ))}
           <Button variant="nav" size="sm" asChild>
-            <Link to="/contact">Get a Quote</Link>
+            <Link to="/quote">Request a Quote</Link>
           </Button>
         </div>
 
@@ -89,7 +86,7 @@ const Navbar = () => {
               </Link>
             ))}
             <Button variant="nav" size="sm" asChild>
-              <Link to="/contact">Get a Quote</Link>
+              <Link to="/quote">Request a Quote</Link>
             </Button>
           </div>
         </div>
