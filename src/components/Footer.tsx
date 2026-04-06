@@ -18,8 +18,8 @@ const Footer = () => {
   const phone = settings?.phone || "(409) 977-1515";
   const phoneLink = settings?.phone_link || "+14099771515";
   const email = settings?.email || "joshuaquao@gmail.com";
-  const serviceArea = settings?.service_area || "Serving the United States";
-  const tagline = settings?.footer_tagline || "Professional cleaning services for homes and businesses across the United States. Trusted by thousands.";
+  const serviceArea = settings?.service_area || "Serving Washington and surrounding areas";
+  const tagline = settings?.footer_tagline || "Professional cleaning services for homes and businesses. Trusted by our community.";
 
   const handleHomeClick = (e: React.MouseEvent) => {
     if (window.location.pathname === "/") {
