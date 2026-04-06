@@ -33,6 +33,8 @@ import BookingsAdmin from "./pages/admin/BookingsAdmin";
 import QuotesAdmin from "./pages/admin/QuotesAdmin";
 import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
 import TermsAdmin from "./pages/admin/TermsAdmin";
+import BeforeAfterAdmin from "./pages/admin/BeforeAfterAdmin";
+import BrandingAdmin from "./pages/admin/BrandingAdmin";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +55,7 @@ const App = () => (
               <Route path="submissions" element={<Submissions />} />
               <Route path="services" element={<ServicesAdmin />} />
               <Route path="gallery" element={<GalleryAdmin />} />
+              <Route path="before-after" element={<BeforeAfterAdmin />} />
               <Route path="testimonials" element={<TestimonialsAdmin />} />
               <Route path="payment" element={<PaymentSettingsAdmin />} />
               <Route path="settings" element={<SettingsAdmin />} />
@@ -62,6 +65,7 @@ const App = () => (
               <Route path="quotes" element={<QuotesAdmin />} />
               <Route path="availability" element={<AvailabilityAdmin />} />
               <Route path="terms" element={<TermsAdmin />} />
+              <Route path="branding" element={<BrandingAdmin />} />
             </Route>
 
             {/* Public routes */}

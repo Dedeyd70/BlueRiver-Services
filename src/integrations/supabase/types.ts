@@ -38,6 +38,39 @@ export type Database = {
         }
         Relationships: []
       }
+      before_after_images: {
+        Row: {
+          after_image_url: string
+          before_image_url: string
+          caption: string | null
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          after_image_url: string
+          before_image_url: string
+          caption?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          after_image_url?: string
+          before_image_url?: string
+          caption?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       blocked_dates: {
         Row: {
           blocked_date: string
@@ -103,6 +136,30 @@ export type Database = {
           service_type?: string | null
           status?: string
           time_slot?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      branding_settings: {
+        Row: {
+          created_at: string
+          id: string
+          setting_key: string
+          setting_value: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setting_key: string
+          setting_value?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setting_key?: string
+          setting_value?: string
           updated_at?: string
         }
         Relationships: []

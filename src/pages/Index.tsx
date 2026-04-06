@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import SectionHeading from "@/components/SectionHeading";
-import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck, Droplets, Wind, Phone } from "lucide-react";
+import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck, Droplets, Wind, Phone, MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -40,15 +40,22 @@ const IndexPage = () => {
       return data ?? [];
     },
   });
+  const { data: beforeAfter } = useQuery({
+    queryKey: ["public-before-after"],
+    queryFn: async () => {
+      const { data } = await supabase.from("before_after_images").select("*").eq("is_active", true).order("display_order");
+      return data ?? [];
+    },
+  });
 
   return (
     <div className="overflow-hidden">
       {/* Hero */}
       <section className="relative min-h-[90vh] flex items-center bg-hero-gradient overflow-hidden">
         <div className="absolute inset-0">
-          <img src={heroImg} alt="Professional cleaning team at work" className="w-full h-full object-cover opacity-20" width={1920} height={1080} />
+          <img src={heroImg} alt="Professional cleaning team at work" className="w-full h-full object-cover" width={1920} height={1080} />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-accent/80" />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/70 via-primary/40 to-accent/30" />
         <div className="container relative z-10 py-32">
           <div className="max-w-2xl">
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
@@ -58,8 +65,11 @@ const IndexPage = () => {
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-extrabold text-primary-foreground leading-tight mb-6">
                 {settings?.hero_headline || "Reliable Cleaning Services You Can Trust"}
               </h1>
-              <p className="text-lg text-primary-foreground/85 leading-relaxed mb-8 max-w-lg">
+              <p className="text-lg text-primary-foreground/85 leading-relaxed mb-4 max-w-lg">
                 {settings?.hero_subheadline || "From cozy homes to bustling offices, BlueRiver Services delivers spotless results with every visit."}
+              </p>
+              <p className="flex items-center gap-2 text-primary-foreground/75 text-sm mb-8">
+                <MapPin className="w-4 h-4" /> Serving Washington and surrounding areas
               </p>
               <div className="flex flex-wrap gap-4">
                 <Button variant="hero" size="xl" asChild>
@@ -151,9 +161,39 @@ const IndexPage = () => {
         </div>
       </section>
 
+      {/* Before & After */}
+      {(beforeAfter ?? []).length > 0 && (
+        <section className="py-20 md:py-28 bg-muted/50">
+          <div className="container">
+            <SectionHeading badge="Results" title="Before & After" description="See the difference our professional cleaning makes." />
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(beforeAfter ?? []).map((item, i) => (
+                <motion.div key={item.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="bg-card border border-border rounded-2xl overflow-hidden">
+                  <div className="grid grid-cols-2">
+                    <div className="relative">
+                      <img src={item.before_image_url} alt="Before" className="w-full h-48 object-cover" loading="lazy" />
+                      <span className="absolute bottom-2 left-2 bg-foreground/70 text-background text-xs font-semibold px-2 py-0.5 rounded">Before</span>
+                    </div>
+                    <div className="relative">
+                      <img src={item.after_image_url} alt="After" className="w-full h-48 object-cover" loading="lazy" />
+                      <span className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-0.5 rounded">After</span>
+                    </div>
+                  </div>
+                  {item.caption && (
+                    <div className="p-3">
+                      <p className="text-sm text-muted-foreground">{item.caption}</p>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Testimonials */}
       {(testimonials ?? []).length > 0 && (
-        <section className="py-20 md:py-28 bg-muted/50">
+        <section className="py-20 md:py-28">
           <div className="container">
             <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it — hear from the people who trust BlueRiver." />
             <div className="grid md:grid-cols-3 gap-6">
