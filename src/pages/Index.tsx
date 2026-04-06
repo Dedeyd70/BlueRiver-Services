@@ -124,7 +124,7 @@ const IndexPage = () => {
       {/* How it works */}
       <section className="py-20 md:py-28 bg-muted/50">
         <div className="container">
-          <SectionHeading badge="How It Works" title="Simple Steps to a Cleaner Space" description="Getting started is easy — just follow these three steps." />
+          <SectionHeading badge="How It Works" title="Simple Steps to a Cleaner Space" description="Getting started is easy, just follow these three steps." />
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {[
               { step: "1", title: "Request a Quote or Book", desc: "Tell us about your space and needs through our booking form or quote request." },
