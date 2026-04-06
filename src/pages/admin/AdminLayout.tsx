@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, ScrollText, CalendarDays, FileQuestion, Clock, Scale } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, ScrollText, CalendarDays, FileQuestion, Clock, Scale, Layers, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import logo from "@/assets/blueriver-logo.png";
@@ -13,11 +13,13 @@ const navItems = [
   { label: "Submissions", path: "/admin/submissions", icon: MessageSquare },
   { label: "Services", path: "/admin/services", icon: Wrench },
   { label: "Gallery", path: "/admin/gallery", icon: Image },
+  { label: "Before & After", path: "/admin/before-after", icon: Layers },
   { label: "Testimonials", path: "/admin/testimonials", icon: FileText },
   { label: "Availability", path: "/admin/availability", icon: Clock },
   { label: "Payment", path: "/admin/payment", icon: DollarSign },
   { label: "Privacy Policy", path: "/admin/privacy-policy", icon: ScrollText },
   { label: "Terms of Service", path: "/admin/terms", icon: Scale },
+  { label: "Branding", path: "/admin/branding", icon: Palette },
   { label: "Settings", path: "/admin/settings", icon: Settings },
   { label: "Account", path: "/admin/account", icon: Shield },
 ];
