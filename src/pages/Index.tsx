@@ -21,7 +21,7 @@ const whyUs = [
   { icon: Shield, title: "Trusted & Insured", desc: "Fully licensed, bonded, and insured for your peace of mind." },
   { icon: Clock, title: "Flexible Scheduling", desc: "Appointments that fit your busy lifestyle." },
   { icon: Award, title: "Experienced Team", desc: "Trained professionals with years of expertise." },
-  { icon: Sparkles, title: "Attention to Detail", desc: "We don't cut corners — we clean them." },
+  { icon: Sparkles, title: "Attention to Detail", desc: "We don't cut corners, we clean them." },
 ];
 
 const IndexPage = () => {
@@ -195,7 +195,7 @@ const IndexPage = () => {
       {(testimonials ?? []).length > 0 && (
         <section className="py-20 md:py-28">
           <div className="container">
-            <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it — hear from the people who trust BlueRiver." />
+            <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it, hear from the people who trust BlueRiver." />
             <div className="grid md:grid-cols-3 gap-6">
               {(testimonials ?? []).map((t, i) => (
                 <motion.div key={t.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.15 }} className="p-6 rounded-2xl bg-card border border-border">
