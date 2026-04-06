@@ -10,6 +10,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAdmin: false,
@@ -23,6 +25,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const initialised = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const checkAdmin = useCallback(async (userId: string) => {
     try {
@@ -38,8 +41,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const doSignOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setIsAdmin(false);
+  }, []);
+
+  // Session timeout: reset timer on activity
+  const resetTimeout = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      doSignOut();
+    }, SESSION_TIMEOUT_MS);
+  }, [doSignOut]);
+
+  // Logout on browser/tab close
   useEffect(() => {
-    // Get initial session first, then subscribe to changes
+    const handleBeforeUnload = () => {
+      // Mark session for cleanup - use sessionStorage flag
+      sessionStorage.setItem("blueriver_session_active", "true");
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    // Check if returning from a page reload vs new tab
+    const wasActive = sessionStorage.getItem("blueriver_session_active");
+    if (!wasActive) {
+      // New tab/window - sign out any lingering session
+      supabase.auth.signOut();
+    }
+
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  // Activity listeners for session timeout
+  useEffect(() => {
+    if (!user) return;
+    const events = ["mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, resetTimeout, { passive: true }));
+    resetTimeout();
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, resetTimeout));
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [user, resetTimeout]);
+
+  useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
@@ -52,9 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Skip if this fires before getSession resolves (initial event)
       if (!initialised.current) return;
-
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
@@ -72,17 +116,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
+    sessionStorage.setItem("blueriver_session_active", "true");
     return { error: null };
   }, []);
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setIsAdmin(false);
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signOut: doSignOut }}>
       {children}
     </AuthContext.Provider>
   );
