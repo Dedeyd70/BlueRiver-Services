@@ -59,9 +59,9 @@ const IndexPage = () => {
         <div className="container relative z-10 py-32">
           <div className="max-w-2xl">
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-              <span className="inline-block px-4 py-1.5 rounded-full bg-primary-foreground/15 text-primary-foreground text-sm font-medium mb-6">
+              {/* <span className="inline-block px-4 py-1.5 rounded-full bg-primary-foreground/15 text-primary-foreground text-sm font-medium mb-6">
                 ✨ Professional Cleaning Services
-              </span>
+              </span> */}
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-extrabold text-primary-foreground leading-tight mb-6">
                 {settings?.hero_headline || "Reliable Cleaning Services You Can Trust"}
               </h1>
