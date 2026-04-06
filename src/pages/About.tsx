@@ -7,7 +7,7 @@ const values = [
   { icon: Heart, title: "Customer First", desc: "Every decision starts with what's best for our clients." },
   { icon: Eye, title: "Attention to Detail", desc: "We notice the small things that make a big difference." },
   { icon: Users, title: "Team Excellence", desc: "Our people are trained, vetted, and passionate about cleaning." },
-  { icon: Award, title: "Quality Guarantee", desc: "If you're not satisfied, we'll make it right — guaranteed." },
+  { icon: Award, title: "Quality Guarantee", desc: "If you're not satisfied, we'll make it right and its guaranteed." },
 ];
 
 const fadeUp = {
