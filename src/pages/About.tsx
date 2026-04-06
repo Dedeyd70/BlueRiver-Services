@@ -40,10 +40,10 @@ const About = () => {
                 {settings?.about_mission_title || "Our Mission"}
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                {settings?.about_mission_p1 || "At BlueRiver Services, we believe that a clean space is more than just tidy surfaces — it's about creating environments where people feel comfortable, productive, and at ease."}
+                {settings?.about_mission_p1 || "At BlueRiver Services, we believe that a clean space is more than just tidy surfaces, it's about creating environments where people feel comfortable, productive, and at ease."}
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                {settings?.about_mission_p2 || "Our name reflects what we stand for: the steady flow of a blue river — consistent, refreshing, and dependable."}
+                {settings?.about_mission_p2 || "Our name reflects what we stand for: the steady flow of a blue river. Consistent, refreshing, and dependable."}
               </p>
             </motion.div>
           </div>
@@ -71,10 +71,10 @@ const About = () => {
         <div className="container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: "5,000+", label: "Happy Clients" },
-              { value: "15+", label: "Years Experience" },
+              { value: "1,000+", label: "Happy Clients" },
+              { value: "5+", label: "Years Experience" },
               { value: "98%", label: "Satisfaction Rate" },
-              { value: "50+", label: "Team Members" },
+              { value: "10+", label: "Team Members" },
             ].map((s, i) => (
               <motion.div key={s.label} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="text-center">
                 <p className="text-3xl md:text-4xl font-display font-extrabold text-gradient mb-1">{s.value}</p>
