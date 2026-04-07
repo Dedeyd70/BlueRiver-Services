@@ -3,19 +3,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import ImageUpload from "@/components/ImageUpload";
 
+const CATEGORIES = ["General", "Kitchen", "Bathroom", "Living Area", "Office Cleaning", "Deep Cleaning", "Exterior"];
+
 interface GalleryForm {
   image_url: string;
   caption: string;
+  category: string;
   is_active: boolean;
 }
 
-const defaultForm: GalleryForm = { image_url: "", caption: "", is_active: true };
+const defaultForm: GalleryForm = { image_url: "", caption: "", category: "General", is_active: true };
 
 const GalleryAdmin = () => {
   const { toast } = useToast();
@@ -39,6 +43,7 @@ const GalleryAdmin = () => {
       const payload = {
         image_url: form.image_url,
         caption: form.caption,
+        category: form.category,
         is_active: form.is_active,
         display_order: editId ? undefined : (gallery?.length ?? 0) + 1,
       };
@@ -73,13 +78,13 @@ const GalleryAdmin = () => {
 
   const openEdit = (item: any) => {
     setEditId(item.id);
-    setForm({ image_url: item.image_url, caption: item.caption || "", is_active: item.is_active });
+    setForm({ image_url: item.image_url, caption: item.caption || "", category: item.category || "General", is_active: item.is_active });
     setDialogOpen(true);
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold text-foreground">Gallery</h1>
         <Button onClick={() => { setEditId(null); setForm(defaultForm); setDialogOpen(true); }}>
           <Plus className="w-4 h-4 mr-2" /> Add Image
@@ -95,6 +100,17 @@ const GalleryAdmin = () => {
             <div>
               <label className="text-sm font-medium mb-1 block">Image</label>
               <ImageUpload value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} folder="gallery" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Category</label>
+              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">Caption (optional)</label>
@@ -124,6 +140,7 @@ const GalleryAdmin = () => {
                 <span className="absolute top-2 left-2 text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">Hidden</span>
               )}
               <div className="p-2">
+                <p className="text-xs text-primary font-medium">{(item as any).category || "General"}</p>
                 <p className="text-xs text-muted-foreground truncate">{item.caption || "No caption"}</p>
               </div>
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
