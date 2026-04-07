@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import SectionHeading from "@/components/SectionHeading";
-import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck, Droplets, Wind, Phone, MapPin } from "lucide-react";
+import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck, Droplets, Wind, Phone, MapPin, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
