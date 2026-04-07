@@ -36,6 +36,7 @@ import TermsAdmin from "./pages/admin/TermsAdmin";
 import BeforeAfterAdmin from "./pages/admin/BeforeAfterAdmin";
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
+import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +68,7 @@ const App = () => (
               <Route path="availability" element={<AvailabilityAdmin />} />
               <Route path="terms" element={<TermsAdmin />} />
               <Route path="branding" element={<BrandingAdmin />} />
+              <Route path="homepage-images" element={<HomepageImagesAdmin />} />
               <Route path="users" element={<UserManagement />} />
             </Route>
 
