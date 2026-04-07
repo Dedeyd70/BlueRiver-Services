@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import SectionHeading from "@/components/SectionHeading";
-import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck, Droplets, Wind, Phone, MapPin } from "lucide-react";
+import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck, Droplets, Wind, Phone, MapPin, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -25,6 +26,7 @@ const whyUs = [
 ];
 
 const IndexPage = () => {
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const { data: settings } = useSiteSettings();
   const { data: services } = useQuery({
     queryKey: ["public-services-home"],
@@ -170,12 +172,12 @@ const IndexPage = () => {
               {(beforeAfter ?? []).map((item, i) => (
                 <motion.div key={item.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="bg-card border border-border rounded-2xl overflow-hidden">
                   <div className="grid grid-cols-2">
-                    <div className="relative">
-                      <img src={item.before_image_url} alt="Before" className="w-full h-48 object-cover" loading="lazy" />
+                    <div className="relative cursor-pointer" onClick={() => setLightboxImage(item.before_image_url)}>
+                      <img src={item.before_image_url} alt="Before" className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
                       <span className="absolute bottom-2 left-2 bg-foreground/70 text-background text-xs font-semibold px-2 py-0.5 rounded">Before</span>
                     </div>
-                    <div className="relative">
-                      <img src={item.after_image_url} alt="After" className="w-full h-48 object-cover" loading="lazy" />
+                    <div className="relative cursor-pointer" onClick={() => setLightboxImage(item.after_image_url)}>
+                      <img src={item.after_image_url} alt="After" className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
                       <span className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-0.5 rounded">After</span>
                     </div>
                   </div>
@@ -233,6 +235,31 @@ const IndexPage = () => {
           </motion.div>
         </div>
       </section>
+      {/* Lightbox for Before & After */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setLightboxImage(null)}
+          >
+            <button className="absolute top-4 right-4 text-white" onClick={() => setLightboxImage(null)}>
+              <X className="w-8 h-8" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.8 }}
+              src={lightboxImage}
+              alt="Preview"
+              className="max-w-full max-h-[90vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
