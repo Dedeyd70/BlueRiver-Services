@@ -67,6 +67,7 @@ const App = () => (
               <Route path="availability" element={<AvailabilityAdmin />} />
               <Route path="terms" element={<TermsAdmin />} />
               <Route path="branding" element={<BrandingAdmin />} />
+              <Route path="users" element={<UserManagement />} />
             </Route>
 
             {/* Public routes */}
