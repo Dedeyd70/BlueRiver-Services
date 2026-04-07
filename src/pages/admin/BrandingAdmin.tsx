@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Palette } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ImageUpload from "@/components/ImageUpload";
 
 const BrandingAdmin = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoSize, setLogoSize] = useState("medium");
   const [primaryColor, setPrimaryColor] = useState("#1a73e8");
   const [secondaryColor, setSecondaryColor] = useState("#0097a7");
 
@@ -27,6 +29,7 @@ const BrandingAdmin = () => {
   useEffect(() => {
     if (settings) {
       setLogoUrl(settings.logo_url || "");
+      setLogoSize(settings.logo_size || "medium");
       setPrimaryColor(settings.primary_color || "#1a73e8");
       setSecondaryColor(settings.secondary_color || "#0097a7");
     }
@@ -36,6 +39,7 @@ const BrandingAdmin = () => {
     mutationFn: async () => {
       const entries = [
         { setting_key: "logo_url", setting_value: logoUrl },
+        { setting_key: "logo_size", setting_value: logoSize },
         { setting_key: "primary_color", setting_value: primaryColor },
         { setting_key: "secondary_color", setting_value: secondaryColor },
       ];
@@ -69,6 +73,17 @@ const BrandingAdmin = () => {
           <label className="text-sm font-medium text-foreground mb-1.5 block">Logo</label>
           <p className="text-xs text-muted-foreground mb-2">Upload a custom logo. If empty, the default logo will be used.</p>
           <ImageUpload value={logoUrl} onChange={setLogoUrl} folder="branding" />
+          <div className="mt-3">
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Logo Size</label>
+            <Select value={logoSize} onValueChange={setLogoSize}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="small">Small</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="large">Large</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">

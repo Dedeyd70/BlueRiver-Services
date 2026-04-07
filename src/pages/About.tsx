@@ -2,6 +2,9 @@ import { motion } from "framer-motion";
 import SectionHeading from "@/components/SectionHeading";
 import { Heart, Eye, Users, Award } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import defaultLogo from "@/assets/blueriver-logo.png";
 
 const values = [
   { icon: Heart, title: "Customer First", desc: "Every decision starts with what's best for our clients." },
@@ -19,6 +22,16 @@ const fadeUp = {
 
 const About = () => {
   const { data: settings } = useSiteSettings();
+  const { data: branding } = useQuery({
+    queryKey: ["public-branding"],
+    queryFn: async () => {
+      const { data } = await supabase.from("branding_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r: any) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+  const logoUrl = branding?.logo_url || defaultLogo;
 
   return (
     <div>
@@ -36,6 +49,7 @@ const About = () => {
         <div className="container">
           <div className="max-w-3xl mx-auto">
             <motion.div {...fadeUp} className="space-y-6 text-center">
+              <img src={logoUrl} alt="BlueRiver Services" className="h-20 w-auto mx-auto object-contain mb-4" />
               <h2 className="text-3xl font-display font-bold text-foreground">
                 {settings?.about_mission_title || "Our Mission"}
               </h2>

@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type TabType = "all" | "bookings" | "quotes" | "contact";
 
@@ -39,6 +41,7 @@ const Submissions = () => {
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabType>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [deleteTarget, setDeleteTarget] = useState<UnifiedEntry | null>(null);
 
   const { data: bookings } = useQuery({
     queryKey: ["admin-bookings-sub"],
@@ -67,7 +70,24 @@ const Submissions = () => {
     },
   });
 
-  // Combine all entries
+  const deleteEntry = useMutation({
+    mutationFn: async (entry: UnifiedEntry) => {
+      const table = entry.type === "Booking" ? "bookings" : entry.type === "Quote" ? "quote_requests" : "contact_submissions";
+      const { error } = await supabase.from(table).delete().eq("id", entry.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
+      qc.invalidateQueries({ queryKey: ["admin-quotes-sub"] });
+      qc.invalidateQueries({ queryKey: ["admin-submissions"] });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-quotes"] });
+      toast({ title: "Submission deleted" });
+      setDeleteTarget(null);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const entries: UnifiedEntry[] = [
     ...(bookings ?? []).map((b) => ({
       id: b.id,
@@ -125,7 +145,21 @@ const Submissions = () => {
     <div>
       <h1 className="text-2xl font-display font-bold text-foreground mb-4">Submissions</h1>
 
-      {/* Tabs */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Submission</AlertDialogTitle>
+            <AlertDialogDescription>Are you sure you want to delete this submission? This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteTarget && deleteEntry.mutate(deleteTarget)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="flex flex-wrap gap-2 mb-4">
         {tabs.map((t) => (
           <button
@@ -140,7 +174,6 @@ const Submissions = () => {
         ))}
       </div>
 
-      {/* Status filter */}
       <div className="flex flex-wrap gap-1.5 mb-4">
         <button
           onClick={() => setStatusFilter("all")}
@@ -163,7 +196,6 @@ const Submissions = () => {
         ))}
       </div>
 
-      {/* Entries */}
       {!filtered.length ? (
         <p className="text-muted-foreground text-sm">No entries found.</p>
       ) : (
@@ -180,9 +212,14 @@ const Submissions = () => {
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{e.email} {e.phone && `• ${e.phone}`}</p>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[e.status] || "bg-muted text-muted-foreground"}`}>
-                  {e.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[e.status] || "bg-muted text-muted-foreground"}`}>
+                    {e.status}
+                  </span>
+                  <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => setDeleteTarget(e)}>
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  </Button>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                 {e.service_type && <span>Service: <strong className="text-foreground">{e.service_type}</strong></span>}
