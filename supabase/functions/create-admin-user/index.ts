@@ -39,8 +39,17 @@ Deno.serve(async (req) => {
     }
 
     const { email, password, role, full_name } = await req.json();
-    if (!email || !role) throw new Error("Email and role are required");
+    if (!email || !role) throw new Error("Invalid input: email, full_name, and valid role are required");
     if (!password || password.length < 8) throw new Error("Password must be at least 8 characters");
+
+    // Map display roles to DB enum values
+    const roleMap: Record<string, string> = {
+      "admin": "admin", "Super Admin": "admin",
+      "manager": "manager", "Manager": "manager",
+      "staff": "staff", "Staff": "staff",
+    };
+    const dbRole = roleMap[role];
+    if (!dbRole) throw new Error(`Invalid role value: ${role}`);
 
     // Create user via admin API (bypasses signup restrictions)
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
@@ -56,7 +65,7 @@ Deno.serve(async (req) => {
     // Assign role
     const { error: roleError } = await adminClient
       .from("user_roles")
-      .insert({ user_id: newUser.user.id, role });
+      .insert({ user_id: newUser.user.id, role: dbRole });
 
     if (roleError) throw roleError;
 
@@ -64,9 +73,10 @@ Deno.serve(async (req) => {
       JSON.stringify({ success: true, user_id: newUser.user.id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
