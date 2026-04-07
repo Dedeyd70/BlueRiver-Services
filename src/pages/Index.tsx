@@ -7,7 +7,7 @@ import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck,
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
-import heroImg from "@/assets/hero-cleaning.jpg";
+import heroImgFallback from "@/assets/hero-cleaning.jpg";
 
 const iconMap: Record<string, any> = { Home, Building2, SprayCan, Truck, Droplets, Wind, Sparkles, Shield, Clock, Award };
 
@@ -49,6 +49,17 @@ const IndexPage = () => {
       return data ?? [];
     },
   });
+  const { data: homepageImages } = useQuery({
+    queryKey: ["public-homepage-images"],
+    queryFn: async () => {
+      const { data } = await supabase.from("homepage_images").select("section_key, image_url");
+      const map: Record<string, string> = {};
+      data?.forEach((r: any) => { if (r.image_url) map[r.section_key] = r.image_url; });
+      return map;
+    },
+  });
+
+  const heroImg = homepageImages?.hero || heroImgFallback;
 
   return (
     <div className="overflow-hidden">
