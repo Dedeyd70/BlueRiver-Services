@@ -47,6 +47,7 @@ export type Database = {
           display_order: number
           id: string
           is_active: boolean
+          service_id: string | null
           updated_at: string
         }
         Insert: {
@@ -57,6 +58,7 @@ export type Database = {
           display_order?: number
           id?: string
           is_active?: boolean
+          service_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -67,9 +69,18 @@ export type Database = {
           display_order?: number
           id?: string
           is_active?: boolean
+          service_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "before_after_images_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       blocked_dates: {
         Row: {
@@ -203,6 +214,7 @@ export type Database = {
       gallery: {
         Row: {
           caption: string | null
+          category: string | null
           created_at: string
           display_order: number
           id: string
@@ -212,6 +224,7 @@ export type Database = {
         }
         Insert: {
           caption?: string | null
+          category?: string | null
           created_at?: string
           display_order?: number
           id?: string
@@ -221,6 +234,7 @@ export type Database = {
         }
         Update: {
           caption?: string | null
+          category?: string | null
           created_at?: string
           display_order?: number
           id?: string
@@ -439,7 +453,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "manager" | "staff"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -567,7 +581,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "manager", "staff"],
     },
   },
 } as const
