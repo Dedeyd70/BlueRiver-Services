@@ -244,6 +244,33 @@ export type Database = {
         }
         Relationships: []
       }
+      homepage_images: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          label: string
+          section_key: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          label?: string
+          section_key: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          label?: string
+          section_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       page_content: {
         Row: {
           content: Json
@@ -270,6 +297,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      quote_notes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string
+          quote_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note: string
+          quote_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string
+          quote_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_notes_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quote_requests: {
         Row: {
