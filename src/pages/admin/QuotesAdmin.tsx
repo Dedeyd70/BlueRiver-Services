@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { ExternalLink, ArrowRightLeft } from "lucide-react";
+import { ExternalLink, ArrowRightLeft, MessageSquare, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const statusColors: Record<string, string> = {
@@ -23,6 +24,8 @@ const QuotesAdmin = () => {
   const [selectedQuote, setSelectedQuote] = useState<any>(null);
   const [bookingDate, setBookingDate] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
+  const [expandedNotes, setExpandedNotes] = useState<string | null>(null);
+  const [newNote, setNewNote] = useState("");
 
   const { data: quotes, isLoading } = useQuery({
     queryKey: ["admin-quotes"],
@@ -30,6 +33,32 @@ const QuotesAdmin = () => {
       const { data, error } = await supabase.from("quote_requests").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: allNotes } = useQuery({
+    queryKey: ["admin-quote-notes"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("quote_notes").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const addNote = useMutation({
+    mutationFn: async ({ quoteId, note }: { quoteId: string; note: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from("quote_notes").insert({
+        quote_id: quoteId,
+        note,
+        created_by: user?.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+      setNewNote("");
+      toast({ title: "Note added" });
     },
   });
 
@@ -48,7 +77,6 @@ const QuotesAdmin = () => {
   const convertToBooking = useMutation({
     mutationFn: async () => {
       if (!selectedQuote || !bookingDate || !timeSlot) throw new Error("Please select date and time");
-      // Create booking from quote data
       const { error: bookingError } = await supabase.from("bookings").insert({
         name: selectedQuote.name,
         email: selectedQuote.email,
@@ -62,8 +90,6 @@ const QuotesAdmin = () => {
         status: "confirmed",
       });
       if (bookingError) throw bookingError;
-
-      // Update quote status to converted
       const { error: quoteError } = await supabase
         .from("quote_requests")
         .update({ status: "converted" })
@@ -89,11 +115,12 @@ const QuotesAdmin = () => {
     setConvertDialogOpen(true);
   };
 
+  const getNotesForQuote = (quoteId: string) => (allNotes ?? []).filter((n) => n.quote_id === quoteId);
+
   return (
     <div>
       <h1 className="text-2xl font-display font-bold text-foreground mb-6">Quote Requests</h1>
 
-      {/* Convert to Booking Dialog */}
       <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -114,7 +141,7 @@ const QuotesAdmin = () => {
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Time Slot</label>
-                <Input type="time" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} placeholder="e.g. 9:00 AM" required />
+                <Input type="time" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} required />
               </div>
               <Button onClick={() => convertToBooking.mutate()} className="w-full" disabled={convertToBooking.isPending}>
                 {convertToBooking.isPending ? "Converting..." : "Convert to Booking"}
@@ -130,52 +157,96 @@ const QuotesAdmin = () => {
         <p className="text-muted-foreground">No quote requests yet.</p>
       ) : (
         <div className="space-y-3">
-          {quotes.map((q) => (
-            <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-medium text-foreground">{q.name}</h3>
-                  <p className="text-sm text-muted-foreground">{q.email} {q.phone && `• ${q.phone}`}</p>
+          {quotes.map((q) => {
+            const notes = getNotesForQuote(q.id);
+            const isExpanded = expandedNotes === q.id;
+            return (
+              <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-medium text-foreground">{q.name}</h3>
+                    <p className="text-sm text-muted-foreground">{q.email} {q.phone && `• ${q.phone}`}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}>
+                    {q.status}
+                  </span>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}>
-                  {q.status}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Service:</span>
-                  <p className="font-medium text-foreground">{q.service_type || "—"}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Service:</span>
+                    <p className="font-medium text-foreground">{q.service_type || "—"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Contact via:</span>
+                    <p className="font-medium text-foreground capitalize">{q.preferred_contact}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Submitted:</span>
+                    <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Contact via:</span>
-                  <p className="font-medium text-foreground capitalize">{q.preferred_contact}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Submitted:</span>
-                  <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
-                </div>
-              </div>
-              {q.address && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Address:</span> {q.address}</p>}
-              <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Description:</span> {q.description}</p>
-              {q.attachment_url && (
-                <a href={q.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                  <ExternalLink className="w-3 h-3" /> View Attachment
-                </a>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {q.status !== "converted" && (
-                  <Button variant="default" size="sm" onClick={() => openConvert(q)} className="gap-1">
-                    <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
-                  </Button>
+                {q.address && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Address:</span> {q.address}</p>}
+                <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Description:</span> {q.description}</p>
+                {q.attachment_url && (
+                  <a href={q.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                    <ExternalLink className="w-3 h-3" /> View Attachment
+                  </a>
                 )}
-                {["pending", "reviewed", "responded", "closed"].filter((s) => s !== q.status && q.status !== "converted").map((s) => (
-                  <Button key={s} variant="outline" size="sm" onClick={() => updateStatus.mutate({ id: q.id, status: s })} className="capitalize">
-                    {s}
-                  </Button>
-                ))}
+
+                {/* Interaction Log */}
+                <div className="border-t border-border pt-3">
+                  <button
+                    onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
+                    className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Activity Log ({notes.length})
+                  </button>
+                  {isExpanded && (
+                    <div className="mt-3 space-y-2">
+                      {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
+                      {notes.map((n) => (
+                        <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                          <p className="text-foreground">{n.note}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}</p>
+                        </div>
+                      ))}
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (newNote.trim()) addNote.mutate({ quoteId: q.id, note: newNote.trim() });
+                        }}
+                        className="flex gap-2"
+                      >
+                        <Input
+                          value={expandedNotes === q.id ? newNote : ""}
+                          onChange={(e) => setNewNote(e.target.value)}
+                          placeholder="Add a note..."
+                          className="flex-1 h-8 text-sm"
+                        />
+                        <Button type="submit" size="sm" variant="outline" disabled={addNote.isPending || !newNote.trim()} className="h-8">
+                          <Send className="w-3 h-3" />
+                        </Button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {q.status !== "converted" && (
+                    <Button variant="default" size="sm" onClick={() => openConvert(q)} className="gap-1">
+                      <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                    </Button>
+                  )}
+                  {["pending", "reviewed", "responded", "closed"].filter((s) => s !== q.status && q.status !== "converted").map((s) => (
+                    <Button key={s} variant="outline" size="sm" onClick={() => updateStatus.mutate({ id: q.id, status: s })} className="capitalize">
+                      {s}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
