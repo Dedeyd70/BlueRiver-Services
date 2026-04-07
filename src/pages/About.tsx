@@ -88,7 +88,7 @@ const About = () => {
               { value: "1,000+", label: "Happy Clients" },
               { value: "5+", label: "Years Experience" },
               { value: "98%", label: "Satisfaction Rate" },
-              { value: "10+", label: "Team Members" },
+              { value: "4.9", label: "Ratings" },
             ].map((s, i) => (
               <motion.div key={s.label} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="text-center">
                 <p className="text-3xl md:text-4xl font-display font-extrabold text-gradient mb-1">{s.value}</p>
