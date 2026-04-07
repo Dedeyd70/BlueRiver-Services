@@ -172,12 +172,12 @@ const IndexPage = () => {
               {(beforeAfter ?? []).map((item, i) => (
                 <motion.div key={item.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="bg-card border border-border rounded-2xl overflow-hidden">
                   <div className="grid grid-cols-2">
-                    <div className="relative">
-                      <img src={item.before_image_url} alt="Before" className="w-full h-48 object-cover" loading="lazy" />
+                    <div className="relative cursor-pointer" onClick={() => setLightboxImage(item.before_image_url)}>
+                      <img src={item.before_image_url} alt="Before" className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
                       <span className="absolute bottom-2 left-2 bg-foreground/70 text-background text-xs font-semibold px-2 py-0.5 rounded">Before</span>
                     </div>
-                    <div className="relative">
-                      <img src={item.after_image_url} alt="After" className="w-full h-48 object-cover" loading="lazy" />
+                    <div className="relative cursor-pointer" onClick={() => setLightboxImage(item.after_image_url)}>
+                      <img src={item.after_image_url} alt="After" className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
                       <span className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-0.5 rounded">After</span>
                     </div>
                   </div>
