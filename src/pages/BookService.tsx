@@ -237,7 +237,7 @@ const BookService = () => {
                 </label>
               </div>
 
-              <Button type="submit" variant="hero" size="lg" disabled={loading || !selectedDate || !selectedSlot || !consent}>
+              <Button type="submit" variant="hero" size="lg" disabled={loading || !form.name.trim() || !form.email.trim() || !form.address.trim() || !selectedDate || !selectedSlot || !consent}>
                 {loading ? "Submitting..." : "Confirm Booking"}
               </Button>
             </form>
