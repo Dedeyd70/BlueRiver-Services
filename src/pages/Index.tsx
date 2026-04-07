@@ -26,6 +26,7 @@ const whyUs = [
 ];
 
 const IndexPage = () => {
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const { data: settings } = useSiteSettings();
   const { data: services } = useQuery({
     queryKey: ["public-services-home"],
