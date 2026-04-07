@@ -35,6 +35,7 @@ import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
 import TermsAdmin from "./pages/admin/TermsAdmin";
 import BeforeAfterAdmin from "./pages/admin/BeforeAfterAdmin";
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
+import UserManagement from "./pages/admin/UserManagement";
 
 const queryClient = new QueryClient();
 
