@@ -1,20 +1,23 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import type { AppRole } from "@/lib/permissions";
 
 interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
+  role: AppRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAdmin: false,
+  role: null,
   loading: true,
   signIn: async () => ({ error: null }),
   signOut: async () => {},
@@ -23,21 +26,21 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
   const initialised = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const checkAdmin = useCallback(async (userId: string) => {
+  const checkRole = useCallback(async (userId: string): Promise<AppRole | null> => {
     try {
       const { data } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId)
-        .eq("role", "admin")
         .maybeSingle();
-      return !!data;
+      return (data?.role as AppRole) ?? null;
     } catch {
-      return false;
+      return null;
     }
   }, []);
 
@@ -45,9 +48,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
     setUser(null);
     setIsAdmin(false);
+    setRole(null);
   }, []);
 
-  // Session timeout: reset timer on activity
   const resetTimeout = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
@@ -55,25 +58,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, SESSION_TIMEOUT_MS);
   }, [doSignOut]);
 
-  // Logout on browser/tab close
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // Mark session for cleanup - use sessionStorage flag
       sessionStorage.setItem("blueriver_session_active", "true");
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
-
-    // Check if returning from a page reload vs new tab
     const wasActive = sessionStorage.getItem("blueriver_session_active");
     if (!wasActive) {
-      // New tab/window - sign out any lingering session
       supabase.auth.signOut();
     }
-
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
-  // Activity listeners for session timeout
   useEffect(() => {
     if (!user) return;
     const events = ["mousedown", "keydown", "scroll", "touchstart"];
@@ -90,8 +86,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        const admin = await checkAdmin(u.id);
-        setIsAdmin(admin);
+        const r = await checkRole(u.id);
+        setRole(r);
+        setIsAdmin(r === "admin" || r === "manager" || r === "staff");
       }
       setLoading(false);
       initialised.current = true;
@@ -102,16 +99,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        const admin = await checkAdmin(u.id);
-        setIsAdmin(admin);
+        const r = await checkRole(u.id);
+        setRole(r);
+        setIsAdmin(r === "admin" || r === "manager" || r === "staff");
       } else {
         setIsAdmin(false);
+        setRole(null);
       }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [checkAdmin]);
+  }, [checkRole]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -121,7 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, signIn, signOut: doSignOut }}>
+    <AuthContext.Provider value={{ user, isAdmin, role, loading, signIn, signOut: doSignOut }}>
       {children}
     </AuthContext.Provider>
   );
