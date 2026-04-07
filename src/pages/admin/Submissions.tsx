@@ -1,120 +1,198 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+
+type TabType = "all" | "bookings" | "quotes" | "contact";
+
+interface UnifiedEntry {
+  id: string;
+  type: "Booking" | "Quote" | "Contact";
+  name: string;
+  email: string;
+  phone: string | null;
+  status: string;
+  service_type: string | null;
+  created_at: string;
+  detail: string;
+}
+
+const statusColors: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-800",
+  confirmed: "bg-green-100 text-green-800",
+  completed: "bg-primary/10 text-primary",
+  cancelled: "bg-destructive/10 text-destructive",
+  requested: "bg-amber-100 text-amber-800",
+  "in progress": "bg-blue-100 text-blue-800",
+  converted: "bg-green-100 text-green-800",
+  closed: "bg-muted text-muted-foreground",
+  reviewed: "bg-primary/10 text-primary",
+  responded: "bg-green-100 text-green-800",
+  contacted: "bg-green-100 text-green-800",
+};
 
 const Submissions = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [tab, setTab] = useState<TabType>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const { data: submissions, isLoading } = useQuery({
-    queryKey: ["admin-submissions"],
+  const { data: bookings } = useQuery({
+    queryKey: ["admin-bookings-sub"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("contact_submissions")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("bookings").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
   });
 
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("contact_submissions").update({ status }).eq("id", id);
+  const { data: quotes } = useQuery({
+    queryKey: ["admin-quotes-sub"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("quote_requests").select("*").order("created_at", { ascending: false });
       if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-submissions"] });
-      qc.invalidateQueries({ queryKey: ["admin-pending-count"] });
-      toast({ title: "Status updated" });
+      return data;
     },
   });
 
+  const { data: contacts } = useQuery({
+    queryKey: ["admin-submissions"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("contact_submissions").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Combine all entries
+  const entries: UnifiedEntry[] = [
+    ...(bookings ?? []).map((b) => ({
+      id: b.id,
+      type: "Booking" as const,
+      name: b.name,
+      email: b.email,
+      phone: b.phone,
+      status: b.status,
+      service_type: b.service_type,
+      created_at: b.created_at,
+      detail: `${format(new Date(b.booking_date), "MMM d, yyyy")} at ${b.time_slot}`,
+    })),
+    ...(quotes ?? []).map((q) => ({
+      id: q.id,
+      type: "Quote" as const,
+      name: q.name,
+      email: q.email,
+      phone: q.phone,
+      status: q.status,
+      service_type: q.service_type,
+      created_at: q.created_at,
+      detail: q.description?.substring(0, 80) || "—",
+    })),
+    ...(contacts ?? []).map((c) => ({
+      id: c.id,
+      type: "Contact" as const,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      status: c.status,
+      service_type: c.service_type,
+      created_at: c.created_at,
+      detail: c.message?.substring(0, 80) || "—",
+    })),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const filtered = entries.filter((e) => {
+    if (tab === "bookings" && e.type !== "Booking") return false;
+    if (tab === "quotes" && e.type !== "Quote") return false;
+    if (tab === "contact" && e.type !== "Contact") return false;
+    if (statusFilter !== "all" && e.status !== statusFilter) return false;
+    return true;
+  });
+
+  const allStatuses = [...new Set(entries.map((e) => e.status))];
+
+  const tabs: { key: TabType; label: string; count: number }[] = [
+    { key: "all", label: "All", count: entries.length },
+    { key: "bookings", label: "Bookings", count: entries.filter((e) => e.type === "Booking").length },
+    { key: "quotes", label: "Quotes", count: entries.filter((e) => e.type === "Quote").length },
+    { key: "contact", label: "Contact", count: entries.filter((e) => e.type === "Contact").length },
+  ];
+
   return (
     <div>
-      <h1 className="text-2xl font-display font-bold text-foreground mb-6">Submissions</h1>
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {isLoading ? (
-          <p className="p-6 text-muted-foreground">Loading...</p>
-        ) : !submissions?.length ? (
-          <p className="p-6 text-muted-foreground">No submissions yet.</p>
-        ) : (
-          <>
-            {/* Desktop table */}
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Name</th>
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Email</th>
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Phone</th>
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Service</th>
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Message</th>
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Date</th>
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
-                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {submissions.map((s) => (
-                    <tr key={s.id} className="border-b border-border last:border-0">
-                      <td className="px-4 py-3 text-sm font-medium">{s.name}</td>
-                      <td className="px-4 py-3 text-sm">{s.email}</td>
-                      <td className="px-4 py-3 text-sm">{s.phone || "—"}</td>
-                      <td className="px-4 py-3 text-sm">{s.service_type || "—"}</td>
-                      <td className="px-4 py-3 text-sm max-w-[200px] truncate">{s.message}</td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">{new Date(s.created_at).toLocaleDateString()}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={s.status === "pending" ? "secondary" : "default"}>{s.status}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        {s.status === "pending" ? (
-                          <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: s.id, status: "contacted" })}>
-                            Mark Contacted
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: s.id, status: "pending" })}>
-                            Mark Pending
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      <h1 className="text-2xl font-display font-bold text-foreground mb-4">Submissions</h1>
 
-            {/* Mobile cards */}
-            <div className="lg:hidden divide-y divide-border">
-              {submissions.map((s) => (
-                <div key={s.id} className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm text-foreground">{s.name}</span>
-                    <Badge variant={s.status === "pending" ? "secondary" : "default"}>{s.status}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{s.email} {s.phone ? `· ${s.phone}` : ""}</p>
-                  {s.service_type && <p className="text-xs text-primary">{s.service_type}</p>}
-                  <p className="text-sm text-muted-foreground line-clamp-2">{s.message}</p>
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</span>
-                    {s.status === "pending" ? (
-                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: s.id, status: "contacted" })}>
-                        Mark Contacted
-                      </Button>
-                    ) : (
-                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: s.id, status: "pending" })}>
-                        Mark Pending
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setStatusFilter("all"); }}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              tab === t.key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label} ({t.count})
+          </button>
+        ))}
       </div>
+
+      {/* Status filter */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        <button
+          onClick={() => setStatusFilter("all")}
+          className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+            statusFilter === "all" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          All Statuses
+        </button>
+        {allStatuses.map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={`px-2 py-1 rounded text-xs font-medium capitalize transition-colors ${
+              statusFilter === s ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* Entries */}
+      {!filtered.length ? (
+        <p className="text-muted-foreground text-sm">No entries found.</p>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((e) => (
+            <div key={`${e.type}-${e.id}`} className="bg-card border border-border rounded-xl p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={e.type === "Booking" ? "default" : e.type === "Quote" ? "secondary" : "outline"} className="text-xs">
+                      {e.type}
+                    </Badge>
+                    <h3 className="font-medium text-foreground text-sm">{e.name}</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{e.email} {e.phone && `• ${e.phone}`}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[e.status] || "bg-muted text-muted-foreground"}`}>
+                  {e.status}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                {e.service_type && <span>Service: <strong className="text-foreground">{e.service_type}</strong></span>}
+                <span>{format(new Date(e.created_at), "MMM d, yyyy")}</span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{e.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
