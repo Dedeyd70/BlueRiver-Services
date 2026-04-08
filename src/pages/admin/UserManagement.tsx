@@ -7,11 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Users } from "lucide-react";
+import { Plus, Trash2, Users, ShieldAlert } from "lucide-react";
 import { getRoleLabel, type AppRole } from "@/lib/permissions";
+import { useAuth } from "@/hooks/useAuth";
 
 const UserManagement = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -28,6 +30,8 @@ const UserManagement = () => {
       return data;
     },
   });
+
+  const adminCount = users?.filter((u) => u.role === "admin").length ?? 0;
 
   const createUser = useMutation({
     mutationFn: async () => {
@@ -58,6 +62,11 @@ const UserManagement = () => {
 
   const updateRole = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
+      // Prevent demoting the last admin
+      const currentUser = users?.find((u) => u.user_id === userId);
+      if (currentUser?.role === "admin" && newRole !== "admin" && adminCount <= 1) {
+        throw new Error("Cannot change the last Super Admin's role. At least one Super Admin must remain.");
+      }
       const { error } = await supabase
         .from("user_roles")
         .update({ role: newRole as any })
@@ -68,10 +77,21 @@ const UserManagement = () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "Role updated" });
     },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const removeUser = useMutation({
     mutationFn: async (userId: string) => {
+      // Prevent deleting the last admin
+      const targetUser = users?.find((u) => u.user_id === userId);
+      if (targetUser?.role === "admin" && adminCount <= 1) {
+        throw new Error("Cannot delete the last Super Admin. At least one Super Admin must remain.");
+      }
+      // Prevent self-deletion
+      if (userId === user?.id) {
+        throw new Error("You cannot delete your own account.");
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
@@ -101,6 +121,13 @@ const UserManagement = () => {
           <Plus className="w-4 h-4 mr-2" /> Add User
         </Button>
       </div>
+
+      {adminCount <= 1 && (
+        <div className="mb-4 flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+          <span>There is only one Super Admin. This account cannot be deleted or demoted.</span>
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -159,27 +186,45 @@ const UserManagement = () => {
         <p className="text-muted-foreground">No users found.</p>
       ) : (
         <div className="space-y-3">
-          {users.map((u) => (
-            <div key={u.id} className="bg-card border border-border rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-foreground font-mono">{u.user_id}</p>
-                <p className="text-xs text-muted-foreground">{getRoleLabel(u.role as AppRole)}</p>
+          {users.map((u) => {
+            const isLastAdmin = u.role === "admin" && adminCount <= 1;
+            const isSelf = u.user_id === user?.id;
+            return (
+              <div key={u.id} className="bg-card border border-border rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground font-mono">{u.user_id}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {getRoleLabel(u.role as AppRole)}
+                    {isSelf && <span className="ml-1 text-primary">(You)</span>}
+                    {isLastAdmin && <span className="ml-1 text-amber-600">(Protected)</span>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={u.role}
+                    onValueChange={(v) => updateRole.mutate({ userId: u.user_id, newRole: v })}
+                    disabled={isLastAdmin}
+                  >
+                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Super Admin</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="staff">Staff</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-8 h-8"
+                    onClick={() => setDeleteConfirm(u.user_id)}
+                    disabled={isLastAdmin || isSelf}
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Select value={u.role} onValueChange={(v) => updateRole.mutate({ userId: u.user_id, newRole: v })}>
-                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Super Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setDeleteConfirm(u.user_id)}>
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
