@@ -50,8 +50,8 @@ const About = () => {
           <div className="max-w-3xl mx-auto">
             <motion.div {...fadeUp} className="space-y-6 text-center">
               {/* Logo with subtle grey background for visibility */}
-              <div className="inline-block rounded-2xl bg-muted/60 border border-border/50 p-6 mx-auto">
-                <img src={logoUrl} alt="BlueRiver Services" className="h-20 w-auto mx-auto object-contain" />
+              <div className="inline-block rounded-2xl bg-muted border border-border p-8 mx-auto shadow-sm">
+                <img src={logoUrl} alt="BlueRiver Services" className="h-24 md:h-28 w-auto mx-auto object-contain drop-shadow-md" />
               </div>
               <h2 className="text-3xl font-display font-bold text-foreground">
                 {settings?.about_mission_title || "Our Mission"}
