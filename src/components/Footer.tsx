@@ -15,10 +15,10 @@ const Footer = () => {
     },
   });
 
-  const phone = settings?.phone || "(409) 977-1515";
-  const phoneLink = settings?.phone_link || "+14099771515";
+  const phone = settings?.phone || "(206) 317-8300";
+  const phoneLink = settings?.phone_link || "+12063178300";
   const email = settings?.email || "joshuaquao@gmail.com";
-  const serviceArea = settings?.service_area || "Serving Washington and surrounding areas";
+  const serviceArea = settings?.service_area || "Serving Washington State";
   const tagline = settings?.footer_tagline || "Professional cleaning services for homes and businesses. Trusted by our community.";
 
   const handleHomeClick = (e: React.MouseEvent) => {
@@ -31,8 +31,8 @@ const Footer = () => {
   return (
     <footer className="bg-navy text-navy-foreground">
       <div className="container py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
-          <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
+          <div className="space-y-4 lg:col-span-1">
             <div className="flex items-center gap-2">
               <img src={logo} alt="BlueRiver Services" className="h-10 w-auto object-contain brightness-0 invert" />
             </div>
@@ -60,6 +60,20 @@ const Footer = () => {
             <div className="flex flex-col gap-2">
               {(services ?? []).map((s) => (
                 <Link key={s.title} to="/services" className="text-sm text-navy-foreground/70 hover:text-primary transition-colors">{s.title}</Link>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-display font-semibold mb-4">Legal</h4>
+            <div className="flex flex-col gap-2">
+              {[
+                ["Privacy Policy", "/privacy-policy"],
+                ["Terms of Service", "/terms-of-service"],
+                ["Liability Disclaimer", "/liability-disclaimer"],
+                ["Cancellation Policy", "/cancellation-policy"],
+              ].map(([label, path]) => (
+                <Link key={path} to={path} className="text-sm text-navy-foreground/70 hover:text-primary transition-colors">{label}</Link>
               ))}
             </div>
           </div>
