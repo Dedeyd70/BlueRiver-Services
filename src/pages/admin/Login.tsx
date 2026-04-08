@@ -32,9 +32,8 @@ const AdminLogin = () => {
     setLoading(false);
     if (error) {
       toast({ title: "Login failed", description: error, variant: "destructive" });
-    } else {
-      navigate("/admin", { replace: true });
     }
+    // Navigation is handled by the useEffect above once isAdmin becomes true
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
