@@ -48,11 +48,8 @@ const About = () => {
       <section className="py-20 md:py-28">
         <div className="container">
           <div className="max-w-3xl mx-auto">
-            <motion.div {...fadeUp} className="space-y-6 text-center">
-              {/* Logo with subtle grey background for visibility */}
-              <div className="inline-block rounded-2xl bg-muted border border-border p-8 mx-auto shadow-sm">
-                <img src={logoUrl} alt="BlueRiver Services" className="h-24 md:h-28 w-auto mx-auto object-contain drop-shadow-md" />
-              </div>
+            <motion.div {...fadeUp} className="space-y-8 text-center">
+              <img src={logoUrl} alt="BlueRiver Services" className="h-28 md:h-36 w-auto mx-auto object-contain" />
               <h2 className="text-3xl font-display font-bold text-foreground">
                 {settings?.about_mission_title || "Our Mission"}
               </h2>
