@@ -97,8 +97,6 @@ const Footer = () => {
         <div className="mt-12 pt-8 border-t border-navy-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-navy-foreground/50">
           <span>© {new Date().getFullYear()} BlueRiver Services. All rights reserved.</span>
           <div className="flex gap-4">
-            <Link to="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link>
-            <Link to="/terms-of-service" className="hover:text-primary transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>
