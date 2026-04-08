@@ -8,10 +8,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Save } from "lucide-react";
 
 const settingsDef = [
-  { key: "phone", label: "Business Phone", type: "input" },
-  { key: "phone_link", label: "Phone Link (tel format)", type: "input", placeholder: "+14099771515" },
+  { key: "phone", label: "Business Phone", type: "input", placeholder: "(206) 317-8300" },
+  { key: "phone_link", label: "Phone Link (tel format)", type: "input", placeholder: "+12063178300" },
   { key: "email", label: "Business Email", type: "input" },
-  { key: "service_area", label: "Service Area", type: "input" },
+  { key: "service_area", label: "Service Area", type: "input", placeholder: "Serving Washington State" },
+  { key: "call_availability", label: "Call Availability Hours", type: "input", placeholder: "7:00 AM – 5:00 PM" },
+  { key: "business_hours_mf", label: "Business Hours (Mon–Fri)", type: "input", placeholder: "Monday – Friday: 7:00 AM – 7:00 PM" },
+  { key: "business_hours_sat", label: "Business Hours (Saturday)", type: "input", placeholder: "Saturday: 8:00 AM – 5:00 PM" },
+  { key: "business_hours_sun", label: "Business Hours (Sunday)", type: "input", placeholder: "Sunday: Closed" },
   { key: "footer_tagline", label: "Footer Tagline", type: "textarea" },
   { key: "hero_headline", label: "Hero Headline", type: "input" },
   { key: "hero_subheadline", label: "Hero Subheadline", type: "textarea" },

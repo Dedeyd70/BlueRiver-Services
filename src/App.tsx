@@ -16,6 +16,8 @@ import BookService from "./pages/BookService";
 import RequestQuote from "./pages/RequestQuote";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import LiabilityDisclaimer from "./pages/LiabilityDisclaimer";
+import CancellationPolicy from "./pages/CancellationPolicy";
 import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/Login";
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -33,6 +35,7 @@ import BookingsAdmin from "./pages/admin/BookingsAdmin";
 import QuotesAdmin from "./pages/admin/QuotesAdmin";
 import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
 import TermsAdmin from "./pages/admin/TermsAdmin";
+import LegalAdmin from "./pages/admin/LegalAdmin";
 import BeforeAfterAdmin from "./pages/admin/BeforeAfterAdmin";
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
@@ -67,6 +70,7 @@ const App = () => (
               <Route path="quotes" element={<QuotesAdmin />} />
               <Route path="availability" element={<AvailabilityAdmin />} />
               <Route path="terms" element={<TermsAdmin />} />
+              <Route path="legal" element={<LegalAdmin />} />
               <Route path="branding" element={<BrandingAdmin />} />
               <Route path="homepage-images" element={<HomepageImagesAdmin />} />
               <Route path="users" element={<UserManagement />} />
@@ -89,6 +93,8 @@ const App = () => (
                       <Route path="/quote" element={<RequestQuote />} />
                       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                       <Route path="/terms-of-service" element={<TermsOfService />} />
+                      <Route path="/liability-disclaimer" element={<LiabilityDisclaimer />} />
+                      <Route path="/cancellation-policy" element={<CancellationPolicy />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </main>
