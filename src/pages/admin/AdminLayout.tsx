@@ -20,6 +20,7 @@ const iconMap: Record<string, any> = {
   Payment: DollarSign,
   "Privacy Policy": ScrollText,
   "Terms of Service": Scale,
+  "Legal Pages": Gavel,
   "Homepage Images": ImageIcon,
   Branding: Palette,
   Settings: Settings,
