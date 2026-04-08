@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, ScrollText, CalendarDays, FileQuestion, Clock, Scale, Layers, Palette, Users, ImageIcon } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, LogOut, Image, DollarSign, Menu, ScrollText, CalendarDays, FileQuestion, Clock, Scale, Layers, Palette, Users, ImageIcon, Gavel } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import logo from "@/assets/blueriver-logo.png";
@@ -20,6 +20,7 @@ const iconMap: Record<string, any> = {
   Payment: DollarSign,
   "Privacy Policy": ScrollText,
   "Terms of Service": Scale,
+  "Legal Pages": Gavel,
   "Homepage Images": ImageIcon,
   Branding: Palette,
   Settings: Settings,

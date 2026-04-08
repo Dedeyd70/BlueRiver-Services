@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Phone, Mail, MapPin, CheckCircle } from "lucide-react";
+import { Phone, Mail, MapPin, CheckCircle, Clock, CalendarDays } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -50,10 +50,14 @@ const Contact = () => {
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const phone = settings?.phone || "(409) 977-1515";
-  const phoneLink = settings?.phone_link || "+14099771515";
+  const phone = settings?.phone || "(206) 317-8300";
+  const phoneLink = settings?.phone_link || "+12063178300";
   const email = settings?.email || "joshuaquao@gmail.com";
-  const serviceArea = settings?.service_area || "Serving the United States";
+  const serviceArea = settings?.service_area || "Serving Washington State";
+  const callAvailability = settings?.call_availability || "7:00 AM – 5:00 PM";
+  const businessHoursMF = settings?.business_hours_mf || "Monday – Friday: 7:00 AM – 7:00 PM";
+  const businessHoursSat = settings?.business_hours_sat || "Saturday: 8:00 AM – 5:00 PM";
+  const businessHoursSun = settings?.business_hours_sun || "Sunday: Closed";
 
   return (
     <div>
@@ -62,7 +66,7 @@ const Contact = () => {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
             <span className="inline-block px-4 py-1.5 rounded-full bg-sky text-sky-foreground text-xs font-semibold tracking-wider uppercase mb-4">Get in Touch</span>
             <h1 className="text-4xl md:text-5xl font-display font-extrabold text-foreground mb-4">Contact Us</h1>
-            <p className="text-muted-foreground leading-relaxed">Request a quote, book a service, or simply say hello.</p>
+            <p className="text-muted-foreground leading-relaxed">Request a quote, book a service, or contact us directly.</p>
           </motion.div>
         </div>
       </section>
@@ -129,6 +133,7 @@ const Contact = () => {
                     <div>
                       <p className="text-sm font-medium text-foreground">Phone</p>
                       <p className="text-sm">{phone}</p>
+                      <p className="text-xs text-muted-foreground/70">Available for calls: {callAvailability}</p>
                     </div>
                   </a>
                   <a href={`mailto:${email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
@@ -153,22 +158,23 @@ const Contact = () => {
               </div>
 
               <div className="p-6 rounded-2xl bg-sky/50">
-                <h4 className="font-display font-semibold text-foreground mb-3">Payment Information</h4>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p><strong className="text-foreground">Accepted:</strong> {settings?.payment_methods || "Cash, Zelle"}</p>
-                  {settings?.zelle_info && <p><strong className="text-foreground">Zelle:</strong> {settings.zelle_info}</p>}
-                  <p>{settings?.payment_policy || "Payment is typically made after service completion."}</p>
-                  {settings?.deposit_info && <p>{settings.deposit_info}</p>}
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarDays className="w-4 h-4 text-foreground" />
+                  <h4 className="font-display font-semibold text-foreground">Business Hours</h4>
+                </div>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>{businessHoursMF}</p>
+                  <p>{businessHoursSat}</p>
+                  <p>{businessHoursSun}</p>
                 </div>
               </div>
 
               <div className="p-6 rounded-2xl bg-sky/50">
-                <h4 className="font-display font-semibold text-foreground mb-2">Business Hours</h4>
-                <div className="space-y-1 text-sm text-muted-foreground">
-                  <p>Monday – Friday: 7:00 AM – 7:00 PM</p>
-                  <p>Saturday: 8:00 AM – 5:00 PM</p>
-                  <p>Sunday: Closed</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4 text-foreground" />
+                  <h4 className="font-display font-semibold text-foreground">Call Availability</h4>
                 </div>
+                <p className="text-sm text-muted-foreground">{callAvailability}</p>
               </div>
             </motion.div>
           </div>
