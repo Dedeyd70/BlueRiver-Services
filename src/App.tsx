@@ -36,7 +36,7 @@ import QuotesAdmin from "./pages/admin/QuotesAdmin";
 import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
 import TermsAdmin from "./pages/admin/TermsAdmin";
 import LegalAdmin from "./pages/admin/LegalAdmin";
-import BeforeAfterAdmin from "./pages/admin/BeforeAfterAdmin";
+
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
 import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
@@ -60,7 +60,7 @@ const App = () => (
               <Route path="submissions" element={<Submissions />} />
               <Route path="services" element={<ServicesAdmin />} />
               <Route path="gallery" element={<GalleryAdmin />} />
-              <Route path="before-after" element={<BeforeAfterAdmin />} />
+              
               <Route path="testimonials" element={<TestimonialsAdmin />} />
               <Route path="payment" element={<PaymentSettingsAdmin />} />
               <Route path="settings" element={<SettingsAdmin />} />

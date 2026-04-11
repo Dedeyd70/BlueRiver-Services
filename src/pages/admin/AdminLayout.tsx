@@ -14,7 +14,7 @@ const iconMap: Record<string, any> = {
   Submissions: MessageSquare,
   Services: Wrench,
   Gallery: Image,
-  "Before & After": Layers,
+  
   Testimonials: FileText,
   Availability: Clock,
   Payment: DollarSign,
