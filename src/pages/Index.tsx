@@ -43,10 +43,27 @@ const IndexPage = () => {
     },
   });
   const { data: beforeAfter } = useQuery({
-    queryKey: ["public-before-after"],
+    queryKey: ["public-before-after-home"],
     queryFn: async () => {
-      const { data } = await supabase.from("before_after_images").select("*").eq("is_active", true).order("display_order");
-      return data ?? [];
+      const { data } = await supabase
+        .from("gallery")
+        .select("*")
+        .eq("is_active", true)
+        .neq("image_type", "single")
+        .order("display_order");
+      if (!data) return [];
+      // Group by group_id
+      const groups: Record<string, { before?: typeof data[0]; after?: typeof data[0]; caption?: string }> = {};
+      data.forEach((item) => {
+        if (!item.group_id) return;
+        if (!groups[item.group_id]) groups[item.group_id] = {};
+        if (item.image_type === "before") groups[item.group_id].before = item;
+        if (item.image_type === "after") groups[item.group_id].after = item;
+        if (item.caption) groups[item.group_id].caption = item.caption;
+      });
+      return Object.entries(groups)
+        .filter(([, g]) => g.before && g.after)
+        .map(([id, g]) => ({ id, before_image_url: g.before!.image_url, after_image_url: g.after!.image_url, caption: g.caption || "" }));
     },
   });
   const { data: homepageImages } = useQuery({

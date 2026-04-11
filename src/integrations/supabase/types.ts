@@ -38,50 +38,6 @@ export type Database = {
         }
         Relationships: []
       }
-      before_after_images: {
-        Row: {
-          after_image_url: string
-          before_image_url: string
-          caption: string | null
-          created_at: string
-          display_order: number
-          id: string
-          is_active: boolean
-          service_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          after_image_url: string
-          before_image_url: string
-          caption?: string | null
-          created_at?: string
-          display_order?: number
-          id?: string
-          is_active?: boolean
-          service_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          after_image_url?: string
-          before_image_url?: string
-          caption?: string | null
-          created_at?: string
-          display_order?: number
-          id?: string
-          is_active?: boolean
-          service_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "before_after_images_service_id_fkey"
-            columns: ["service_id"]
-            isOneToOne: false
-            referencedRelation: "services"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       blocked_dates: {
         Row: {
           blocked_date: string
@@ -217,7 +173,9 @@ export type Database = {
           category: string | null
           created_at: string
           display_order: number
+          group_id: string | null
           id: string
+          image_type: string
           image_url: string
           is_active: boolean
           updated_at: string
@@ -227,7 +185,9 @@ export type Database = {
           category?: string | null
           created_at?: string
           display_order?: number
+          group_id?: string | null
           id?: string
+          image_type?: string
           image_url: string
           is_active?: boolean
           updated_at?: string
@@ -237,7 +197,9 @@ export type Database = {
           category?: string | null
           created_at?: string
           display_order?: number
+          group_id?: string | null
           id?: string
+          image_type?: string
           image_url?: string
           is_active?: boolean
           updated_at?: string
