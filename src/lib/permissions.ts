@@ -16,7 +16,7 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   { label: "Submissions", path: "/admin/submissions", roles: ["admin", "manager", "staff"] },
   { label: "Services", path: "/admin/services", roles: ["admin", "manager"] },
   { label: "Gallery", path: "/admin/gallery", roles: ["admin", "manager"] },
-  { label: "Before & After", path: "/admin/before-after", roles: ["admin", "manager"] },
+  
   { label: "Testimonials", path: "/admin/testimonials", roles: ["admin", "manager"] },
   { label: "Availability", path: "/admin/availability", roles: ["admin", "manager"] },
   { label: "Payment", path: "/admin/payment", roles: ["admin", "manager"] },
