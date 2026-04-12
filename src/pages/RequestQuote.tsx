@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,22 +13,31 @@ import imageCompression from "browser-image-compression";
 
 const RequestQuote = () => {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [consent, setConsent] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [form, setForm] = useState({
-    name: "", email: "", phone: "", address: "", service: "", description: "", preferred_contact: "email",
+    name: "", email: "", phone: "", address: "", service: searchParams.get("service") || "", description: "", preferred_contact: "email",
   });
 
   const { data: services } = useQuery({
-    queryKey: ["public-services-quote"],
+    queryKey: ["public-services-quote-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
+      const { data } = await supabase.from("services").select("title, price_starting, service_category").eq("is_active", true).order("display_order");
       return data ?? [];
     },
   });
+
+  const mainServices = useMemo(() => (services ?? []).filter((s) => (s as any).service_category !== "addon"), [services]);
+  const addons = useMemo(() => (services ?? []).filter((s) => (s as any).service_category === "addon"), [services]);
+
+  const toggleAddon = (title: string) => {
+    setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,6 +89,7 @@ const RequestQuote = () => {
       preferred_contact: form.preferred_contact,
       attachment_url: attachmentUrl || null,
       consent_given: consent,
+      selected_addons: selectedAddons.map((title) => ({ title })),
     });
     setLoading(false);
     if (error) {
@@ -152,12 +163,29 @@ const RequestQuote = () => {
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Service Type</label>
                   <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     <option value="">Select a service</option>
-                    {(services ?? []).map((s) => (
+                    {mainServices.map((s) => (
                       <option key={s.title} value={s.title}>{s.title}</option>
                     ))}
                     <option value="Other">Other</option>
                   </select>
                 </div>
+
+                {/* Add-ons as requested extras */}
+                {form.service && addons.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Interested in Add-Ons? (optional)</label>
+                    <p className="text-xs text-muted-foreground mb-3">Select any extras you'd like us to consider. Final pricing will be provided in your quote.</p>
+                    <div className="space-y-2">
+                      {addons.map((a) => (
+                        <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
+                          <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
+                          <span className="text-sm font-medium text-foreground">{a.title}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Description of Request *</label>
                   <Textarea placeholder="Describe your cleaning needs, size of space, frequency, etc..." rows={5} value={form.description} onChange={update("description")} maxLength={2000} />

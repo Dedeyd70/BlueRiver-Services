@@ -18,9 +18,10 @@ interface ServiceForm {
   price_starting: string;
   is_active: boolean;
   image_url: string;
+  service_category: string;
 }
 
-const defaultForm: ServiceForm = { title: "", description: "", icon: "Sparkles", features: "", price_starting: "", is_active: true, image_url: "" };
+const defaultForm: ServiceForm = { title: "", description: "", icon: "Sparkles", features: "", price_starting: "", is_active: true, image_url: "", service_category: "main" };
 
 const ServicesAdmin = () => {
   const { toast } = useToast();
@@ -48,6 +49,7 @@ const ServicesAdmin = () => {
         price_starting: form.price_starting || null,
         is_active: form.is_active,
         image_url: form.image_url,
+        service_category: form.service_category,
         display_order: editId ? undefined : (services?.length ?? 0) + 1,
       };
       if (editId) {
@@ -89,6 +91,7 @@ const ServicesAdmin = () => {
       price_starting: s.price_starting || "",
       is_active: s.is_active,
       image_url: s.image_url || "",
+      service_category: s.service_category || "main",
     });
     setDialogOpen(true);
   };
@@ -98,6 +101,9 @@ const ServicesAdmin = () => {
     setForm(defaultForm);
     setDialogOpen(true);
   };
+
+  const mainServices = (services ?? []).filter((s) => (s as any).service_category !== "addon");
+  const addons = (services ?? []).filter((s) => (s as any).service_category === "addon");
 
   return (
     <div>
@@ -117,6 +123,17 @@ const ServicesAdmin = () => {
                 <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
               </div>
               <div>
+                <label className="text-sm font-medium mb-1 block">Category</label>
+                <select
+                  value={form.service_category}
+                  onChange={(e) => setForm({ ...form, service_category: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="main">Main Service</option>
+                  <option value="addon">Add-On</option>
+                </select>
+              </div>
+              <div>
                 <label className="text-sm font-medium mb-1 block">Description</label>
                 <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
               </div>
@@ -130,14 +147,16 @@ const ServicesAdmin = () => {
                   <Input value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} placeholder="Home, Building2, etc." />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Starting Price</label>
-                  <Input value={form.price_starting} onChange={(e) => setForm({ ...form, price_starting: e.target.value })} placeholder="$99" />
+                  <label className="text-sm font-medium mb-1 block">{form.service_category === "addon" ? "Price" : "Starting Price"}</label>
+                  <Input value={form.price_starting} onChange={(e) => setForm({ ...form, price_starting: e.target.value })} placeholder={form.service_category === "addon" ? "$50" : "$200"} />
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Features (one per line)</label>
-                <Textarea value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} rows={4} placeholder={"Feature 1\nFeature 2"} />
-              </div>
+              {form.service_category === "main" && (
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Features (one per line)</label>
+                  <Textarea value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} rows={4} placeholder={"Feature 1\nFeature 2"} />
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
                 <span className="text-sm">Active</span>
@@ -150,33 +169,60 @@ const ServicesAdmin = () => {
         </Dialog>
       </div>
 
-      <div className="space-y-3">
-        {isLoading ? (
-          <p className="text-muted-foreground">Loading...</p>
-        ) : !services?.length ? (
-          <p className="text-muted-foreground">No services yet.</p>
-        ) : (
-          services.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 sm:gap-4 bg-card border border-border rounded-xl p-3 sm:p-4">
-              <GripVertical className="w-4 h-4 text-muted-foreground hidden sm:block" />
-              {s.image_url && (
-                <img src={s.image_url} alt={s.title} className="w-12 h-12 rounded-lg object-cover hidden sm:block" />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-medium text-foreground truncate">{s.title}</h3>
-                  {!s.is_active && <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">Inactive</span>}
-                </div>
-                <p className="text-sm text-muted-foreground line-clamp-1">{s.description}</p>
+      {isLoading ? (
+        <p className="text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-8">
+          {/* Main Services */}
+          <div>
+            <h2 className="text-lg font-display font-semibold text-foreground mb-3">Main Services</h2>
+            {mainServices.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No main services yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {mainServices.map((s) => (
+                  <ServiceRow key={s.id} s={s} onEdit={openEdit} onDelete={(id) => remove.mutate(id)} />
+                ))}
               </div>
-              <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Pencil className="w-4 h-4" /></Button>
-              <Button variant="ghost" size="icon" onClick={() => remove.mutate(s.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-            </div>
-          ))
-        )}
-      </div>
+            )}
+          </div>
+
+          {/* Add-Ons */}
+          <div>
+            <h2 className="text-lg font-display font-semibold text-foreground mb-3">Add-Ons</h2>
+            {addons.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No add-ons yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {addons.map((s) => (
+                  <ServiceRow key={s.id} s={s} onEdit={openEdit} onDelete={(id) => remove.mutate(id)} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+const ServiceRow = ({ s, onEdit, onDelete }: { s: any; onEdit: (s: any) => void; onDelete: (id: string) => void }) => (
+  <div className="flex items-center gap-3 sm:gap-4 bg-card border border-border rounded-xl p-3 sm:p-4">
+    <GripVertical className="w-4 h-4 text-muted-foreground hidden sm:block" />
+    {s.image_url && (
+      <img src={s.image_url} alt={s.title} className="w-12 h-12 rounded-lg object-cover hidden sm:block" />
+    )}
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-2 flex-wrap">
+        <h3 className="font-medium text-foreground truncate">{s.title}</h3>
+        {s.price_starting && <span className="text-xs text-primary font-medium">{s.price_starting}</span>}
+        {!s.is_active && <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">Inactive</span>}
+      </div>
+      <p className="text-sm text-muted-foreground line-clamp-1">{s.description}</p>
+    </div>
+    <Button variant="ghost" size="icon" onClick={() => onEdit(s)}><Pencil className="w-4 h-4" /></Button>
+    <Button variant="ghost" size="icon" onClick={() => onDelete(s.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+  </div>
+);
 
 export default ServicesAdmin;

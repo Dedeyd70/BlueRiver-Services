@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ExternalLink, ArrowRightLeft, MessageSquare, Send } from "lucide-react";
@@ -48,11 +47,7 @@ const QuotesAdmin = () => {
   const addNote = useMutation({
     mutationFn: async ({ quoteId, note }: { quoteId: string; note: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("quote_notes").insert({
-        quote_id: quoteId,
-        note,
-        created_by: user?.id,
-      });
+      const { error } = await supabase.from("quote_notes").insert({ quote_id: quoteId, note, created_by: user?.id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -69,7 +64,6 @@ const QuotesAdmin = () => {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
-      qc.invalidateQueries({ queryKey: ["admin-quotes-sub"] });
       toast({ title: "Quote request updated" });
     },
   });
@@ -88,19 +82,15 @@ const QuotesAdmin = () => {
         notes: selectedQuote.description,
         consent_given: selectedQuote.consent_given,
         status: "confirmed",
+        selected_addons: selectedQuote.selected_addons || [],
       });
       if (bookingError) throw bookingError;
-      const { error: quoteError } = await supabase
-        .from("quote_requests")
-        .update({ status: "converted" })
-        .eq("id", selectedQuote.id);
+      const { error: quoteError } = await supabase.from("quote_requests").update({ status: "converted" }).eq("id", selectedQuote.id);
       if (quoteError) throw quoteError;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
-      qc.invalidateQueries({ queryKey: ["admin-quotes-sub"] });
-      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
       toast({ title: "Quote converted to booking!" });
       setConvertDialogOpen(false);
       setSelectedQuote(null);
@@ -110,12 +100,12 @@ const QuotesAdmin = () => {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const openConvert = (q: any) => {
-    setSelectedQuote(q);
-    setConvertDialogOpen(true);
-  };
-
+  const openConvert = (q: any) => { setSelectedQuote(q); setConvertDialogOpen(true); };
   const getNotesForQuote = (quoteId: string) => (allNotes ?? []).filter((n) => n.quote_id === quoteId);
+  const parseAddons = (addons: any): { title: string }[] => {
+    if (!addons || !Array.isArray(addons)) return [];
+    return addons;
+  };
 
   return (
     <div>
@@ -123,9 +113,7 @@ const QuotesAdmin = () => {
 
       <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Convert to Booking</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Convert to Booking</DialogTitle></DialogHeader>
           {selectedQuote && (
             <div className="space-y-4">
               <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
@@ -134,6 +122,9 @@ const QuotesAdmin = () => {
                 {selectedQuote.phone && <p><strong>Phone:</strong> {selectedQuote.phone}</p>}
                 {selectedQuote.service_type && <p><strong>Service:</strong> {selectedQuote.service_type}</p>}
                 {selectedQuote.address && <p><strong>Address:</strong> {selectedQuote.address}</p>}
+                {parseAddons(selectedQuote.selected_addons).length > 0 && (
+                  <p><strong>Requested Add-Ons:</strong> {parseAddons(selectedQuote.selected_addons).map((a) => a.title).join(", ")}</p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Booking Date</label>
@@ -160,6 +151,7 @@ const QuotesAdmin = () => {
           {quotes.map((q) => {
             const notes = getNotesForQuote(q.id);
             const isExpanded = expandedNotes === q.id;
+            const addons = parseAddons((q as any).selected_addons);
             return (
               <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -185,6 +177,18 @@ const QuotesAdmin = () => {
                     <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
                   </div>
                 </div>
+                {addons.length > 0 && (
+                  <div className="text-sm">
+                    <span className="text-foreground font-medium">Requested Add-Ons:</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {addons.map((a, i) => (
+                        <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium">
+                          {a.title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {q.address && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Address:</span> {q.address}</p>}
                 <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Description:</span> {q.description}</p>
                 {q.attachment_url && (
@@ -193,14 +197,9 @@ const QuotesAdmin = () => {
                   </a>
                 )}
 
-                {/* Interaction Log */}
                 <div className="border-t border-border pt-3">
-                  <button
-                    onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
-                    className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    Activity Log ({notes.length})
+                  <button onClick={() => setExpandedNotes(isExpanded ? null : q.id)} className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors">
+                    <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
                   </button>
                   {isExpanded && (
                     <div className="mt-3 space-y-2">
@@ -211,19 +210,8 @@ const QuotesAdmin = () => {
                           <p className="text-xs text-muted-foreground mt-1">{format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}</p>
                         </div>
                       ))}
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (newNote.trim()) addNote.mutate({ quoteId: q.id, note: newNote.trim() });
-                        }}
-                        className="flex gap-2"
-                      >
-                        <Input
-                          value={expandedNotes === q.id ? newNote : ""}
-                          onChange={(e) => setNewNote(e.target.value)}
-                          placeholder="Add a note..."
-                          className="flex-1 h-8 text-sm"
-                        />
+                      <form onSubmit={(e) => { e.preventDefault(); if (newNote.trim()) addNote.mutate({ quoteId: q.id, note: newNote.trim() }); }} className="flex gap-2">
+                        <Input value={expandedNotes === q.id ? newNote : ""} onChange={(e) => setNewNote(e.target.value)} placeholder="Add a note..." className="flex-1 h-8 text-sm" />
                         <Button type="submit" size="sm" variant="outline" disabled={addNote.isPending || !newNote.trim()} className="h-8">
                           <Send className="w-3 h-3" />
                         </Button>
