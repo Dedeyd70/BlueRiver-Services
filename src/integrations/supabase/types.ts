@@ -70,9 +70,11 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          selected_addons: Json | null
           service_type: string | null
           status: string
           time_slot: string
+          total_price: number | null
           updated_at: string
         }
         Insert: {
@@ -85,9 +87,11 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          selected_addons?: Json | null
           service_type?: string | null
           status?: string
           time_slot: string
+          total_price?: number | null
           updated_at?: string
         }
         Update: {
@@ -100,9 +104,11 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          selected_addons?: Json | null
           service_type?: string | null
           status?: string
           time_slot?: string
+          total_price?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -304,6 +310,7 @@ export type Database = {
           name: string
           phone: string | null
           preferred_contact: string | null
+          selected_addons: Json | null
           service_type: string | null
           status: string
           updated_at: string
@@ -319,6 +326,7 @@ export type Database = {
           name: string
           phone?: string | null
           preferred_contact?: string | null
+          selected_addons?: Json | null
           service_type?: string | null
           status?: string
           updated_at?: string
@@ -334,6 +342,7 @@ export type Database = {
           name?: string
           phone?: string | null
           preferred_contact?: string | null
+          selected_addons?: Json | null
           service_type?: string | null
           status?: string
           updated_at?: string
@@ -351,6 +360,7 @@ export type Database = {
           image_url: string | null
           is_active: boolean
           price_starting: string | null
+          service_category: string
           title: string
           updated_at: string
         }
@@ -364,6 +374,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           price_starting?: string | null
+          service_category?: string
           title: string
           updated_at?: string
         }
@@ -377,6 +388,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           price_starting?: string | null
+          service_category?: string
           title?: string
           updated_at?: string
         }
