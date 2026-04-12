@@ -28,13 +28,17 @@ const whyUs = [
 const IndexPage = () => {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const { data: settings } = useSiteSettings();
-  const { data: services } = useQuery({
-    queryKey: ["public-services-home"],
+  const { data: allServices } = useQuery({
+    queryKey: ["public-services-home-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("services").select("*").eq("is_active", true).order("display_order").limit(4);
+      const { data } = await supabase.from("services").select("*").eq("is_active", true).order("display_order");
       return data ?? [];
     },
   });
+
+  const mainServices = (allServices ?? []).filter((s) => (s as any).service_category !== "addon").slice(0, 4);
+  const addons = (allServices ?? []).filter((s) => (s as any).service_category === "addon");
+
   const { data: testimonials } = useQuery({
     queryKey: ["public-testimonials"],
     queryFn: async () => {
@@ -52,7 +56,6 @@ const IndexPage = () => {
         .neq("image_type", "single")
         .order("display_order");
       if (!data) return [];
-      // Group by group_id
       const groups: Record<string, { before?: typeof data[0]; after?: typeof data[0]; caption?: string }> = {};
       data.forEach((item) => {
         if (!item.group_id) return;
@@ -89,9 +92,6 @@ const IndexPage = () => {
         <div className="container relative z-10 py-32">
           <div className="max-w-2xl">
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-              {/* <span className="inline-block px-4 py-1.5 rounded-full bg-primary-foreground/15 text-primary-foreground text-sm font-medium mb-6">
-                ✨ Professional Cleaning Services
-              </span> */}
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-extrabold text-primary-foreground leading-tight mb-6">
                 {settings?.hero_headline || "Reliable Cleaning Services You Can Trust"}
               </h1>
@@ -116,12 +116,12 @@ const IndexPage = () => {
         <div className="absolute top-20 -left-20 w-72 h-72 bg-accent/20 rounded-full blur-3xl animate-float" />
       </section>
 
-      {/* Services overview */}
+      {/* Main Services */}
       <section className="py-20 md:py-28">
         <div className="container">
           <SectionHeading badge="Our Services" title="Cleaning Solutions for Every Space" description="Whether it's your home or business, our professional team delivers exceptional results every time." />
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {(services ?? []).slice(0, 4).map((s, i) => {
+            {mainServices.map((s, i) => {
               const Icon = iconMap[s.icon] || Sparkles;
               return (
                 <motion.div key={s.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
@@ -133,7 +133,8 @@ const IndexPage = () => {
                         <Icon className="w-6 h-6 text-sky-foreground group-hover:text-primary-foreground" />
                       </div>
                     )}
-                    <h3 className="font-display font-semibold text-card-foreground mb-2">{s.title}</h3>
+                    <h3 className="font-display font-semibold text-card-foreground mb-1">{s.title}</h3>
+                    {s.price_starting && <p className="text-sm font-medium text-primary mb-2">Starting from {s.price_starting}</p>}
                     <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
                     <Button variant="outline" size="sm" asChild>
                       <Link to={`/book?service=${encodeURIComponent(s.title)}`}>Book Now</Link>
@@ -151,8 +152,41 @@ const IndexPage = () => {
         </div>
       </section>
 
+      {/* Add-Ons */}
+      {addons.length > 0 && (
+        <section className="py-20 md:py-28 bg-muted/50">
+          <div className="container">
+            <SectionHeading badge="Extras" title="Popular Add-Ons" description="Enhance your cleaning with these optional extras." />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
+              {addons.map((a, i) => {
+                const Icon = iconMap[a.icon] || Sparkles;
+                return (
+                  <motion.div key={a.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
+                    <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
+                      {a.image_url ? (
+                        <img src={a.image_url} alt={a.title} className="w-full h-32 object-cover rounded-xl mb-4" loading="lazy" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4">
+                          <Icon className="w-6 h-6 text-sky-foreground" />
+                        </div>
+                      )}
+                      <h3 className="font-display font-semibold text-card-foreground mb-1">{a.title}</h3>
+                      {a.price_starting && <p className="text-sm font-medium text-primary mb-2">{a.price_starting}</p>}
+                      <p className="text-sm text-muted-foreground mb-4">{a.description}</p>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/book?addon=${encodeURIComponent(a.title)}`}>Request with Booking</Link>
+                      </Button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* How it works */}
-      <section className="py-20 md:py-28 bg-muted/50">
+      <section className="py-20 md:py-28">
         <div className="container">
           <SectionHeading badge="How It Works" title="Simple Steps to a Cleaner Space" description="Getting started is easy, just follow these three steps." />
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
@@ -174,7 +208,7 @@ const IndexPage = () => {
       </section>
 
       {/* Why choose us */}
-      <section className="py-20 md:py-28">
+      <section className="py-20 md:py-28 bg-muted/50">
         <div className="container">
           <SectionHeading badge="Why BlueRiver" title="Why Clients Choose Us" description="We go above and beyond to earn your trust and deliver results that speak for themselves." />
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -193,7 +227,7 @@ const IndexPage = () => {
 
       {/* Before & After */}
       {(beforeAfter ?? []).length > 0 && (
-        <section className="py-20 md:py-28 bg-muted/50">
+        <section className="py-20 md:py-28">
           <div className="container">
             <SectionHeading badge="Results" title="Before & After" description="See the difference our professional cleaning makes." />
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -223,7 +257,7 @@ const IndexPage = () => {
 
       {/* Testimonials */}
       {(testimonials ?? []).length > 0 && (
-        <section className="py-20 md:py-28">
+        <section className="py-20 md:py-28 bg-muted/50">
           <div className="container">
             <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it, hear from the people who trust BlueRiver." />
             <div className="grid md:grid-cols-3 gap-6">
@@ -263,7 +297,8 @@ const IndexPage = () => {
           </motion.div>
         </div>
       </section>
-      {/* Lightbox for Before & After */}
+
+      {/* Lightbox */}
       <AnimatePresence>
         {lightboxImage && (
           <motion.div

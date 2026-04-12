@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -16,24 +16,35 @@ const BookService = () => {
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
+  const prefilledAddon = searchParams.get("addon") || "";
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [consent, setConsent] = useState(false);
+  const [selectedAddons, setSelectedAddons] = useState<string[]>(prefilledAddon ? [prefilledAddon] : []);
   const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", service: prefilledService, notes: "" });
 
   useEffect(() => {
     if (prefilledService) setForm((f) => ({ ...f, service: prefilledService }));
   }, [prefilledService]);
 
+  useEffect(() => {
+    if (prefilledAddon && !selectedAddons.includes(prefilledAddon)) {
+      setSelectedAddons((prev) => [...prev, prefilledAddon]);
+    }
+  }, [prefilledAddon]);
+
   const { data: services } = useQuery({
-    queryKey: ["public-services-booking"],
+    queryKey: ["public-services-booking-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
+      const { data } = await supabase.from("services").select("title, price_starting, service_category").eq("is_active", true).order("display_order");
       return data ?? [];
     },
   });
+
+  const mainServices = useMemo(() => (services ?? []).filter((s) => (s as any).service_category !== "addon"), [services]);
+  const addons = useMemo(() => (services ?? []).filter((s) => (s as any).service_category === "addon"), [services]);
 
   const { data: availability } = useQuery({
     queryKey: ["availability-settings"],
@@ -60,7 +71,7 @@ const BookService = () => {
 
   const generateTimeSlots = (date: Date | undefined) => {
     if (!date) return [];
-    const dayOfWeek = getDay(date); // 0=Sun
+    const dayOfWeek = getDay(date);
     if (!workingDays.includes(dayOfWeek)) return [];
     const hours = dayOfWeek === 6 ? saturdayHours : workingHours;
     const [startH, startM] = hours.start.split(":").map(Number);
@@ -71,9 +82,9 @@ const BookService = () => {
     for (let m = startMin; m + slotDuration <= endMin; m += slotDuration) {
       const h = Math.floor(m / 60);
       const mm = m % 60;
-      const endSlot = m + slotDuration;
-      const eh = Math.floor(endSlot / 60);
-      const em = endSlot % 60;
+      const endSlotM = m + slotDuration;
+      const eh = Math.floor(endSlotM / 60);
+      const em = endSlotM % 60;
       const fmt = (hr: number, mi: number) => {
         const ampm = hr >= 12 ? "PM" : "AM";
         const h12 = hr % 12 || 12;
@@ -94,6 +105,22 @@ const BookService = () => {
   };
 
   const timeSlots = generateTimeSlots(selectedDate);
+
+  // Price calculation
+  const parsePrice = (p: string | null | undefined): number => {
+    if (!p) return 0;
+    const num = parseFloat(p.replace(/[^0-9.]/g, ""));
+    return isNaN(num) ? 0 : num;
+  };
+
+  const selectedMainService = mainServices.find((s) => s.title === form.service);
+  const mainPrice = parsePrice(selectedMainService?.price_starting);
+  const addonPrices = addons.filter((a) => selectedAddons.includes(a.title)).map((a) => ({ title: a.title, price: parsePrice(a.price_starting) }));
+  const totalPrice = mainPrice + addonPrices.reduce((sum, a) => sum + a.price, 0);
+
+  const toggleAddon = (title: string) => {
+    setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +143,11 @@ const BookService = () => {
       time_slot: selectedSlot,
       notes: form.notes.trim() || null,
       consent_given: consent,
+      selected_addons: selectedAddons.map((title) => {
+        const addon = addons.find((a) => a.title === title);
+        return { title, price: parsePrice(addon?.price_starting) };
+      }),
+      total_price: totalPrice > 0 ? totalPrice : null,
     });
     setLoading(false);
     if (error) {
@@ -149,7 +181,8 @@ const BookService = () => {
                 <CheckCircle className="w-8 h-8 text-primary-foreground" />
               </div>
               <h3 className="text-2xl font-display font-bold text-foreground mb-2">Booking Received!</h3>
-              <p className="text-muted-foreground">We've received your booking for {selectedDate && format(selectedDate, "MMMM d, yyyy")} at {selectedSlot}. We'll confirm shortly.</p>
+              <p className="text-muted-foreground">We've received your booking for {selectedDate && format(selectedDate, "MMMM d, yyyy")} at {selectedSlot}.</p>
+              {totalPrice > 0 && <p className="text-primary font-semibold mt-2">Estimated Total: ${totalPrice.toFixed(2)}</p>}
             </motion.div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-8">
@@ -175,14 +208,53 @@ const BookService = () => {
                     <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Service</label>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Service *</label>
                     <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                       <option value="">Select a service</option>
-                      {(services ?? []).map((s) => (
-                        <option key={s.title} value={s.title}>{s.title}</option>
+                      {mainServices.map((s) => (
+                        <option key={s.title} value={s.title}>
+                          {s.title}{s.price_starting ? ` — ${s.price_starting}` : ""}
+                        </option>
                       ))}
                     </select>
                   </div>
+
+                  {/* Add-ons selection */}
+                  {form.service && addons.length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">Optional Add-Ons</label>
+                      <div className="space-y-2">
+                        {addons.map((a) => (
+                          <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
+                            <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
+                            <span className="flex-1 text-sm font-medium text-foreground">{a.title}</span>
+                            {a.price_starting && <span className="text-sm text-primary font-medium">{a.price_starting}</span>}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Price summary */}
+                  {form.service && totalPrice > 0 && (
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{form.service}</span>
+                        <span className="text-foreground">${mainPrice.toFixed(2)}</span>
+                      </div>
+                      {addonPrices.filter((a) => a.price > 0).map((a) => (
+                        <div key={a.title} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">{a.title}</span>
+                          <span className="text-foreground">${a.price.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-sm font-semibold border-t border-border pt-2 mt-2">
+                        <span className="text-foreground">Estimated Total</span>
+                        <span className="text-primary">${totalPrice.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Additional Notes</label>
                     <Textarea placeholder="Any special instructions..." rows={3} value={form.notes} onChange={update("notes")} maxLength={500} />

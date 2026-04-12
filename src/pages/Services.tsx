@@ -24,8 +24,8 @@ const Services = () => {
     },
   });
 
-  const mainServices = (services ?? []).filter((s) => s.features && s.features.length > 0);
-  const addons = (services ?? []).filter((s) => !s.features || s.features.length === 0);
+  const mainServices = (services ?? []).filter((s) => (s as any).service_category !== "addon");
+  const addons = (services ?? []).filter((s) => (s as any).service_category === "addon");
 
   return (
     <div>
@@ -51,7 +51,7 @@ const Services = () => {
                   </div>
                   <h2 className="text-2xl font-display font-bold text-foreground mb-3">{s.title}</h2>
                   <p className="text-muted-foreground leading-relaxed mb-4">{s.description}</p>
-                  {s.price_starting && <p className="text-sm font-medium text-primary mb-4">Starting at {s.price_starting}</p>}
+                  {s.price_starting && <p className="text-sm font-medium text-primary mb-4">Starting from {s.price_starting}</p>}
                   <ul className="space-y-2 mb-6">
                     {(s.features || []).map((b: string) => (
                       <li key={b} className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -82,7 +82,7 @@ const Services = () => {
         <section className="py-20 md:py-28 bg-muted/50">
           <div className="container">
             <SectionHeading badge="Extras" title="Optional Add-Ons" description="Enhance your cleaning package with these popular extras." />
-            <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
               {addons.map((a, i) => {
                 const Icon = iconMap[a.icon] || Sparkles;
                 return (
@@ -94,10 +94,11 @@ const Services = () => {
                         <Icon className="w-6 h-6 text-sky-foreground" />
                       </div>
                     )}
-                    <h3 className="font-display font-semibold text-card-foreground mb-2">{a.title}</h3>
+                    <h3 className="font-display font-semibold text-card-foreground mb-1">{a.title}</h3>
+                    {a.price_starting && <p className="text-sm font-medium text-primary mb-2">{a.price_starting}</p>}
                     <p className="text-sm text-muted-foreground mb-4">{a.description}</p>
                     <Button variant="outline" size="sm" asChild>
-                      <Link to={`/book?service=${encodeURIComponent(a.title)}`}>Book Now</Link>
+                      <Link to={`/book?addon=${encodeURIComponent(a.title)}`}>Request with Booking</Link>
                     </Button>
                   </motion.div>
                 );
