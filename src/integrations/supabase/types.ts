@@ -239,6 +239,78 @@ export type Database = {
         }
         Relationships: []
       }
+      invoices: {
+        Row: {
+          amount_paid: number
+          booking_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_email: string
+          customer_name: string
+          due_date: string | null
+          id: string
+          issued_date: string
+          notes: string | null
+          payment_method: string | null
+          payment_status: string
+          quote_id: string | null
+          services: Json
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          amount_paid?: number
+          booking_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_email: string
+          customer_name: string
+          due_date?: string | null
+          id?: string
+          issued_date?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          quote_id?: string | null
+          services?: Json
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          amount_paid?: number
+          booking_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_email?: string
+          customer_name?: string
+          due_date?: string | null
+          id?: string
+          issued_date?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          quote_id?: string | null
+          services?: Json
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string

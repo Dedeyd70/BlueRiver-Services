@@ -69,6 +69,22 @@ const BookService = () => {
     },
   });
 
+  // Fetch already-booked slots for the selected date to prevent double-booking
+  const { data: bookedSlots } = useQuery({
+    queryKey: ["booked-slots", selectedDate ? format(selectedDate, "yyyy-MM-dd") : null],
+    queryFn: async () => {
+      if (!selectedDate) return [];
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const { data } = await supabase
+        .from("bookings")
+        .select("time_slot")
+        .eq("booking_date", dateStr)
+        .in("status", ["confirmed", "pending"]);
+      return (data ?? []).map((b: any) => b.time_slot);
+    },
+    enabled: !!selectedDate,
+  });
+
   const workingDays: number[] = availability?.working_days?.days ?? [1, 2, 3, 4, 5, 6];
   const workingHours = availability?.working_hours ?? { start: "07:00", end: "19:00" };
   const saturdayHours = availability?.saturday_hours ?? { start: "08:00", end: "17:00" };
@@ -299,20 +315,26 @@ const BookService = () => {
                     <div>
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Select Time *</label>
                       <div className="grid grid-cols-2 gap-2">
-                        {timeSlots.map((slot) => (
-                          <button
-                            key={slot}
-                            type="button"
-                            onClick={() => setSelectedSlot(slot)}
-                            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                              selectedSlot === slot
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-card border-border text-foreground hover:border-primary/50"
-                            }`}
-                          >
-                            {slot}
-                          </button>
-                        ))}
+                        {timeSlots.map((slot) => {
+                          const isBooked = bookedSlots?.includes(slot);
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => !isBooked && setSelectedSlot(slot)}
+                              disabled={isBooked}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                                isBooked
+                                  ? "bg-muted border-border text-muted-foreground cursor-not-allowed line-through opacity-60"
+                                  : selectedSlot === slot
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-card border-border text-foreground hover:border-primary/50"
+                              }`}
+                            >
+                              {slot}{isBooked ? " (Booked)" : ""}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
