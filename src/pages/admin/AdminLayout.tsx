@@ -5,7 +5,8 @@ import { LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, Log
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import logo from "@/assets/blueriver-logo.png";
-import { getFilteredNavItems, canAccessPath, getRoleLabel, type AppRole } from "@/lib/permissions";
+import { getGroupedNavItems, canAccessPath, getRoleLabel, type AppRole } from "@/lib/permissions";
+import NotificationBell from "@/components/admin/NotificationBell";
 
 const iconMap: Record<string, any> = {
   Dashboard: LayoutDashboard,
@@ -14,7 +15,6 @@ const iconMap: Record<string, any> = {
   Submissions: MessageSquare,
   Services: Wrench,
   Gallery: Image,
-  
   Testimonials: FileText,
   Availability: Clock,
   Payment: DollarSign,
@@ -29,7 +29,7 @@ const iconMap: Record<string, any> = {
 };
 
 const SidebarContent = ({ location, signOut, role, onNavClick }: { location: ReturnType<typeof useLocation>; signOut: () => void; role: AppRole; onNavClick?: () => void }) => {
-  const navItems = getFilteredNavItems(role);
+  const groups = getGroupedNavItems(role);
 
   return (
     <>
@@ -42,24 +42,35 @@ const SidebarContent = ({ location, signOut, role, onNavClick }: { location: Ret
           </div>
         </Link>
       </div>
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          const Icon = iconMap[item.label] || Settings;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              onClick={onNavClick}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        {groups.map((group) => (
+          <div key={group.key}>
+            {group.label && (
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-3 mb-1">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive = location.pathname === item.path;
+                const Icon = iconMap[item.label] || Settings;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={onNavClick}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
       <div className="p-3 border-t border-border">
         <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={() => { signOut(); onNavClick?.(); }}>
@@ -82,7 +93,6 @@ const AdminLayout = () => {
     }
   }, [user, isAdmin, loading, navigate]);
 
-  // Redirect if user tries to access a page they don't have permission for
   useEffect(() => {
     if (!loading && user && isAdmin && role) {
       if (!canAccessPath(role, location.pathname)) {
@@ -121,11 +131,17 @@ const AdminLayout = () => {
               <SidebarContent location={location} signOut={signOut} role={role} onNavClick={() => setSheetOpen(false)} />
             </SheetContent>
           </Sheet>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1">
             <img src={logo} alt="BlueRiver" className="h-7 w-auto object-contain" />
             <span className="font-display font-bold text-foreground text-sm">Admin</span>
           </div>
+          <NotificationBell />
         </header>
+
+        {/* Desktop notification bell */}
+        <div className="hidden md:flex items-center justify-end p-2 pr-4">
+          <NotificationBell />
+        </div>
 
         <main className="flex-1 overflow-auto">
           <div className="p-4 md:p-6 lg:p-8 max-w-5xl">
