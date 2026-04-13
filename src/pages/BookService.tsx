@@ -315,20 +315,26 @@ const BookService = () => {
                     <div>
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Select Time *</label>
                       <div className="grid grid-cols-2 gap-2">
-                        {timeSlots.map((slot) => (
-                          <button
-                            key={slot}
-                            type="button"
-                            onClick={() => setSelectedSlot(slot)}
-                            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                              selectedSlot === slot
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-card border-border text-foreground hover:border-primary/50"
-                            }`}
-                          >
-                            {slot}
-                          </button>
-                        ))}
+                        {timeSlots.map((slot) => {
+                          const isBooked = bookedSlots?.includes(slot);
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => !isBooked && setSelectedSlot(slot)}
+                              disabled={isBooked}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                                isBooked
+                                  ? "bg-muted border-border text-muted-foreground cursor-not-allowed line-through opacity-60"
+                                  : selectedSlot === slot
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-card border-border text-foreground hover:border-primary/50"
+                              }`}
+                            >
+                              {slot}{isBooked ? " (Booked)" : ""}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
