@@ -24,6 +24,7 @@ const BookService = () => {
   const prefilledAddon = searchParams.get("addon") || "";
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [consent, setConsent] = useState(false);
@@ -69,18 +70,14 @@ const BookService = () => {
     },
   });
 
-  // Fetch already-booked slots for the selected date to prevent double-booking
+  // Fetch already-booked slots via secure RPC (no direct table access needed)
   const { data: bookedSlots } = useQuery({
     queryKey: ["booked-slots", selectedDate ? format(selectedDate, "yyyy-MM-dd") : null],
     queryFn: async () => {
       if (!selectedDate) return [];
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const { data } = await supabase
-        .from("bookings")
-        .select("time_slot")
-        .eq("booking_date", dateStr)
-        .in("status", ["confirmed", "pending"]);
-      return (data ?? []).map((b: any) => b.time_slot);
+      const { data } = await supabase.rpc("get_booked_slots", { p_date: dateStr });
+      return (data ?? []).map((r: any) => r.time_slot);
     },
     enabled: !!selectedDate,
   });
@@ -159,6 +156,16 @@ const BookService = () => {
     }
     setLoading(true);
 
+    // Rate-limit check
+    try {
+      const { data: isRecent } = await supabase.rpc("check_recent_submission", { p_email: form.email.trim(), p_table: "bookings" });
+      if (isRecent) {
+        setLoading(false);
+        toast({ title: "Please wait before submitting again.", variant: "destructive" });
+        return;
+      }
+    } catch { /* allow booking if rate check fails */ }
+
     // Determine initial status based on approval mode
     const approvalMode = siteSettings?.booking_approval_mode || "auto";
     const initialStatus = approvalMode === "manual" ? "pending" : "confirmed";
@@ -188,6 +195,10 @@ const BookService = () => {
 
     // Create notification for admins
     await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
+
+    // 30s cooldown to prevent spam
+    setCooldown(true);
+    setTimeout(() => setCooldown(false), 30000);
 
     setSubmitted(true);
     toast({ title: "Booking submitted!", description: approvalMode === "manual" ? "Your booking is pending approval." : "We'll confirm your appointment soon." });
