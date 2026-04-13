@@ -10,8 +10,6 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useQuery } from "@tanstack/react-query";
 import { isValidEmail } from "@/lib/validation";
 import PageMeta from "@/components/PageMeta";
-import { useSiteSettings } from "@/hooks/useSiteSettings";
-import { useQuery } from "@tanstack/react-query";
 
 const Contact = () => {
   const { toast } = useToast();
