@@ -69,6 +69,22 @@ const BookService = () => {
     },
   });
 
+  // Fetch already-booked slots for the selected date to prevent double-booking
+  const { data: bookedSlots } = useQuery({
+    queryKey: ["booked-slots", selectedDate ? format(selectedDate, "yyyy-MM-dd") : null],
+    queryFn: async () => {
+      if (!selectedDate) return [];
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const { data } = await supabase
+        .from("bookings")
+        .select("time_slot")
+        .eq("booking_date", dateStr)
+        .in("status", ["confirmed", "pending"]);
+      return (data ?? []).map((b: any) => b.time_slot);
+    },
+    enabled: !!selectedDate,
+  });
+
   const workingDays: number[] = availability?.working_days?.days ?? [1, 2, 3, 4, 5, 6];
   const workingHours = availability?.working_hours ?? { start: "07:00", end: "19:00" };
   const saturdayHours = availability?.saturday_hours ?? { start: "08:00", end: "17:00" };
