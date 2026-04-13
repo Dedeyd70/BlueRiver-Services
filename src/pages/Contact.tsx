@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { notifyAdmins } from "@/lib/notifications";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ const Contact = () => {
   const { data: settings } = useSiteSettings();
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", service: "", message: "" });
 
   const { data: services } = useQuery({
@@ -37,6 +39,17 @@ const Contact = () => {
       return;
     }
     setLoading(true);
+
+    // Rate-limit check
+    try {
+      const { data: isRecent } = await supabase.rpc("check_recent_submission", { p_email: form.email.trim(), p_table: "contact_submissions" });
+      if (isRecent) {
+        setLoading(false);
+        toast({ title: "Please wait before submitting again.", variant: "destructive" });
+        return;
+      }
+    } catch { /* allow submission if rate check fails */ }
+
     const { error } = await supabase.from("contact_submissions").insert({
       name: form.name.trim(),
       email: form.email.trim(),
@@ -49,6 +62,14 @@ const Contact = () => {
       toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
       return;
     }
+
+    // Notify admins of new contact message
+    try { await notifyAdmins("contact", `New contact message from ${form.name.trim()}`); } catch {}
+
+    // 30s cooldown
+    setCooldown(true);
+    setTimeout(() => setCooldown(false), 30000);
+
     setSubmitted(true);
     toast({ title: "Message sent!", description: "We'll get back to you within 24 hours." });
   };
@@ -122,8 +143,8 @@ const Contact = () => {
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Message *</label>
                     <Textarea placeholder="Tell us about your cleaning needs..." rows={5} value={form.message} onChange={update("message")} maxLength={1000} />
                   </div>
-                  <Button type="submit" variant="hero" size="lg" disabled={loading}>
-                    {loading ? "Submitting..." : "Request a Quote"}
+                  <Button type="submit" variant="hero" size="lg" disabled={loading || cooldown}>
+                    {loading ? "Sending..." : cooldown ? "Please wait..." : "Send Message"}
                   </Button>
                 </form>
               )}

@@ -19,6 +19,7 @@ const RequestQuote = () => {
   const [searchParams] = useSearchParams();
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
   const [consent, setConsent] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState("");
@@ -86,6 +87,17 @@ const RequestQuote = () => {
       return;
     }
     setLoading(true);
+
+    // Rate-limit check
+    try {
+      const { data: isRecent } = await supabase.rpc("check_recent_submission", { p_email: form.email.trim(), p_table: "quote_requests" });
+      if (isRecent) {
+        setLoading(false);
+        toast({ title: "Please wait before submitting again.", variant: "destructive" });
+        return;
+      }
+    } catch { /* allow quote if rate check fails */ }
+
     const { error } = await supabase.from("quote_requests").insert({
       name: form.name.trim(),
       email: form.email.trim(),
@@ -106,6 +118,10 @@ const RequestQuote = () => {
 
     // Notify admins
     await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, undefined, "quote");
+
+    // 30s cooldown
+    setCooldown(true);
+    setTimeout(() => setCooldown(false), 30000);
 
     setSubmitted(true);
     toast({ title: "Quote request submitted!", description: "We'll get back to you within 24 hours." });
@@ -220,8 +236,8 @@ const RequestQuote = () => {
                     I agree to be contacted regarding my request. My information will be kept private.
                   </label>
                 </div>
-                <Button type="submit" variant="hero" size="lg" disabled={loading || !isFormValid} className="w-full sm:w-auto">
-                  {loading ? "Submitting..." : "Request a Quote"}
+                <Button type="submit" variant="hero" size="lg" disabled={loading || cooldown || !isFormValid} className="w-full sm:w-auto">
+                  {loading ? "Submitting..." : cooldown ? "Please wait..." : "Request a Quote"}
                 </Button>
               </form>
             )}

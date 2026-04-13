@@ -38,6 +38,7 @@ import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
 import TermsAdmin from "./pages/admin/TermsAdmin";
 import LegalAdmin from "./pages/admin/LegalAdmin";
 import InvoicesAdmin from "./pages/admin/InvoicesAdmin";
+import MessagesAdmin from "./pages/admin/MessagesAdmin";
 
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="privacy-policy" element={<PrivacyPolicyAdmin />} />
               <Route path="bookings" element={<BookingsAdmin />} />
               <Route path="quotes" element={<QuotesAdmin />} />
+              <Route path="messages" element={<MessagesAdmin />} />
               <Route path="terms" element={<TermsAdmin />} />
               <Route path="legal" element={<LegalAdmin />} />
               <Route path="branding" element={<BrandingAdmin />} />
