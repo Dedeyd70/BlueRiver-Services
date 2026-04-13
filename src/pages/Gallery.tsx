@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import PageMeta from "@/components/PageMeta";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,6 +82,7 @@ const Gallery = () => {
 
   return (
     <div>
+      <PageMeta title="Gallery" description="See examples of our professional cleaning results. Before and after transformations and portfolio images." />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
