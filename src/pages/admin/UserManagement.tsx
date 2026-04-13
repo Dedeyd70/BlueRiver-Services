@@ -25,9 +25,12 @@ const UserManagement = () => {
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
+      // Try enriched endpoint first, fall back to basic user_roles
+      const res = await supabase.functions.invoke("list-admin-users");
+      if (!res.error && res.data?.users) return res.data.users;
       const { data, error } = await supabase.from("user_roles").select("*");
       if (error) throw error;
-      return data;
+      return data.map((r: any) => ({ ...r, email: null, full_name: null }));
     },
   });
 
@@ -192,7 +195,12 @@ const UserManagement = () => {
             return (
               <div key={u.id} className="bg-card border border-border rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-foreground font-mono">{u.user_id}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {u.full_name || u.email || <span className="font-mono text-xs">{u.user_id}</span>}
+                  </p>
+                  {u.email && u.full_name && (
+                    <p className="text-xs text-muted-foreground/70">{u.email}</p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {getRoleLabel(u.role as AppRole)}
                     {isSelf && <span className="ml-1 text-primary">(You)</span>}

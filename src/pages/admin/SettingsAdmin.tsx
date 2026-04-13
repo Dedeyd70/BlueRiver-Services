@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Save } from "lucide-react";
 
@@ -26,6 +27,10 @@ const settingsDef = [
   { key: "stats_years", label: "Stats – Years Experience", type: "input", placeholder: "5+" },
   { key: "stats_satisfaction", label: "Stats – Satisfaction Rate", type: "input", placeholder: "98%" },
   { key: "stats_rating", label: "Stats – Rating", type: "input", placeholder: "4.9" },
+  { key: "booking_approval_mode", label: "Booking Approval Mode", type: "select", options: [
+    { value: "auto", label: "Auto-confirm (bookings confirmed immediately)" },
+    { value: "manual", label: "Manual approval (bookings start as pending)" },
+  ]},
 ];
 
 const SettingsAdmin = () => {
@@ -85,6 +90,15 @@ const SettingsAdmin = () => {
                 rows={3}
                 placeholder={s.placeholder}
               />
+            ) : s.type === "select" && s.options ? (
+              <Select value={form[s.key] || s.options[0]?.value} onValueChange={(v) => setForm({ ...form, [s.key]: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {s.options.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <Input
                 value={form[s.key] || ""}
