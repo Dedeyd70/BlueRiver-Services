@@ -124,13 +124,25 @@ const IndexPage = () => {
       {/* Hero */}
       <section className="relative min-h-[90vh] flex items-center bg-hero-gradient overflow-hidden">
         <div className="absolute inset-0">
-          <img
-            src={heroImg}
-            alt="Professional cleaning team at work"
-            className="w-full h-full object-cover"
-            width={1920}
-            height={1080}
-          />
+          {isLoading ? (
+            <div className="w-full h-full bg-gray-200 animate-pulse" />
+          ) : heroImg ? (
+            <img
+              src={heroImg}
+              alt="Professional cleaning team at work"
+              className="w-full h-full object-cover"
+              width={1920}
+              height={1080}
+            />
+          ) : (
+            <img
+              src={heroImgFallback}
+              alt="Fallback cleaning"
+              className="w-full h-full object-cover"
+              width={1920}
+              height={1080}
+            />
+          )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-primary/70 via-primary/40 to-accent/30" />
         <div className="container relative z-10 py-32">
