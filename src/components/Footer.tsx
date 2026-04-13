@@ -42,7 +42,7 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold mb-4">Quick Links</h4>
             <div className="flex flex-col gap-2">
-              {[["Home", "/"], ["About Us", "/about"], ["Services", "/services"], ["Gallery", "/gallery"], ["Book Now", "/book"], ["Request a Quote", "/quote"], ["Admin", "/admin/login"]].map(([label, path]) => (
+              {[["Home", "/"], ["About Us", "/about"], ["Services", "/services"], ["Gallery", "/gallery"], ["Book Now", "/book"], ["Request a Quote", "/quote"]].map(([label, path]) => (
                 <Link
                   key={path}
                   to={path}
