@@ -37,6 +37,7 @@ import QuotesAdmin from "./pages/admin/QuotesAdmin";
 import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
 import TermsAdmin from "./pages/admin/TermsAdmin";
 import LegalAdmin from "./pages/admin/LegalAdmin";
+import InvoicesAdmin from "./pages/admin/InvoicesAdmin";
 
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
@@ -64,18 +65,20 @@ const App = () => (
               <Route path="gallery" element={<GalleryAdmin />} />
               
               <Route path="testimonials" element={<TestimonialsAdmin />} />
-              <Route path="payment" element={<PaymentSettingsAdmin />} />
               <Route path="settings" element={<SettingsAdmin />} />
               <Route path="account" element={<AccountSettings />} />
               <Route path="privacy-policy" element={<PrivacyPolicyAdmin />} />
               <Route path="bookings" element={<BookingsAdmin />} />
               <Route path="quotes" element={<QuotesAdmin />} />
-              <Route path="availability" element={<AvailabilityAdmin />} />
               <Route path="terms" element={<TermsAdmin />} />
               <Route path="legal" element={<LegalAdmin />} />
               <Route path="branding" element={<BrandingAdmin />} />
               <Route path="homepage-images" element={<HomepageImagesAdmin />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="invoices" element={<InvoicesAdmin />} />
+              {/* Redirects for removed standalone routes */}
+              <Route path="availability" element={<SettingsAdmin />} />
+              <Route path="payment" element={<SettingsAdmin />} />
             </Route>
 
             {/* Public routes */}
