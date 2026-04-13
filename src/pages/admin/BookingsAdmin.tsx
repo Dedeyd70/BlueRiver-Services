@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -13,6 +14,8 @@ const statusColors: Record<string, string> = {
 
 const BookingsAdmin = () => {
   const { toast } = useToast();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
   const qc = useQueryClient();
 
   const { data: bookings, isLoading } = useQuery({
