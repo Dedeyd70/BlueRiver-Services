@@ -16,7 +16,7 @@ import {
   Truck,
   Droplets,
   Wind,
-  Phone,
+  
   MapPin,
   X,
 } from "lucide-react";
