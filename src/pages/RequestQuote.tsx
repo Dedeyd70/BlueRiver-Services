@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { notifyAdmins } from "@/lib/notifications";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,10 @@ const RequestQuote = () => {
       toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
       return;
     }
+
+    // Notify admins
+    await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, undefined, "quote");
+
     setSubmitted(true);
     toast({ title: "Quote request submitted!", description: "We'll get back to you within 24 hours." });
   };
