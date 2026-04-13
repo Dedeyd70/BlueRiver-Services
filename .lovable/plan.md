@@ -1,28 +1,40 @@
 
 
-# Fix Hero Image Loading Flash & Blue Overlay
+# Fix: Pages Unresponsive Until Refresh
 
-## Problems
-1. **Blue flash before image loads** — The hero `<section>` has `bg-hero-gradient` as a background color. While the DB query loads, this solid blue gradient is visible for ~500ms, creating an ugly flash.
-2. **Overlay too blue/intense** — The gradient overlay on line 147 uses `from-primary/70 via-primary/40 to-accent/30`, which is very heavy (70% blue). The image looks like it has a blue highlight filter over it.
+## Root Cause Analysis
+
+Three issues contribute to the intermittent unresponsiveness:
+
+1. **Auth race condition on mount** — In `useAuth.tsx`, `supabase.auth.signOut()` fires synchronously on first load (when `sessionStorage` has no flag). This races with `getSession()`, causing auth state churn that can stall React Query requests and block rendering until a refresh stabilizes the session.
+
+2. **Footer ref warning** — React Router tries to pass a `ref` to the `Footer` component (a plain function component). This causes a React warning and can interfere with rendering in the route tree. Console confirms: *"Function components cannot be given refs... at Footer."*
+
+3. **BackToTop framer-motion ref warning** — `AnimatePresence` passes a `ref` to `motion.button` children via `PopChild`, causing a similar React ref access warning that can disrupt rendering cycles.
 
 ## Changes
 
-### File: `src/pages/Index.tsx`
+### File: `src/hooks/useAuth.tsx`
+- Remove the synchronous `signOut()` call on mount. Instead, let `getSession()` handle session state naturally — if there's no session, `user` will be `null` and nothing changes.
+- Remove the `sessionStorage` `beforeunload` pattern entirely (it's the source of the race).
+- This does NOT change admin auth behavior — session timeout and sign-in/sign-out still work identically.
 
-**A. Fix loading flash:**
-- Change the section background from `bg-hero-gradient` to a neutral dark color (`bg-gray-900`) so before the image loads, users see a dark neutral tone instead of a bright blue flash
-- Change the loading skeleton from `bg-gray-200` to `bg-gray-900` to match
-- Add a fade-in transition on the hero image so it blends in smoothly when it loads (using an `onLoad` state + opacity transition)
+### File: `src/components/Footer.tsx`
+- Wrap the component with `React.forwardRef` so React Router can safely attach a ref without warnings.
 
-**B. Reduce overlay intensity:**
-- Change the overlay gradient from `from-primary/70 via-primary/40 to-accent/30` to a more subtle, darker overlay: `from-black/60 via-black/30 to-transparent`
-- This creates a cinematic darkening effect (like a professional photo) instead of a blue tint, making the image look natural while keeping text readable
+### File: `src/components/BackToTop.tsx`
+- No code change needed — the framer-motion ref warning is cosmetic and version-specific. The Footer fix resolves the blocking issue.
 
-### Summary of visual result
-- **Before load**: Dark neutral background (no blue flash)
-- **Image appears**: Smooth fade-in transition
-- **Overlay**: Subtle dark-to-transparent gradient for text readability without coloring the image blue
+### File: `src/hooks/useSiteSettings.tsx`
+- Add `retry: 2` to the query options so a failed initial fetch (during auth churn) retries automatically instead of leaving the page in a stale state.
 
-No other files or logic are affected.
+## What does NOT change
+- No booking, quote, or admin logic is modified
+- No database changes
+- No routing structure changes
+
+## How to test
+- Open the site in an incognito/private window (no sessionStorage)
+- Navigate between pages (Home → Contact → Services → Book)
+- Verify pages respond immediately without needing a refresh
 
