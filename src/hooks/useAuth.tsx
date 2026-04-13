@@ -58,17 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, SESSION_TIMEOUT_MS);
   }, [doSignOut]);
 
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      sessionStorage.setItem("blueriver_session_active", "true");
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    const wasActive = sessionStorage.getItem("blueriver_session_active");
-    if (!wasActive) {
-      supabase.auth.signOut();
-    }
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, []);
+  // Session persistence is handled naturally by getSession() — no manual signOut on mount
 
   useEffect(() => {
     if (!user) return;
@@ -115,7 +105,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
-    sessionStorage.setItem("blueriver_session_active", "true");
     return { error: null };
   }, []);
 
