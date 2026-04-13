@@ -1,0 +1,107 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Bell, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { formatDistanceToNow } from "date-fns";
+
+const NotificationBell = () => {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const { data: notifications } = useQuery({
+    queryKey: ["admin-notifications", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+
+  const unreadCount = notifications?.filter((n: any) => !n.is_read).length ?? 0;
+
+  const markRead = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-notifications"] }),
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      if (!user) return;
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("user_id", user.id)
+        .eq("is_read", false);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-notifications"] }),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="w-5 h-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center min-w-[18px] h-[18px] px-1">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="end">
+        <div className="flex items-center justify-between p-3 border-b border-border">
+          <p className="text-sm font-semibold text-foreground">Notifications</p>
+          {unreadCount > 0 && (
+            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => markAllRead.mutate()}>
+              Mark all read
+            </Button>
+          )}
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          {!notifications?.length ? (
+            <p className="text-sm text-muted-foreground p-4 text-center">No notifications</p>
+          ) : (
+            notifications.map((n: any) => (
+              <div
+                key={n.id}
+                className={`flex items-start gap-2 p-3 border-b border-border last:border-0 text-sm cursor-pointer hover:bg-muted/50 transition-colors ${
+                  !n.is_read ? "bg-primary/5" : ""
+                }`}
+                onClick={() => !n.is_read && markRead.mutate(n.id)}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className={`text-foreground ${!n.is_read ? "font-medium" : ""}`}>{n.message}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                  </p>
+                </div>
+                {!n.is_read && <Check className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />}
+              </div>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+export default NotificationBell;
