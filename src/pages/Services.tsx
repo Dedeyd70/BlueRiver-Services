@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import PageMeta from "@/components/PageMeta";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import SectionHeading from "@/components/SectionHeading";
@@ -29,6 +30,7 @@ const Services = () => {
 
   return (
     <div>
+      <PageMeta title="Our Services" description="Professional cleaning solutions for homes and businesses. View our full range of services and add-ons." />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
