@@ -4,13 +4,39 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import SectionHeading from "@/components/SectionHeading";
-import { Shield, Clock, Award, Sparkles, Star, Home, Building2, SprayCan, Truck, Droplets, Wind, Phone, MapPin, X } from "lucide-react";
+import {
+  Shield,
+  Clock,
+  Award,
+  Sparkles,
+  Star,
+  Home,
+  Building2,
+  SprayCan,
+  Truck,
+  Droplets,
+  Wind,
+  Phone,
+  MapPin,
+  X,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import heroImgFallback from "@/assets/hero-cleaning.jpg";
 
-const iconMap: Record<string, any> = { Home, Building2, SprayCan, Truck, Droplets, Wind, Sparkles, Shield, Clock, Award };
+const iconMap: Record<string, any> = {
+  Home,
+  Building2,
+  SprayCan,
+  Truck,
+  Droplets,
+  Wind,
+  Sparkles,
+  Shield,
+  Clock,
+  Award,
+};
 
 const fadeUp = {
   initial: { opacity: 0, y: 30 },
@@ -57,7 +83,7 @@ const IndexPage = () => {
         .neq("image_type", "single")
         .order("display_order");
       if (!data) return [];
-      const groups: Record<string, { before?: typeof data[0]; after?: typeof data[0]; caption?: string }> = {};
+      const groups: Record<string, { before?: (typeof data)[0]; after?: (typeof data)[0]; caption?: string }> = {};
       data.forEach((item) => {
         if (!item.group_id) return;
         if (!groups[item.group_id]) groups[item.group_id] = {};
@@ -67,28 +93,44 @@ const IndexPage = () => {
       });
       return Object.entries(groups)
         .filter(([, g]) => g.before && g.after)
-        .map(([id, g]) => ({ id, before_image_url: g.before!.image_url, after_image_url: g.after!.image_url, caption: g.caption || "" }));
+        .map(([id, g]) => ({
+          id,
+          before_image_url: g.before!.image_url,
+          after_image_url: g.after!.image_url,
+          caption: g.caption || "",
+        }));
     },
   });
-  const { data: homepageImages } = useQuery({
+  const { data: homepageImages, isLoading } = useQuery({
     queryKey: ["public-homepage-images"],
     queryFn: async () => {
       const { data } = await supabase.from("homepage_images").select("section_key, image_url");
       const map: Record<string, string> = {};
-      data?.forEach((r: any) => { if (r.image_url) map[r.section_key] = r.image_url; });
+      data?.forEach((r: any) => {
+        if (r.image_url) map[r.section_key] = r.image_url;
+      });
       return map;
     },
   });
 
-  const heroImg = homepageImages?.hero || heroImgFallback;
+  const heroImg = homepageImages?.hero ?? null;
 
   return (
     <div className="overflow-hidden">
-      <PageMeta title="Home" description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today." />
+      <PageMeta
+        title="Home"
+        description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today."
+      />
       {/* Hero */}
       <section className="relative min-h-[90vh] flex items-center bg-hero-gradient overflow-hidden">
         <div className="absolute inset-0">
-          <img src={heroImg} alt="Professional cleaning team at work" className="w-full h-full object-cover" width={1920} height={1080} />
+          <img
+            src={heroImg}
+            alt="Professional cleaning team at work"
+            className="w-full h-full object-cover"
+            width={1920}
+            height={1080}
+          />
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-primary/70 via-primary/40 to-accent/30" />
         <div className="container relative z-10 py-32">
@@ -98,7 +140,8 @@ const IndexPage = () => {
                 {settings?.hero_headline || "Reliable Cleaning Services You Can Trust"}
               </h1>
               <p className="text-lg text-primary-foreground/85 leading-relaxed mb-4 max-w-lg">
-                {settings?.hero_subheadline || "From cozy homes to bustling offices, BlueRiver Services delivers spotless results with every visit."}
+                {settings?.hero_subheadline ||
+                  "From cozy homes to bustling offices, BlueRiver Services delivers spotless results with every visit."}
               </p>
               <p className="flex items-center gap-2 text-primary-foreground/75 text-sm mb-8">
                 <MapPin className="w-4 h-4" /> Serving Washington and surrounding areas
@@ -121,7 +164,11 @@ const IndexPage = () => {
       {/* Main Services */}
       <section className="py-20 md:py-28">
         <div className="container">
-          <SectionHeading badge="Our Services" title="Cleaning Solutions for Every Space" description="Whether it's your home or business, our professional team delivers exceptional results every time." />
+          <SectionHeading
+            badge="Our Services"
+            title="Cleaning Solutions for Every Space"
+            description="Whether it's your home or business, our professional team delivers exceptional results every time."
+          />
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {mainServices.map((s, i) => {
               const Icon = iconMap[s.icon] || Sparkles;
@@ -129,14 +176,21 @@ const IndexPage = () => {
                 <motion.div key={s.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
                   <div className="group block p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
                     {s.image_url ? (
-                      <img src={s.image_url} alt={s.title} className="w-full h-32 object-cover rounded-xl mb-4" loading="lazy" />
+                      <img
+                        src={s.image_url}
+                        alt={s.title}
+                        className="w-full h-32 object-cover rounded-xl mb-4"
+                        loading="lazy"
+                      />
                     ) : (
                       <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4 group-hover:bg-hero-gradient group-hover:text-primary-foreground transition-all duration-300">
                         <Icon className="w-6 h-6 text-sky-foreground group-hover:text-primary-foreground" />
                       </div>
                     )}
                     <h3 className="font-display font-semibold text-card-foreground mb-1">{s.title}</h3>
-                    {s.price_starting && <p className="text-sm font-medium text-primary mb-2">Starting from {s.price_starting}</p>}
+                    {s.price_starting && (
+                      <p className="text-sm font-medium text-primary mb-2">Starting from {s.price_starting}</p>
+                    )}
                     <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
                     <Button variant="outline" size="sm" asChild>
                       <Link to={`/book?service=${encodeURIComponent(s.title)}`}>Book Now</Link>
@@ -158,7 +212,11 @@ const IndexPage = () => {
       {addons.length > 0 && (
         <section className="py-20 md:py-28 bg-muted/50">
           <div className="container">
-            <SectionHeading badge="Extras" title="Popular Add-Ons" description="Enhance your cleaning with these optional extras." />
+            <SectionHeading
+              badge="Extras"
+              title="Popular Add-Ons"
+              description="Enhance your cleaning with these optional extras."
+            />
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
               {addons.map((a, i) => {
                 const Icon = iconMap[a.icon] || Sparkles;
@@ -166,7 +224,12 @@ const IndexPage = () => {
                   <motion.div key={a.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
                     <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
                       {a.image_url ? (
-                        <img src={a.image_url} alt={a.title} className="w-full h-32 object-cover rounded-xl mb-4" loading="lazy" />
+                        <img
+                          src={a.image_url}
+                          alt={a.title}
+                          className="w-full h-32 object-cover rounded-xl mb-4"
+                          loading="lazy"
+                        />
                       ) : (
                         <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4">
                           <Icon className="w-6 h-6 text-sky-foreground" />
@@ -190,14 +253,35 @@ const IndexPage = () => {
       {/* How it works */}
       <section className="py-20 md:py-28">
         <div className="container">
-          <SectionHeading badge="How It Works" title="Simple Steps to a Cleaner Space" description="Getting started is easy, just follow these three steps." />
+          <SectionHeading
+            badge="How It Works"
+            title="Simple Steps to a Cleaner Space"
+            description="Getting started is easy, just follow these three steps."
+          />
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {[
-              { step: "1", title: "Request a Quote or Book", desc: "Tell us about your space and needs through our booking form or quote request." },
-              { step: "2", title: "We Confirm & Schedule", desc: "Our team reviews your request, confirms availability, and locks in your appointment." },
-              { step: "3", title: "Enjoy a Spotless Space", desc: "Sit back and relax while our pros deliver a thorough, professional clean." },
+              {
+                step: "1",
+                title: "Request a Quote or Book",
+                desc: "Tell us about your space and needs through our booking form or quote request.",
+              },
+              {
+                step: "2",
+                title: "We Confirm & Schedule",
+                desc: "Our team reviews your request, confirms availability, and locks in your appointment.",
+              },
+              {
+                step: "3",
+                title: "Enjoy a Spotless Space",
+                desc: "Sit back and relax while our pros deliver a thorough, professional clean.",
+              },
             ].map((item, i) => (
-              <motion.div key={item.step} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.15 }} className="text-center p-6">
+              <motion.div
+                key={item.step}
+                {...fadeUp}
+                transition={{ duration: 0.5, delay: i * 0.15 }}
+                className="text-center p-6"
+              >
                 <div className="w-14 h-14 rounded-full bg-hero-gradient flex items-center justify-center mx-auto mb-4">
                   <span className="text-xl font-display font-bold text-primary-foreground">{item.step}</span>
                 </div>
@@ -212,10 +296,19 @@ const IndexPage = () => {
       {/* Why choose us */}
       <section className="py-20 md:py-28 bg-muted/50">
         <div className="container">
-          <SectionHeading badge="Why BlueRiver" title="Why Clients Choose Us" description="We go above and beyond to earn your trust and deliver results that speak for themselves." />
+          <SectionHeading
+            badge="Why BlueRiver"
+            title="Why Clients Choose Us"
+            description="We go above and beyond to earn your trust and deliver results that speak for themselves."
+          />
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {whyUs.map((item, i) => (
-              <motion.div key={item.title} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="text-center p-6">
+              <motion.div
+                key={item.title}
+                {...fadeUp}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className="text-center p-6"
+              >
                 <div className="w-14 h-14 rounded-2xl bg-hero-gradient flex items-center justify-center mx-auto mb-4">
                   <item.icon className="w-7 h-7 text-primary-foreground" />
                 </div>
@@ -231,18 +324,41 @@ const IndexPage = () => {
       {(beforeAfter ?? []).length > 0 && (
         <section className="py-20 md:py-28">
           <div className="container">
-            <SectionHeading badge="Results" title="Before & After" description="See the difference our professional cleaning makes." />
+            <SectionHeading
+              badge="Results"
+              title="Before & After"
+              description="See the difference our professional cleaning makes."
+            />
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {(beforeAfter ?? []).map((item, i) => (
-                <motion.div key={item.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="bg-card border border-border rounded-2xl overflow-hidden">
+                <motion.div
+                  key={item.id}
+                  {...fadeUp}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className="bg-card border border-border rounded-2xl overflow-hidden"
+                >
                   <div className="grid grid-cols-2">
                     <div className="relative cursor-pointer" onClick={() => setLightboxImage(item.before_image_url)}>
-                      <img src={item.before_image_url} alt="Before" className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
-                      <span className="absolute bottom-2 left-2 bg-foreground/70 text-background text-xs font-semibold px-2 py-0.5 rounded">Before</span>
+                      <img
+                        src={item.before_image_url}
+                        alt="Before"
+                        className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      <span className="absolute bottom-2 left-2 bg-foreground/70 text-background text-xs font-semibold px-2 py-0.5 rounded">
+                        Before
+                      </span>
                     </div>
                     <div className="relative cursor-pointer" onClick={() => setLightboxImage(item.after_image_url)}>
-                      <img src={item.after_image_url} alt="After" className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300" loading="lazy" />
-                      <span className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-0.5 rounded">After</span>
+                      <img
+                        src={item.after_image_url}
+                        alt="After"
+                        className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      <span className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-0.5 rounded">
+                        After
+                      </span>
                     </div>
                   </div>
                   {item.caption && (
@@ -261,10 +377,19 @@ const IndexPage = () => {
       {(testimonials ?? []).length > 0 && (
         <section className="py-20 md:py-28 bg-muted/50">
           <div className="container">
-            <SectionHeading badge="Testimonials" title="What Our Clients Say" description="Don't just take our word for it, hear from the people who trust BlueRiver." />
+            <SectionHeading
+              badge="Testimonials"
+              title="What Our Clients Say"
+              description="Don't just take our word for it, hear from the people who trust BlueRiver."
+            />
             <div className="grid md:grid-cols-3 gap-6">
               {(testimonials ?? []).map((t, i) => (
-                <motion.div key={t.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.15 }} className="p-6 rounded-2xl bg-card border border-border">
+                <motion.div
+                  key={t.id}
+                  {...fadeUp}
+                  transition={{ duration: 0.5, delay: i * 0.15 }}
+                  className="p-6 rounded-2xl bg-card border border-border"
+                >
                   <div className="flex gap-1 mb-4">
                     {Array.from({ length: t.rating }).map((_, j) => (
                       <Star key={j} className="w-4 h-4 fill-primary text-primary" />
@@ -286,10 +411,19 @@ const IndexPage = () => {
       <section className="py-20 md:py-28 bg-hero-gradient">
         <div className="container text-center">
           <motion.div {...fadeUp}>
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-4">Ready for a Cleaner Space?</h2>
-            <p className="text-primary-foreground/80 mb-8 max-w-lg mx-auto">Get in touch today for a free estimate. No obligations, no hidden fees.</p>
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-4">
+              Ready for a Cleaner Space?
+            </h2>
+            <p className="text-primary-foreground/80 mb-8 max-w-lg mx-auto">
+              Get in touch today for a free estimate. No obligations, no hidden fees.
+            </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Button variant="hero" size="xl" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90" asChild>
+              <Button
+                variant="hero"
+                size="xl"
+                className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                asChild
+              >
                 <Link to="/quote">Get a Free Quote</Link>
               </Button>
               <Button variant="hero-outline" size="xl" asChild>
