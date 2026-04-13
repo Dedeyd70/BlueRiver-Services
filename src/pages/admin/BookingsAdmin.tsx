@@ -16,7 +16,6 @@ const BookingsAdmin = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const qc = useQueryClient();
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
