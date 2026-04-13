@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import imageCompression from "browser-image-compression";
+import { isValidEmail } from "@/lib/validation";
+import PageMeta from "@/components/PageMeta";
 
 const RequestQuote = () => {
   const { toast } = useToast();
@@ -74,6 +76,10 @@ const RequestQuote = () => {
       toast({ title: "Please fill in all required fields.", variant: "destructive" });
       return;
     }
+    if (!isValidEmail(form.email)) {
+      toast({ title: "Please enter a valid email address.", variant: "destructive" });
+      return;
+    }
     if (!consent) {
       toast({ title: "Please agree to be contacted.", variant: "destructive" });
       return;
@@ -107,6 +113,7 @@ const RequestQuote = () => {
 
   return (
     <div>
+      <PageMeta title="Request a Quote" description="Get a free estimate for your cleaning needs. Tell us about your space and we'll provide a customised quote." />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
