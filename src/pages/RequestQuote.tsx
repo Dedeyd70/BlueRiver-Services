@@ -236,8 +236,8 @@ const RequestQuote = () => {
                     I agree to be contacted regarding my request. My information will be kept private.
                   </label>
                 </div>
-                <Button type="submit" variant="hero" size="lg" disabled={loading || !isFormValid} className="w-full sm:w-auto">
-                  {loading ? "Submitting..." : "Request a Quote"}
+                <Button type="submit" variant="hero" size="lg" disabled={loading || cooldown || !isFormValid} className="w-full sm:w-auto">
+                  {loading ? "Submitting..." : cooldown ? "Please wait..." : "Request a Quote"}
                 </Button>
               </form>
             )}
