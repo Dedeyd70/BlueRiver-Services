@@ -44,7 +44,7 @@ const Contact = () => {
       return;
     }
     setSubmitted(true);
-    toast({ title: "Quote request submitted!", description: "We'll get back to you within 24 hours." });
+    toast({ title: "Message sent!", description: "We'll get back to you within 24 hours." });
   };
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>

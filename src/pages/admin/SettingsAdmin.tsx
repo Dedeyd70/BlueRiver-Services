@@ -22,6 +22,10 @@ const settingsDef = [
   { key: "about_mission_title", label: "About - Mission Title", type: "input" },
   { key: "about_mission_p1", label: "About - Mission Paragraph 1", type: "textarea" },
   { key: "about_mission_p2", label: "About - Mission Paragraph 2", type: "textarea" },
+  { key: "stats_clients", label: "Stats – Happy Clients", type: "input", placeholder: "1,000+" },
+  { key: "stats_years", label: "Stats – Years Experience", type: "input", placeholder: "5+" },
+  { key: "stats_satisfaction", label: "Stats – Satisfaction Rate", type: "input", placeholder: "98%" },
+  { key: "stats_rating", label: "Stats – Rating", type: "input", placeholder: "4.9" },
 ];
 
 const SettingsAdmin = () => {
