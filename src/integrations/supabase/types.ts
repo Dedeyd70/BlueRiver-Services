@@ -582,6 +582,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_recent_submission: {
+        Args: { p_email: string; p_table: string }
+        Returns: boolean
+      }
+      get_booked_slots: {
+        Args: { p_date: string }
+        Returns: {
+          time_slot: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
