@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { format, isBefore, startOfDay, getDay } from "date-fns";
 import { isValidEmail } from "@/lib/validation";
+import { notifyAdmins } from "@/lib/notifications";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import PageMeta from "@/components/PageMeta";
 
 const BookService = () => {
@@ -139,7 +141,12 @@ const BookService = () => {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.from("bookings").insert({
+
+    // Determine initial status based on approval mode
+    const approvalMode = siteSettings?.booking_approval_mode || "auto";
+    const initialStatus = approvalMode === "manual" ? "pending" : "confirmed";
+
+    const { data: insertedBooking, error } = await supabase.from("bookings").insert({
       name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim() || null,
@@ -149,19 +156,24 @@ const BookService = () => {
       time_slot: selectedSlot,
       notes: form.notes.trim() || null,
       consent_given: consent,
+      status: initialStatus,
       selected_addons: selectedAddons.map((title) => {
         const addon = addons.find((a) => a.title === title);
         return { title, price: parsePrice(addon?.price_starting) };
       }),
       total_price: totalPrice > 0 ? totalPrice : null,
-    });
+    }).select("id").single();
     setLoading(false);
     if (error) {
       toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
       return;
     }
+
+    // Create notification for admins
+    await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
+
     setSubmitted(true);
-    toast({ title: "Booking submitted!", description: "We'll confirm your appointment soon." });
+    toast({ title: "Booking submitted!", description: approvalMode === "manual" ? "Your booking is pending approval." : "We'll confirm your appointment soon." });
   };
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
