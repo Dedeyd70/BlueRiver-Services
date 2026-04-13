@@ -26,6 +26,10 @@ const settingsDef = [
   { key: "stats_years", label: "Stats – Years Experience", type: "input", placeholder: "5+" },
   { key: "stats_satisfaction", label: "Stats – Satisfaction Rate", type: "input", placeholder: "98%" },
   { key: "stats_rating", label: "Stats – Rating", type: "input", placeholder: "4.9" },
+  { key: "booking_approval_mode", label: "Booking Approval Mode", type: "select", options: [
+    { value: "auto", label: "Auto-confirm (bookings confirmed immediately)" },
+    { value: "manual", label: "Manual approval (bookings start as pending)" },
+  ]},
 ];
 
 const SettingsAdmin = () => {
