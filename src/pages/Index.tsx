@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PageMeta from "@/components/PageMeta";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,7 @@ const IndexPage = () => {
 
   return (
     <div className="overflow-hidden">
+      <PageMeta title="Home" description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today." />
       {/* Hero */}
       <section className="relative min-h-[90vh] flex items-center bg-hero-gradient overflow-hidden">
         <div className="absolute inset-0">

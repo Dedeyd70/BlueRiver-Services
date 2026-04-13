@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import PageMeta from "@/components/PageMeta";
 import SectionHeading from "@/components/SectionHeading";
 import { Heart, Eye, Users, Award } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -35,6 +36,7 @@ const About = () => {
 
   return (
     <div>
+      <PageMeta title="About Us" description="Learn about BlueRiver Services — our mission, values, and commitment to delivering spotless spaces." />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
