@@ -13,6 +13,7 @@ interface NavPermission {
 export const NAV_GROUPS = [
   { key: "main", label: "" },
   { key: "operations", label: "Operations" },
+  { key: "finance", label: "Finance" },
   { key: "website", label: "Website" },
   { key: "system", label: "System" },
 ];
@@ -25,8 +26,9 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   { label: "Bookings", path: "/admin/bookings", roles: ["admin", "manager", "staff"], group: "operations" },
   { label: "Quotes", path: "/admin/quotes", roles: ["admin", "manager", "staff"], group: "operations" },
   { label: "Submissions", path: "/admin/submissions", roles: ["admin", "manager", "staff"], group: "operations" },
-  { label: "Availability", path: "/admin/availability", roles: ["admin", "manager"], group: "operations" },
-  { label: "Payment", path: "/admin/payment", roles: ["admin", "manager"], group: "operations" },
+
+  // Finance
+  { label: "Invoices", path: "/admin/invoices", roles: ["admin", "manager"], group: "finance" },
 
   // Website
   { label: "Services", path: "/admin/services", roles: ["admin", "manager"], group: "website" },
