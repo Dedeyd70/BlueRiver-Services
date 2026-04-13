@@ -18,6 +18,7 @@ import PageMeta from "@/components/PageMeta";
 
 const BookService = () => {
   const { toast } = useToast();
+  const { data: siteSettings } = useSiteSettings();
   const [searchParams] = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
   const prefilledAddon = searchParams.get("addon") || "";
