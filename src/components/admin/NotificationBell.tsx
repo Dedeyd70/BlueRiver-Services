@@ -1,31 +1,26 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { Bell, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDistanceToNow } from "date-fns";
 
 const NotificationBell = () => {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
 
   const { data: notifications } = useQuery({
-    queryKey: ["admin-notifications", user?.id],
+    queryKey: ["admin-notifications"],
     queryFn: async () => {
-      if (!user) return [];
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
-        .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!user,
     refetchInterval: 30000,
   });
 
@@ -33,10 +28,7 @@ const NotificationBell = () => {
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", id);
+      const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-notifications"] }),
@@ -44,12 +36,10 @@ const NotificationBell = () => {
 
   const markAllRead = useMutation({
     mutationFn: async () => {
-      if (!user) return;
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("user_id", user.id)
-        .eq("is_read", false);
+      const unread = notifications?.filter((n: any) => !n.is_read) ?? [];
+      if (!unread.length) return;
+      const ids = unread.map((n: any) => n.id);
+      const { error } = await supabase.from("notifications").update({ is_read: true }).in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-notifications"] }),
@@ -61,7 +51,7 @@ const NotificationBell = () => {
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center min-w-[18px] h-[18px] px-1">
+            <span className="absolute -top-0.5 -right-0.5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center min-w-[18px] h-[18px] px-1">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
