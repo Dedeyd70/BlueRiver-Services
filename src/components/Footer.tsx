@@ -1,3 +1,4 @@
+import React from "react";
 import { Link } from "react-router-dom";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -5,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/blueriver-logo.png";
 
-const Footer = () => {
+const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
   const { data: settings } = useSiteSettings();
   const { data: services } = useQuery({
     queryKey: ["public-services-footer"],
@@ -29,7 +30,7 @@ const Footer = () => {
   };
 
   return (
-    <footer className="bg-navy text-navy-foreground">
+    <footer ref={ref} className="bg-navy text-navy-foreground">
       <div className="container py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           <div className="space-y-4 lg:col-span-1">
@@ -102,6 +103,8 @@ const Footer = () => {
       </div>
     </footer>
   );
-};
+});
+
+Footer.displayName = "Footer";
 
 export default Footer;
