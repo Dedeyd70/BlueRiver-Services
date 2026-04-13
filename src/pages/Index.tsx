@@ -16,7 +16,7 @@ import {
   Truck,
   Droplets,
   Wind,
-  Phone,
+  
   MapPin,
   X,
 } from "lucide-react";
@@ -54,6 +54,7 @@ const whyUs = [
 
 const IndexPage = () => {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [heroLoaded, setHeroLoaded] = useState(false);
   const { data: settings } = useSiteSettings();
   const { data: allServices } = useQuery({
     queryKey: ["public-services-home-all"],
@@ -122,29 +123,31 @@ const IndexPage = () => {
         description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today."
       />
       {/* Hero */}
-      <section className="relative min-h-[90vh] flex items-center bg-hero-gradient overflow-hidden">
+      <section className="relative min-h-[90vh] flex items-center bg-gray-900 overflow-hidden">
         <div className="absolute inset-0">
           {isLoading ? (
-            <div className="w-full h-full bg-gray-200 animate-pulse" />
+            <div className="w-full h-full bg-gray-900" />
           ) : heroImg ? (
             <img
               src={heroImg}
               alt="Professional cleaning team at work"
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               width={1920}
               height={1080}
+              onLoad={() => setHeroLoaded(true)}
             />
           ) : (
             <img
               src={heroImgFallback}
               alt="Fallback cleaning"
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               width={1920}
               height={1080}
+              onLoad={() => setHeroLoaded(true)}
             />
           )}
         </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/70 via-primary/40 to-accent/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
         <div className="container relative z-10 py-32">
           <div className="max-w-2xl">
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
