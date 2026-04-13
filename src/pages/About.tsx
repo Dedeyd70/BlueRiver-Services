@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import PageMeta from "@/components/PageMeta";
 import SectionHeading from "@/components/SectionHeading";
 import { Heart, Eye, Users, Award } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -35,6 +36,7 @@ const About = () => {
 
   return (
     <div>
+      <PageMeta title="About Us" description="Learn about BlueRiver Services — our mission, values, and commitment to delivering spotless spaces." />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
@@ -85,10 +87,10 @@ const About = () => {
         <div className="container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: "1,000+", label: "Happy Clients" },
-              { value: "5+", label: "Years Experience" },
-              { value: "98%", label: "Satisfaction Rate" },
-              { value: "4.9", label: "Ratings" },
+              { value: settings?.stats_clients || "1,000+", label: "Happy Clients" },
+              { value: settings?.stats_years || "5+", label: "Years Experience" },
+              { value: settings?.stats_satisfaction || "98%", label: "Satisfaction Rate" },
+              { value: settings?.stats_rating || "4.9", label: "Ratings" },
             ].map((s, i) => (
               <motion.div key={s.label} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="text-center">
                 <p className="text-3xl md:text-4xl font-display font-extrabold text-gradient mb-1">{s.value}</p>

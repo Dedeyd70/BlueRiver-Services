@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { format, isBefore, startOfDay, getDay } from "date-fns";
+import { isValidEmail } from "@/lib/validation";
+import PageMeta from "@/components/PageMeta";
 
 const BookService = () => {
   const { toast } = useToast();
@@ -128,6 +130,10 @@ const BookService = () => {
       toast({ title: "Please fill in all required fields.", variant: "destructive" });
       return;
     }
+    if (!isValidEmail(form.email)) {
+      toast({ title: "Please enter a valid email address.", variant: "destructive" });
+      return;
+    }
     if (!consent) {
       toast({ title: "Please agree to be contacted.", variant: "destructive" });
       return;
@@ -163,6 +169,7 @@ const BookService = () => {
 
   return (
     <div>
+      <PageMeta title="Book a Service" description="Schedule your professional cleaning service with BlueRiver. Select your preferred date, time, and service." />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">

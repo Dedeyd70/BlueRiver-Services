@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useQuery } from "@tanstack/react-query";
+import { isValidEmail } from "@/lib/validation";
+import PageMeta from "@/components/PageMeta";
 
 const Contact = () => {
   const { toast } = useToast();
@@ -30,6 +32,10 @@ const Contact = () => {
       toast({ title: "Please fill in all required fields.", variant: "destructive" });
       return;
     }
+    if (!isValidEmail(form.email)) {
+      toast({ title: "Please enter a valid email address.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.from("contact_submissions").insert({
       name: form.name.trim(),
@@ -44,7 +50,7 @@ const Contact = () => {
       return;
     }
     setSubmitted(true);
-    toast({ title: "Quote request submitted!", description: "We'll get back to you within 24 hours." });
+    toast({ title: "Message sent!", description: "We'll get back to you within 24 hours." });
   };
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -61,6 +67,7 @@ const Contact = () => {
 
   return (
     <div>
+      <PageMeta title="Contact Us" description="Get in touch with BlueRiver Services. Request a quote, book a service, or contact us directly." />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
