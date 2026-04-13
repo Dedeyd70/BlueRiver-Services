@@ -42,13 +42,18 @@ const Contact = () => {
 
     // Rate-limit check
     try {
-      const { data: isRecent } = await supabase.rpc("check_recent_submission", { p_email: form.email.trim(), p_table: "contact_submissions" });
+      const { data: isRecent } = await supabase.rpc("check_recent_submission", {
+        p_email: form.email.trim(),
+        p_table: "contact_submissions",
+      });
       if (isRecent) {
         setLoading(false);
         toast({ title: "Please wait before submitting again.", variant: "destructive" });
         return;
       }
-    } catch { /* allow submission if rate check fails */ }
+    } catch {
+      /* allow submission if rate check fails */
+    }
 
     const { error } = await supabase.from("contact_submissions").insert({
       name: form.name.trim(),
@@ -64,7 +69,9 @@ const Contact = () => {
     }
 
     // Notify admins of new contact message
-    try { await notifyAdmins("contact", `New contact message from ${form.name.trim()}`); } catch {}
+    try {
+      await notifyAdmins("contact", `New contact message from ${form.name.trim()}`);
+    } catch {}
 
     // 30s cooldown
     setCooldown(true);
@@ -74,8 +81,9 @@ const Contact = () => {
     toast({ title: "Message sent!", description: "We'll get back to you within 24 hours." });
   };
 
-  const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const update =
+    (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const phone = settings?.phone || "(206) 317-8300";
   const phoneLink = settings?.phone_link || "+12063178300";
@@ -88,13 +96,25 @@ const Contact = () => {
 
   return (
     <div>
-      <PageMeta title="Contact Us" description="Get in touch with BlueRiver Services. Request a quote, book a service, or contact us directly." />
+      <PageMeta
+        title="Contact Us"
+        description="Get in touch with BlueRiver Services. Request a quote, book a service, or contact us directly."
+      />
       <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
         <div className="container">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl mx-auto text-center">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-sky text-sky-foreground text-xs font-semibold tracking-wider uppercase mb-4">Get in Touch</span>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="max-w-2xl mx-auto text-center"
+          >
+            <span className="inline-block px-4 py-1.5 rounded-full bg-sky text-sky-foreground text-xs font-semibold tracking-wider uppercase mb-4">
+              Get in Touch
+            </span>
             <h1 className="text-4xl md:text-5xl font-display font-extrabold text-foreground mb-4">Contact Us</h1>
-            <p className="text-muted-foreground leading-relaxed">Request a quote, book a service, or contact us directly.</p>
+            <p className="text-muted-foreground leading-relaxed">
+              Request a quote, book a service, or contact us directly.
+            </p>
           </motion.div>
         </div>
       </section>
@@ -102,7 +122,13 @@ const Contact = () => {
       <section className="py-20 md:py-28">
         <div className="container">
           <div className="grid lg:grid-cols-5 gap-12 max-w-5xl mx-auto">
-            <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="lg:col-span-3">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="lg:col-span-3"
+            >
               {submitted ? (
                 <div className="text-center py-16">
                   <div className="w-16 h-16 rounded-full bg-hero-gradient flex items-center justify-center mx-auto mb-4">
@@ -120,20 +146,38 @@ const Contact = () => {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label>
-                      <Input type="email" placeholder="you@email.com" value={form.email} onChange={update("email")} maxLength={255} />
+                      <Input
+                        type="email"
+                        placeholder="you@email.com"
+                        value={form.email}
+                        onChange={update("email")}
+                        maxLength={255}
+                      />
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-5">
                     <div>
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Phone</label>
-                      <Input type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={update("phone")} maxLength={20} />
+                      <Input
+                        type="tel"
+                        placeholder="(555) 123-4567"
+                        value={form.phone}
+                        onChange={update("phone")}
+                        maxLength={20}
+                      />
                     </div>
                     <div>
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Service Needed</label>
-                      <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <select
+                        value={form.service}
+                        onChange={update("service")}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
                         <option value="">Select a service</option>
                         {(services ?? []).map((s) => (
-                          <option key={s.title} value={s.title}>{s.title}</option>
+                          <option key={s.title} value={s.title}>
+                            {s.title}
+                          </option>
                         ))}
                         <option value="Other">Other</option>
                       </select>
@@ -141,7 +185,13 @@ const Contact = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Message *</label>
-                    <Textarea placeholder="Tell us about your cleaning needs..." rows={5} value={form.message} onChange={update("message")} maxLength={1000} />
+                    <Textarea
+                      placeholder="Please let us know how we can be of help..."
+                      rows={5}
+                      value={form.message}
+                      onChange={update("message")}
+                      maxLength={1000}
+                    />
                   </div>
                   <Button type="submit" variant="hero" size="lg" disabled={loading || cooldown}>
                     {loading ? "Sending..." : cooldown ? "Please wait..." : "Send Message"}
@@ -150,11 +200,20 @@ const Contact = () => {
               )}
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="lg:col-span-2 space-y-8">
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="lg:col-span-2 space-y-8"
+            >
               <div>
                 <h3 className="font-display font-semibold text-foreground mb-4">Contact Information</h3>
                 <div className="space-y-4">
-                  <a href={`tel:${phoneLink}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                  <a
+                    href={`tel:${phoneLink}`}
+                    className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors"
+                  >
                     <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
                       <Phone className="w-5 h-5 text-sky-foreground" />
                     </div>
@@ -164,7 +223,10 @@ const Contact = () => {
                       <p className="text-xs text-muted-foreground/70">Available for calls: {callAvailability}</p>
                     </div>
                   </a>
-                  <a href={`mailto:${email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                  <a
+                    href={`mailto:${email}`}
+                    className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors"
+                  >
                     <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
                       <Mail className="w-5 h-5 text-sky-foreground" />
                     </div>
