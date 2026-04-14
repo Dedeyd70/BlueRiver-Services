@@ -131,7 +131,7 @@ const IndexPage = () => {
             <img
               src={heroImg}
               alt="Professional cleaning team at work"
-              className={`w-full h-full object-cover transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
+              className={`w-full h-full object-cover object-center transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               width={1920}
               height={1080}
               onLoad={() => setHeroLoaded(true)}
@@ -140,7 +140,7 @@ const IndexPage = () => {
             <img
               src={heroImgFallback}
               alt="Fallback cleaning"
-              className={`w-full h-full object-cover transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
+              className={`w-full h-full object-cover object-center transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               width={1920}
               height={1080}
               onLoad={() => setHeroLoaded(true)}
