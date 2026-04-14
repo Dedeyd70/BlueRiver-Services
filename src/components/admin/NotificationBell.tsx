@@ -1,13 +1,21 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { Bell, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDistanceToNow } from "date-fns";
 
+const referenceRoutes: Record<string, string> = {
+  booking: "/admin/bookings",
+  quote: "/admin/quotes",
+  contact: "/admin/messages",
+};
+
 const NotificationBell = () => {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const { data: notifications } = useQuery({
@@ -45,6 +53,15 @@ const NotificationBell = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-notifications"] }),
   });
 
+  const handleNotificationClick = (n: any) => {
+    if (!n.is_read) markRead.mutate(n.id);
+    const route = referenceRoutes[n.reference_type];
+    if (route) {
+      setOpen(false);
+      navigate(route);
+    }
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -76,7 +93,7 @@ const NotificationBell = () => {
                 className={`flex items-start gap-2 p-3 border-b border-border last:border-0 text-sm cursor-pointer hover:bg-muted/50 transition-colors ${
                   !n.is_read ? "bg-primary/5" : ""
                 }`}
-                onClick={() => !n.is_read && markRead.mutate(n.id)}
+                onClick={() => handleNotificationClick(n)}
               >
                 <div className="flex-1 min-w-0">
                   <p className={`text-foreground ${!n.is_read ? "font-medium" : ""}`}>{n.message}</p>

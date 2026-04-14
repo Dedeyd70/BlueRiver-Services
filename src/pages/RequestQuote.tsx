@@ -98,7 +98,7 @@ const RequestQuote = () => {
       }
     } catch { /* allow quote if rate check fails */ }
 
-    const { error } = await supabase.from("quote_requests").insert({
+    const { data: insertedQuote, error } = await supabase.from("quote_requests").insert({
       name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim() || null,
@@ -109,7 +109,7 @@ const RequestQuote = () => {
       attachment_url: attachmentUrl || null,
       consent_given: consent,
       selected_addons: selectedAddons.map((title) => ({ title })),
-    });
+    }).select("id").maybeSingle();
     setLoading(false);
     if (error) {
       toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
@@ -117,7 +117,7 @@ const RequestQuote = () => {
     }
 
     // Notify admins
-    await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, undefined, "quote");
+    await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, insertedQuote?.id, "quote");
 
     // 30s cooldown
     setCooldown(true);
