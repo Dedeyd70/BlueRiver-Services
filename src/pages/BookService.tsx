@@ -166,6 +166,16 @@ const BookService = () => {
       }
     } catch { /* allow booking if rate check fails */ }
 
+    // Final server-side slot availability check
+    try {
+      const { data: bookedSlots } = await supabase.rpc("get_booked_slots", { p_date: format(selectedDate, "yyyy-MM-dd") });
+      const taken = (bookedSlots || []).map((s: any) => s.time_slot);
+      if (taken.includes(selectedSlot)) {
+        setLoading(false);
+        toast({ title: "This time slot was just booked. Please select another.", variant: "destructive" });
+        return;
+      }
+    } catch { /* proceed if check fails */ }
     // Determine initial status based on approval mode
     const approvalMode = siteSettings?.booking_approval_mode || "auto";
     const initialStatus = approvalMode === "manual" ? "pending" : "confirmed";
