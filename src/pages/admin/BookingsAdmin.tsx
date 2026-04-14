@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import jsPDF from "jspdf";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -15,7 +18,8 @@ const statusColors: Record<string, string> = {
 const BookingsAdmin = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const navigate = useNavigate();
+  const [cancelTarget, setCancelTarget] = useState<any>(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
@@ -27,15 +31,60 @@ const BookingsAdmin = () => {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
+    mutationFn: async ({ id, status, cancellation_reason }: { id: string; status: string; cancellation_reason?: string }) => {
+      const updates: any = { status };
+      if (cancellation_reason !== undefined) updates.cancellation_reason = cancellation_reason;
+      const { error } = await supabase.from("bookings").update(updates).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
-      toast({ title: "Booking updated" });
+      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
     },
   });
+
+  const handlePending = (b: any) => {
+    updateStatus.mutate({ id: b.id, status: "pending" });
+    toast({ title: "Reminders paused. Status set to Pending." });
+  };
+
+  const handleCompleted = (b: any) => {
+    updateStatus.mutate({ id: b.id, status: "completed" });
+
+    // Generate invoice PDF
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Invoice", 20, 25);
+    doc.setFontSize(11);
+    doc.text(`Customer: ${b.name}`, 20, 40);
+    doc.text(`Email: ${b.email}`, 20, 48);
+    doc.text(`Service: ${b.service_type || "N/A"}`, 20, 56);
+    doc.text(`Date: ${format(new Date(b.booking_date), "MMM d, yyyy")}`, 20, 64);
+    doc.text(`Time: ${b.time_slot}`, 20, 72);
+    doc.text(`Total: $${Number((b as any).total_price || 0).toFixed(2)}`, 20, 80);
+    doc.text(`Status: Completed`, 20, 88);
+    doc.text(`Generated: ${format(new Date(), "MMM d, yyyy")}`, 20, 96);
+    doc.save(`invoice-${b.name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+
+    const payload = {
+      action: "completed",
+      customer: { name: b.name, email: b.email },
+      service: b.service_type,
+      date: b.booking_date,
+      total: (b as any).total_price,
+    };
+    console.log("[Mimic] Thank You email + Invoice PDF payload:", payload);
+
+    toast({ title: "Success! Generating Invoice PDF and mimic-queuing Thank You email..." });
+  };
+
+  const handleCancelConfirm = () => {
+    if (!cancelTarget) return;
+    updateStatus.mutate({ id: cancelTarget.id, status: "cancelled", cancellation_reason: cancelReason || undefined });
+    toast({ title: `Booking Cancelled. Client notified regarding: ${cancelReason || "No reason provided"}.` });
+    setCancelTarget(null);
+    setCancelReason("");
+  };
 
   const parseAddons = (addons: any): { title: string; price?: number }[] => {
     if (!addons || !Array.isArray(addons)) return [];
@@ -45,6 +94,33 @@ const BookingsAdmin = () => {
   return (
     <div>
       <h1 className="text-2xl font-display font-bold text-foreground mb-6">Bookings</h1>
+
+      {/* Cancellation Dialog */}
+      <Dialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) { setCancelTarget(null); setCancelReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Booking</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Cancelling booking for <strong className="text-foreground">{cancelTarget?.name}</strong>. Please provide a reason:
+          </p>
+          <Textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Enter cancellation reason..."
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCancelTarget(null); setCancelReason(""); }}>
+              Back
+            </Button>
+            <Button variant="destructive" onClick={handleCancelConfirm}>
+              Confirm Cancellation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {isLoading ? (
         <p className="text-muted-foreground">Loading...</p>
       ) : !bookings?.length ? (
@@ -100,12 +176,21 @@ const BookingsAdmin = () => {
                 )}
                 {b.address && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Address:</span> {b.address}</p>}
                 {b.notes && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {b.notes}</p>}
+                {(b as any).cancellation_reason && (
+                  <p className="text-sm text-destructive"><span className="font-medium">Cancellation Reason:</span> {(b as any).cancellation_reason}</p>
+                )}
                 <div className="flex flex-wrap gap-2">
-                  {["pending", "confirmed", "completed", "cancelled"].filter((s) => s !== b.status).map((s) => (
-                    <Button key={s} variant="outline" size="sm" onClick={() => updateStatus.mutate({ id: b.id, status: s })} className="capitalize">
-                      {s}
+                  {b.status !== "pending" && (
+                    <Button variant="outline" size="sm" onClick={() => handlePending(b)}>Pending</Button>
+                  )}
+                  {b.status !== "completed" && (
+                    <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>Completed</Button>
+                  )}
+                  {b.status !== "cancelled" && (
+                    <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelTarget(b)}>
+                      Cancelled
                     </Button>
-                  ))}
+                  )}
                 </div>
               </div>
             );
