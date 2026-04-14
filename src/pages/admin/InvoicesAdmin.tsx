@@ -8,8 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { FileText, Plus, DollarSign } from "lucide-react";
+import { FileText, Plus, DollarSign, Download, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import jsPDF from "jspdf";
 
 const statusColors: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-800",
@@ -41,6 +42,37 @@ const emptyForm: InvoiceForm = {
   quote_id: null,
 };
 
+const generateInvoicePDF = (inv: any) => {
+  const doc = new jsPDF();
+  doc.setFontSize(18);
+  doc.text("Invoice", 20, 25);
+  doc.setFontSize(11);
+  doc.text(`Customer: ${inv.customer_name}`, 20, 40);
+  doc.text(`Email: ${inv.customer_email}`, 20, 48);
+  doc.text(`Issued: ${format(new Date(inv.issued_date), "MMM d, yyyy")}`, 20, 56);
+  doc.text(`Due: ${inv.due_date ? format(new Date(inv.due_date), "MMM d, yyyy") : "N/A"}`, 20, 64);
+  doc.text(`Total: $${Number(inv.total_amount).toFixed(2)}`, 20, 72);
+  doc.text(`Paid: $${Number(inv.amount_paid).toFixed(2)}`, 20, 80);
+  doc.text(`Status: ${inv.payment_status}`, 20, 88);
+  if (inv.payment_method) doc.text(`Method: ${inv.payment_method}`, 20, 96);
+
+  const services = Array.isArray(inv.services) ? inv.services : [];
+  if (services.length) {
+    let y = inv.payment_method ? 112 : 104;
+    doc.text("Services:", 20, y);
+    services.forEach((s: any) => {
+      y += 8;
+      doc.text(`• ${s.title || "Item"} — $${Number(s.price || 0).toFixed(2)}`, 24, y);
+    });
+  }
+
+  if (inv.notes) {
+    doc.text(`Notes: ${inv.notes}`, 20, doc.internal.pageSize.height - 30);
+  }
+
+  doc.save(`invoice-${inv.customer_name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+};
+
 const InvoicesAdmin = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -49,6 +81,8 @@ const InvoicesAdmin = () => {
   const [paymentOpen, setPaymentOpen] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [form, setForm] = useState<InvoiceForm>({ ...emptyForm });
+  const [selectedBookingId, setSelectedBookingId] = useState<string>("");
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string>("");
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["admin-invoices"],
@@ -62,7 +96,7 @@ const InvoicesAdmin = () => {
     },
   });
 
-  const { data: bookings } = useQuery({
+  const { data: bookings, isLoading: bookingsLoading } = useQuery({
     queryKey: ["admin-bookings-for-invoice"],
     queryFn: async () => {
       const { data } = await supabase
@@ -74,7 +108,7 @@ const InvoicesAdmin = () => {
     },
   });
 
-  const { data: quotes } = useQuery({
+  const { data: quotes, isLoading: quotesLoading } = useQuery({
     queryKey: ["admin-quotes-for-invoice"],
     queryFn: async () => {
       const { data } = await supabase
@@ -106,6 +140,8 @@ const InvoicesAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
       setOpen(false);
       setForm({ ...emptyForm });
+      setSelectedBookingId("");
+      setSelectedQuoteId("");
       toast({ title: "Invoice created" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -165,6 +201,8 @@ const InvoicesAdmin = () => {
       booking_id: b.id,
       quote_id: null,
     });
+    setSelectedBookingId(bookingId);
+    setSelectedQuoteId("");
   };
 
   const prefillFromQuote = (quoteId: string) => {
@@ -184,6 +222,17 @@ const InvoicesAdmin = () => {
       booking_id: null,
       quote_id: q.id,
     });
+    setSelectedQuoteId(quoteId);
+    setSelectedBookingId("");
+  };
+
+  const handleOpenChange = (o: boolean) => {
+    setOpen(o);
+    if (!o) {
+      setForm({ ...emptyForm });
+      setSelectedBookingId("");
+      setSelectedQuoteId("");
+    }
   };
 
   return (
@@ -193,9 +242,9 @@ const InvoicesAdmin = () => {
           <FileText className="w-5 h-5 text-primary" />
           <h1 className="text-2xl font-display font-bold text-foreground">Invoices</h1>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger asChild>
-            <Button onClick={() => setForm({ ...emptyForm })}>
+            <Button onClick={() => { setForm({ ...emptyForm }); setSelectedBookingId(""); setSelectedQuoteId(""); }}>
               <Plus className="w-4 h-4 mr-2" /> New Invoice
             </Button>
           </DialogTrigger>
@@ -206,29 +255,37 @@ const InvoicesAdmin = () => {
             <div className="space-y-4 mt-2">
               <div>
                 <label className="text-sm font-medium mb-1 block">Pre-fill from Booking</label>
-                <Select onValueChange={prefillFromBooking}>
-                  <SelectTrigger><SelectValue placeholder="Select a booking..." /></SelectTrigger>
-                  <SelectContent>
-                    {bookings?.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name} — {b.service_type || "No service"} ({format(new Date(b.booking_date), "MMM d")})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {bookingsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading bookings...</div>
+                ) : (
+                  <Select value={selectedBookingId} onValueChange={prefillFromBooking}>
+                    <SelectTrigger><SelectValue placeholder="Select a booking..." /></SelectTrigger>
+                    <SelectContent>
+                      {bookings?.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name} — {b.service_type || "No service"} ({format(new Date(b.booking_date), "MMM d")})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Pre-fill from Quote</label>
-                <Select onValueChange={prefillFromQuote}>
-                  <SelectTrigger><SelectValue placeholder="Select a quote..." /></SelectTrigger>
-                  <SelectContent>
-                    {quotes?.map((q) => (
-                      <SelectItem key={q.id} value={q.id}>
-                        {q.name} — {q.service_type || "No service"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {quotesLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading quotes...</div>
+                ) : (
+                  <Select value={selectedQuoteId} onValueChange={prefillFromQuote}>
+                    <SelectTrigger><SelectValue placeholder="Select a quote..." /></SelectTrigger>
+                    <SelectContent>
+                      {quotes?.map((q) => (
+                        <SelectItem key={q.id} value={q.id}>
+                          {q.name} — {q.service_type || "No service"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -312,6 +369,9 @@ const InvoicesAdmin = () => {
                 <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {inv.notes}</p>
               )}
               <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => generateInvoicePDF(inv)}>
+                  <Download className="w-3 h-3 mr-1" /> Download PDF
+                </Button>
                 {inv.payment_status !== "paid" && (
                   <>
                     <Button variant="outline" size="sm" onClick={() => markPaid.mutate(inv.id)}>
