@@ -55,13 +55,13 @@ const Contact = () => {
       /* allow submission if rate check fails */
     }
 
-    const { error } = await supabase.from("contact_submissions").insert({
+    const { data: insertedContact, error } = await supabase.from("contact_submissions").insert({
       name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim() || null,
       service_type: form.service || null,
       message: form.message.trim(),
-    });
+    }).select("id").maybeSingle();
     setLoading(false);
     if (error) {
       toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
@@ -70,7 +70,7 @@ const Contact = () => {
 
     // Notify admins of new contact message
     try {
-      await notifyAdmins("contact", `New contact message from ${form.name.trim()}`);
+      await notifyAdmins("contact", `New contact message from ${form.name.trim()}`, insertedContact?.id, "contact");
     } catch {}
 
     // 30s cooldown

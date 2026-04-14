@@ -34,6 +34,7 @@ const statusColors: Record<string, string> = {
   reviewed: "bg-primary/10 text-primary",
   responded: "bg-green-100 text-green-800",
   contacted: "bg-green-100 text-green-800",
+  read: "bg-blue-100 text-blue-800",
 };
 
 const Submissions = () => {
