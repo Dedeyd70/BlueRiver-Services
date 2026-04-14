@@ -63,6 +63,7 @@ export type Database = {
         Row: {
           address: string
           booking_date: string
+          cancellation_reason: string | null
           consent_given: boolean
           created_at: string
           email: string
@@ -80,6 +81,7 @@ export type Database = {
         Insert: {
           address: string
           booking_date: string
+          cancellation_reason?: string | null
           consent_given?: boolean
           created_at?: string
           email: string
@@ -97,6 +99,7 @@ export type Database = {
         Update: {
           address?: string
           booking_date?: string
+          cancellation_reason?: string | null
           consent_given?: boolean
           created_at?: string
           email?: string
