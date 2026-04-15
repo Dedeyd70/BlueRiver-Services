@@ -1,12 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Mail, CheckCircle } from "lucide-react";
+import { Mail, CheckCircle, ArrowRight } from "lucide-react";
 
 const MessagesAdmin = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
   const { data: messages, isLoading } = useQuery({
     queryKey: ["admin-contact-messages"],
@@ -22,10 +26,26 @@ const MessagesAdmin = () => {
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("contact_submissions").update({ status: "read" }).eq("id", id);
+      const { error } = await supabase.from("contact_submissions").update({ status: "read" }).eq("id", id);
+      if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
+      toast({ title: "Message marked as read." });
+    },
+    onError: () => {
+      toast({ title: "Failed to mark as read.", description: "Please try again.", variant: "destructive" });
+    },
   });
+
+  const handleConvertToBooking = (m: any) => {
+    const params = new URLSearchParams();
+    if (m.name) params.set("name", m.name);
+    if (m.email) params.set("email", m.email);
+    if (m.phone) params.set("phone", m.phone);
+    if (m.service_type) params.set("service", m.service_type);
+    navigate(`/book?${params.toString()}`);
+  };
 
   if (isLoading) return <p className="text-muted-foreground">Loading messages...</p>;
 
@@ -57,19 +77,27 @@ const MessagesAdmin = () => {
                 </div>
               </div>
               {m.service_type && (
-                <p className="text-xs text-muted-foreground mb-1">Service: {m.service_type}</p>
+                <p className="text-xs text-muted-foreground mb-1">Inquiry: {m.service_type}</p>
               )}
               <p className="text-sm text-foreground whitespace-pre-wrap">{m.message}</p>
-              {m.status === "pending" && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {m.status === "pending" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => markRead.mutate(m.id)}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-1" /> Mark as Read
+                  </Button>
+                )}
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="mt-2"
-                  onClick={() => markRead.mutate(m.id)}
+                  onClick={() => handleConvertToBooking(m)}
                 >
-                  <CheckCircle className="w-4 h-4 mr-1" /> Mark as Read
+                  <ArrowRight className="w-4 h-4 mr-1" /> Convert to Booking
                 </Button>
-              )}
+              </div>
             </div>
           ))}
         </div>
