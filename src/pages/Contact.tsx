@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useQuery } from "@tanstack/react-query";
-import { isValidEmail } from "@/lib/validation";
+import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import PageMeta from "@/components/PageMeta";
 
 const Contact = () => {
@@ -38,6 +38,10 @@ const Contact = () => {
       toast({ title: "Please enter a valid email address.", variant: "destructive" });
       return;
     }
+    if (form.phone.trim() && !isValidUSPhone(form.phone)) {
+      toast({ title: "Please enter a valid US phone number.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
 
     // Rate-limit check
@@ -55,30 +59,34 @@ const Contact = () => {
       /* allow submission if rate check fails */
     }
 
-    const { data: insertedContact, error } = await supabase.from("contact_submissions").insert({
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim() || null,
-      service_type: form.service || null,
-      message: form.message.trim(),
-    }).select("id").maybeSingle();
-    setLoading(false);
-    if (error) {
-      toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
-      return;
-    }
-
-    // Notify admins of new contact message
     try {
-      await notifyAdmins("contact", `New contact message from ${form.name.trim()}`, insertedContact?.id, "contact");
-    } catch {}
+      const { data: insertedContact, error } = await supabase.from("contact_submissions").insert({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+        service_type: form.service || null,
+        message: form.message.trim(),
+      }).select("id").maybeSingle();
 
-    // 30s cooldown
-    setCooldown(true);
-    setTimeout(() => setCooldown(false), 30000);
+      if (error) {
+        toast({ title: "Message failed to send.", description: "Please try again later.", variant: "destructive" });
+        return;
+      }
 
-    setSubmitted(true);
-    toast({ title: "Message sent!", description: "We'll get back to you within 24 hours." });
+      try {
+        await notifyAdmins("contact", `New contact message from ${form.name.trim()}`, insertedContact?.id, "contact");
+      } catch {}
+
+      setCooldown(true);
+      setTimeout(() => setCooldown(false), 30000);
+
+      setSubmitted(true);
+      toast({ title: "Message sent!", description: "We'll respond within 24 hours." });
+    } catch {
+      toast({ title: "Message failed to send.", description: "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const update =
@@ -167,18 +175,17 @@ const Contact = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Service Needed</label>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Inquiry Type</label>
                       <select
                         value={form.service}
                         onChange={update("service")}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
-                        <option value="">Select a service</option>
-                        {(services ?? []).map((s) => (
-                          <option key={s.title} value={s.title}>
-                            {s.title}
-                          </option>
-                        ))}
+                        <option value="">Select type</option>
+                        <option value="General Inquiry">General Inquiry</option>
+                        <option value="Billing Question">Billing Question</option>
+                        <option value="Feedback">Feedback</option>
+                        <option value="Employment">Employment</option>
                         <option value="Other">Other</option>
                       </select>
                     </div>
