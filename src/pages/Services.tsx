@@ -127,7 +127,6 @@ const Services = () => {
           </div>
         </section>
       )}
-      )}
 
       <section className="py-20 md:py-28 bg-hero-gradient text-center">
         <div className="container">
