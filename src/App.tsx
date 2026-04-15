@@ -43,6 +43,7 @@ import MessagesAdmin from "./pages/admin/MessagesAdmin";
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
 import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
+import LocalBusinessSchema from "./components/LocalBusinessSchema";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <LocalBusinessSchema />
           <ScrollToTop />
           <BackToTop />
           <Routes>
