@@ -62,17 +62,25 @@ export type Database = {
       bookings: {
         Row: {
           address: string
+          bathrooms: number | null
+          bedrooms: number | null
           booking_date: string
           cancellation_reason: string | null
           consent_given: boolean
           created_at: string
           email: string
+          entry_codes: string | null
+          frequency: string | null
+          has_pets: boolean | null
           id: string
           name: string
           notes: string | null
           phone: string | null
+          preferred_contact: string | null
+          property_type: string | null
           selected_addons: Json | null
           service_type: string | null
+          square_footage: string | null
           status: string
           time_slot: string
           total_price: number | null
@@ -80,17 +88,25 @@ export type Database = {
         }
         Insert: {
           address: string
+          bathrooms?: number | null
+          bedrooms?: number | null
           booking_date: string
           cancellation_reason?: string | null
           consent_given?: boolean
           created_at?: string
           email: string
+          entry_codes?: string | null
+          frequency?: string | null
+          has_pets?: boolean | null
           id?: string
           name: string
           notes?: string | null
           phone?: string | null
+          preferred_contact?: string | null
+          property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          square_footage?: string | null
           status?: string
           time_slot: string
           total_price?: number | null
@@ -98,17 +114,25 @@ export type Database = {
         }
         Update: {
           address?: string
+          bathrooms?: number | null
+          bedrooms?: number | null
           booking_date?: string
           cancellation_reason?: string | null
           consent_given?: boolean
           created_at?: string
           email?: string
+          entry_codes?: string | null
+          frequency?: string | null
+          has_pets?: boolean | null
           id?: string
           name?: string
           notes?: string | null
           phone?: string | null
+          preferred_contact?: string | null
+          property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          square_footage?: string | null
           status?: string
           time_slot?: string
           total_price?: number | null
@@ -173,6 +197,33 @@ export type Database = {
           service_type?: string | null
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      faqs: {
+        Row: {
+          answer: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          question: string
+        }
+        Insert: {
+          answer: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          question: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          question?: string
         }
         Relationships: []
       }
@@ -410,48 +461,69 @@ export type Database = {
         Row: {
           address: string | null
           attachment_url: string | null
+          bathrooms: number | null
+          bedrooms: number | null
           consent_given: boolean
           created_at: string
           description: string
           email: string
+          entry_codes: string | null
+          frequency: string | null
+          has_pets: boolean | null
           id: string
           name: string
           phone: string | null
           preferred_contact: string | null
+          property_type: string | null
           selected_addons: Json | null
           service_type: string | null
+          square_footage: string | null
           status: string
           updated_at: string
         }
         Insert: {
           address?: string | null
           attachment_url?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
           consent_given?: boolean
           created_at?: string
           description: string
           email: string
+          entry_codes?: string | null
+          frequency?: string | null
+          has_pets?: boolean | null
           id?: string
           name: string
           phone?: string | null
           preferred_contact?: string | null
+          property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          square_footage?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           address?: string | null
           attachment_url?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
           consent_given?: boolean
           created_at?: string
           description?: string
           email?: string
+          entry_codes?: string | null
+          frequency?: string | null
+          has_pets?: boolean | null
           id?: string
           name?: string
           phone?: string | null
           preferred_contact?: string | null
+          property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          square_footage?: string | null
           status?: string
           updated_at?: string
         }

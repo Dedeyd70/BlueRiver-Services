@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { format, isBefore, startOfDay, getDay } from "date-fns";
-import { isValidEmail } from "@/lib/validation";
+import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import { notifyAdmins } from "@/lib/notifications";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import PageMeta from "@/components/PageMeta";
@@ -29,7 +29,21 @@ const BookService = () => {
   const [selectedSlot, setSelectedSlot] = useState("");
   const [consent, setConsent] = useState(false);
   const [selectedAddons, setSelectedAddons] = useState<string[]>(prefilledAddon ? [prefilledAddon] : []);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", service: prefilledService, notes: "" });
+  const [form, setForm] = useState({
+    name: searchParams.get("name") || "",
+    email: searchParams.get("email") || "",
+    phone: searchParams.get("phone") || "",
+    address: "",
+    service: prefilledService,
+    notes: "",
+    property_type: "",
+    square_footage: "",
+    bedrooms: "",
+    bathrooms: "",
+    frequency: "",
+    has_pets: false,
+    entry_codes: "",
+  });
 
   useEffect(() => {
     if (prefilledService) setForm((f) => ({ ...f, service: prefilledService }));
@@ -150,6 +164,10 @@ const BookService = () => {
       toast({ title: "Please enter a valid email address.", variant: "destructive" });
       return;
     }
+    if (form.phone.trim() && !isValidUSPhone(form.phone)) {
+      toast({ title: "Please enter a valid US phone number.", variant: "destructive" });
+      return;
+    }
     if (!consent) {
       toast({ title: "Please agree to be contacted.", variant: "destructive" });
       return;
@@ -180,38 +198,49 @@ const BookService = () => {
     const approvalMode = siteSettings?.booking_approval_mode || "auto";
     const initialStatus = approvalMode === "manual" ? "pending" : "confirmed";
 
-    const { data: insertedBooking, error } = await supabase.from("bookings").insert({
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim() || null,
-      address: form.address.trim(),
-      service_type: form.service || null,
-      booking_date: format(selectedDate, "yyyy-MM-dd"),
-      time_slot: selectedSlot,
-      notes: form.notes.trim() || null,
-      consent_given: consent,
-      status: initialStatus,
-      selected_addons: selectedAddons.map((title) => {
-        const addon = addons.find((a) => a.title === title);
-        return { title, price: parsePrice(addon?.price_starting) };
-      }),
-      total_price: totalPrice > 0 ? totalPrice : null,
-    }).select("id").single();
-    setLoading(false);
-    if (error) {
-      toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
-      return;
+    try {
+      const { data: insertedBooking, error } = await supabase.from("bookings").insert({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+        address: form.address.trim(),
+        service_type: form.service || null,
+        booking_date: format(selectedDate, "yyyy-MM-dd"),
+        time_slot: selectedSlot,
+        notes: form.notes.trim() || null,
+        consent_given: consent,
+        status: initialStatus,
+        property_type: form.property_type || null,
+        square_footage: form.square_footage || null,
+        bedrooms: form.bedrooms ? parseInt(form.bedrooms) : null,
+        bathrooms: form.bathrooms ? parseInt(form.bathrooms) : null,
+        frequency: form.frequency || null,
+        has_pets: form.has_pets,
+        entry_codes: form.entry_codes.trim() || null,
+        selected_addons: selectedAddons.map((title) => {
+          const addon = addons.find((a) => a.title === title);
+          return { title, price: parsePrice(addon?.price_starting) };
+        }),
+        total_price: totalPrice > 0 ? totalPrice : null,
+      }).select("id").single();
+
+      if (error) {
+        toast({ title: "Booking failed.", description: "Please try again later.", variant: "destructive" });
+        return;
+      }
+
+      await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
+
+      setCooldown(true);
+      setTimeout(() => setCooldown(false), 30000);
+
+      setSubmitted(true);
+      toast({ title: "Booking confirmed!", description: "We'll be in touch within 24 hours." });
+    } catch {
+      toast({ title: "Booking failed.", description: "An unexpected error occurred. Please try again.", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-
-    // Create notification for admins
-    await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
-
-    // 30s cooldown to prevent spam
-    setCooldown(true);
-    setTimeout(() => setCooldown(false), 30000);
-
-    setSubmitted(true);
-    toast({ title: "Booking submitted!", description: approvalMode === "manual" ? "Your booking is pending approval." : "We'll confirm your appointment soon." });
   };
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -264,6 +293,57 @@ const BookService = () => {
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Address *</label>
                     <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
                   </div>
+
+                  {/* Property Details */}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
+                      <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <option value="">Select type</option>
+                        <option value="House">House</option>
+                        <option value="Apartment/Condo">Apartment / Condo</option>
+                        <option value="Office">Office</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
+                      <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
+                      <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
+                      <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Cleaning Frequency</label>
+                      <select value={form.frequency} onChange={update("frequency")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <option value="">Select frequency</option>
+                        <option value="One-Time">One-Time</option>
+                        <option value="Weekly">Weekly</option>
+                        <option value="Bi-Weekly">Bi-Weekly</option>
+                        <option value="Monthly">Monthly</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end pb-1">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
+                        <span className="text-sm font-medium text-foreground">Pets in home</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Entry / Gate Codes</label>
+                    <Input placeholder="Gate code, lockbox, etc." value={form.entry_codes} onChange={update("entry_codes")} maxLength={100} />
+                  </div>
+
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Service *</label>
                     <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">

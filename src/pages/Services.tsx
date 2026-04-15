@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Skeleton } from "@/components/ui/skeleton";
 import PageMeta from "@/components/PageMeta";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ const fadeUp = {
 };
 
 const Services = () => {
-  const { data: services } = useQuery({
+  const { data: services, isLoading } = useQuery({
     queryKey: ["public-services"],
     queryFn: async () => {
       const { data } = await supabase.from("services").select("*").eq("is_active", true).order("display_order");
@@ -43,6 +44,21 @@ const Services = () => {
 
       <section className="py-20 md:py-28">
         <div className="container space-y-16">
+          {isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex flex-col md:flex-row gap-8 items-start">
+                <div className="flex-1 space-y-3">
+                  <Skeleton className="w-14 h-14 rounded-2xl" />
+                  <Skeleton className="h-6 w-1/2" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-9 w-24 mt-2" />
+                </div>
+                <Skeleton className="flex-1 w-full h-56 md:h-64 rounded-2xl" />
+              </div>
+            ))
+          ) : (
+          <>
           {mainServices.map((s, i) => {
             const Icon = iconMap[s.icon] || Sparkles;
             return (
@@ -77,6 +93,8 @@ const Services = () => {
               </motion.div>
             );
           })}
+          </>
+          )}
         </div>
       </section>
 
