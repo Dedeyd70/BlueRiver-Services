@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import PageMeta from "@/components/PageMeta";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -56,7 +57,7 @@ const IndexPage = () => {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [heroLoaded, setHeroLoaded] = useState(false);
   const { data: settings } = useSiteSettings();
-  const { data: allServices } = useQuery({
+  const { data: allServices, isLoading: servicesLoading } = useQuery({
     queryKey: ["public-services-home-all"],
     queryFn: async () => {
       const { data } = await supabase.from("services").select("*").eq("is_active", true).order("display_order");
@@ -67,7 +68,7 @@ const IndexPage = () => {
   const mainServices = (allServices ?? []).filter((s) => (s as any).service_category !== "addon").slice(0, 4);
   const addons = (allServices ?? []).filter((s) => (s as any).service_category === "addon");
 
-  const { data: testimonials } = useQuery({
+  const { data: testimonials, isLoading: testimonialsLoading } = useQuery({
     queryKey: ["public-testimonials"],
     queryFn: async () => {
       const { data } = await supabase.from("testimonials").select("*").eq("is_active", true).order("display_order");
@@ -184,6 +185,19 @@ const IndexPage = () => {
             title="Cleaning Solutions for Every Space"
             description="Whether it's your home or business, our professional team delivers exceptional results every time."
           />
+          {servicesLoading ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-6 rounded-2xl bg-card border border-border">
+                  <Skeleton className="w-12 h-12 rounded-xl mb-4" />
+                  <Skeleton className="h-5 w-3/4 mb-2" />
+                  <Skeleton className="h-4 w-full mb-1" />
+                  <Skeleton className="h-4 w-2/3 mb-4" />
+                  <Skeleton className="h-9 w-24" />
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {mainServices.map((s, i) => {
               const Icon = iconMap[s.icon] || Sparkles;
@@ -215,6 +229,7 @@ const IndexPage = () => {
               );
             })}
           </div>
+          )}
           <div className="text-center mt-8">
             <Button variant="outline" asChild>
               <Link to="/services">View All Services</Link>
