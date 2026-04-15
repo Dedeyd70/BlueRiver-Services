@@ -1,25 +1,33 @@
 import { useState } from "react";
 import { notifyAdmins } from "@/lib/notifications";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Phone, Mail, MapPin, CheckCircle, Clock, CalendarDays } from "lucide-react";
+import { Phone, Mail, MapPin, CheckCircle, Clock, CalendarDays, CalendarPlus, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
-import { useQuery } from "@tanstack/react-query";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
+import { useNavigate } from "react-router-dom";
 import PageMeta from "@/components/PageMeta";
 
 const Contact = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { data: settings } = useSiteSettings();
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", service: "", message: "" });
-
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    inquiry_type: "",
+    message: "",
+    other_details: "",
+    preferred_contact: "email",
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,48 +43,58 @@ const Contact = () => {
       toast({ title: "Please enter a valid US phone number.", variant: "destructive" });
       return;
     }
+
     setLoading(true);
 
-    // Rate-limit check
     try {
+      // Rate-limit check
       const { data: isRecent } = await supabase.rpc("check_recent_submission", {
         p_email: form.email.trim(),
         p_table: "contact_submissions",
       });
+
       if (isRecent) {
-        setLoading(false);
         toast({ title: "Please wait before submitting again.", variant: "destructive" });
-        return;
-      }
-    } catch {
-      /* allow submission if rate check fails */
-    }
-
-    try {
-      const { data: insertedContact, error } = await supabase.from("contact_submissions").insert({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim() || null,
-        service_type: form.service || null,
-        message: form.message.trim(),
-      }).select("id").maybeSingle();
-
-      if (error) {
-        toast({ title: "Message failed to send.", description: "Please try again later.", variant: "destructive" });
+        setLoading(false);
         return;
       }
 
-      try {
-        await notifyAdmins("contact", `New contact message from ${form.name.trim()}`, insertedContact?.id, "contact");
-      } catch {}
+      const { data: insertedContact, error } = await supabase
+        .from("contact_submissions")
+        .insert({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim() || null,
+          service_type: form.inquiry_type || "General Inquiry",
+          message: form.message.trim(),
+          other_details: form.inquiry_type === "Other" ? form.other_details : null,
+          preferred_contact: form.preferred_contact,
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (error) throw error;
+
+      await notifyAdmins(
+        "contact",
+        `New ${form.inquiry_type} from ${form.name.trim()}`,
+        insertedContact?.id,
+        "contact",
+      );
 
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
-
       setSubmitted(true);
-      toast({ title: "Message sent!", description: "We'll respond within 24 hours." });
-    } catch {
-      toast({ title: "Message failed to send.", description: "An unexpected error occurred.", variant: "destructive" });
+      toast({
+        title: "Message sent!",
+        description: `We'll reach out via ${form.preferred_contact} within 4 business hours.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Message failed to send.",
+        description: err.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -87,186 +105,209 @@ const Contact = () => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const phone = settings?.phone || "(206) 317-8300";
-  const phoneLink = settings?.phone_link || "+12063178300";
   const email = settings?.email || "joshuaquao@gmail.com";
-  const serviceArea = settings?.service_area || "Serving Washington State";
-  const callAvailability = settings?.call_availability || "7:00 AM – 5:00 PM";
-  const businessHoursMF = settings?.business_hours_mf || "Monday – Friday: 7:00 AM – 7:00 PM";
-  const businessHoursSat = settings?.business_hours_sat || "Saturday: 8:00 AM – 5:00 PM";
-  const businessHoursSun = settings?.business_hours_sun || "Sunday: Closed";
 
   return (
-    <div>
-      <PageMeta
-        title="Contact Us"
-        description="Get in touch with BlueRiver Services. Request a quote, book a service, or contact us directly."
-      />
-      <section className="pt-32 pb-16 md:pt-40 md:pb-20 bg-muted/50">
-        <div className="container">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="max-w-2xl mx-auto text-center"
-          >
-            <span className="inline-block px-4 py-1.5 rounded-full bg-sky text-sky-foreground text-xs font-semibold tracking-wider uppercase mb-4">
-              Get in Touch
-            </span>
-            <h1 className="text-4xl md:text-5xl font-display font-extrabold text-foreground mb-4">Contact Us</h1>
-            <p className="text-muted-foreground leading-relaxed">
-              Request a quote, book a service, or contact us directly.
-            </p>
-          </motion.div>
+    <div className="min-h-screen bg-background">
+      <PageMeta title="Contact Us" description="Get in touch for cleaning services in Washington." />
+
+      <section className="pt-32 pb-12 bg-muted/30">
+        <div className="container px-4">
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-4xl md:text-5xl font-display font-extrabold mb-6">How Can We Help?</h1>
+
+            {/* NEW STRATEGIC CTA BUTTONS */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+              <Button
+                onClick={() => navigate("/book")}
+                size="lg"
+                className="bg-primary hover:bg-primary/90 text-white gap-2 h-14 px-8 text-lg rounded-xl shadow-lg transition-all hover:scale-105"
+              >
+                <CalendarPlus className="w-5 h-5" /> Book a Service
+              </Button>
+              <Button
+                onClick={() => navigate("/quote")}
+                variant="outline"
+                size="lg"
+                className="gap-2 h-14 px-8 text-lg border-2 rounded-xl transition-all hover:bg-muted"
+              >
+                <FileText className="w-5 h-5" /> Get Free Quote
+              </Button>
+            </div>
+            <p className="text-muted-foreground text-lg">For general questions or support, use the form below.</p>
+          </div>
         </div>
       </section>
 
-      <section className="py-20 md:py-28">
-        <div className="container">
-          <div className="grid lg:grid-cols-5 gap-12 max-w-5xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="lg:col-span-3"
-            >
+      <section className="py-16">
+        <div className="container px-4">
+          <div className="grid lg:grid-cols-5 gap-12 max-w-6xl mx-auto">
+            <div className="lg:col-span-3">
               {submitted ? (
-                <div className="text-center py-16">
-                  <div className="w-16 h-16 rounded-full bg-hero-gradient flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-primary-foreground" />
-                  </div>
-                  <h3 className="text-2xl font-display font-bold text-foreground mb-2">Thank You!</h3>
-                  <p className="text-muted-foreground">We've received your request and will be in touch shortly.</p>
-                </div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-20 bg-muted/20 rounded-3xl border-2 border-dashed"
+                >
+                  <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                  <h3 className="text-2xl font-bold mb-2">Message Received</h3>
+                  <p className="text-muted-foreground">
+                    We'll contact you at <strong>{form.email}</strong> shortly.
+                  </p>
+                  <Button variant="link" onClick={() => setSubmitted(false)} className="mt-4">
+                    Send another message
+                  </Button>
+                </motion.div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="grid sm:grid-cols-2 gap-5">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Name *</label>
-                      <Input placeholder="Your name" value={form.name} onChange={update("name")} maxLength={100} />
+                <form onSubmit={handleSubmit} className="bg-card p-8 rounded-3xl border shadow-sm space-y-6">
+                  <div className="grid sm:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">Name *</label>
+                      <Input placeholder="Full Name" value={form.name} onChange={update("name")} required />
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Email *</label>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">Email *</label>
                       <Input
                         type="email"
-                        placeholder="you@email.com"
+                        placeholder="email@address.com"
                         value={form.email}
                         onChange={update("email")}
-                        maxLength={255}
+                        required
                       />
                     </div>
                   </div>
-                  <div className="grid sm:grid-cols-2 gap-5">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Phone</label>
-                      <Input
-                        type="tel"
-                        placeholder="(555) 123-4567"
-                        value={form.phone}
-                        onChange={update("phone")}
-                        maxLength={20}
-                      />
+
+                  <div className="grid sm:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">Phone (US)</label>
+                      <Input type="tel" placeholder="(206) 000-0000" value={form.phone} onChange={update("phone")} />
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Inquiry Type</label>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">Inquiry Type</label>
                       <select
-                        value={form.service}
-                        onChange={update("service")}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary"
+                        value={form.inquiry_type}
+                        onChange={update("inquiry_type")}
                       >
-                        <option value="">Select type</option>
                         <option value="General Inquiry">General Inquiry</option>
-                        <option value="Billing Question">Billing Question</option>
-                        <option value="Feedback">Feedback</option>
-                        <option value="Employment">Employment</option>
+                        <option value="Billing & Payment">Billing & Payment</option>
+                        <option value="Feedback & Complaints">Feedback & Complaints</option>
+                        <option value="Employment">Employment Opportunities</option>
                         <option value="Other">Other</option>
                       </select>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Message *</label>
+
+                  <AnimatePresence>
+                    {form.inquiry_type === "Other" && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="space-y-2 overflow-hidden"
+                      >
+                        <label className="text-sm font-semibold text-primary">Please specify your concern *</label>
+                        <Input
+                          placeholder="Briefly describe the topic..."
+                          value={form.other_details}
+                          onChange={update("other_details")}
+                          required
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold">Preferred Contact Method</label>
+                    <div className="flex gap-4">
+                      {["email", "phone"].map((method) => (
+                        <label key={method} className="flex items-center gap-2 cursor-pointer capitalize">
+                          <input
+                            type="radio"
+                            name="contact_pref"
+                            value={method}
+                            checked={form.preferred_contact === method}
+                            onChange={update("preferred_contact")}
+                            className="accent-primary"
+                          />
+                          {method}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold">Message *</label>
                     <Textarea
-                      placeholder="Please let us know how we can be of help..."
-                      rows={5}
+                      placeholder="Tell us more..."
+                      rows={4}
                       value={form.message}
                       onChange={update("message")}
-                      maxLength={1000}
+                      required
                     />
                   </div>
-                  <Button type="submit" variant="hero" size="lg" disabled={loading || cooldown}>
+
+                  <Button type="submit" size="lg" className="w-full sm:w-auto px-12" disabled={loading || cooldown}>
                     {loading ? "Sending..." : cooldown ? "Please wait..." : "Send Message"}
                   </Button>
                 </form>
               )}
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="lg:col-span-2 space-y-8"
-            >
-              <div>
-                <h3 className="font-display font-semibold text-foreground mb-4">Contact Information</h3>
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-card p-6 rounded-2xl border space-y-6">
+                <h3 className="font-bold text-xl">Direct Contact</h3>
                 <div className="space-y-4">
-                  <a
-                    href={`tel:${phoneLink}`}
-                    className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
-                      <Phone className="w-5 h-5 text-sky-foreground" />
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-primary/10 rounded-lg">
+                      <Phone className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Phone</p>
-                      <p className="text-sm">{phone}</p>
-                      <p className="text-xs text-muted-foreground/70">Available for calls: {callAvailability}</p>
+                      <p className="text-sm font-bold">Call Us</p>
+                      <p className="text-muted-foreground">{phone}</p>
                     </div>
-                  </a>
-                  <a
-                    href={`mailto:${email}`}
-                    className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-5 h-5 text-sky-foreground" />
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-primary/10 rounded-lg">
+                      <Mail className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Email</p>
-                      <p className="text-sm">{email}</p>
+                      <p className="text-sm font-bold">Email</p>
+                      <p className="text-muted-foreground">{email}</p>
                     </div>
-                  </a>
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <div className="w-10 h-10 rounded-xl bg-sky flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-5 h-5 text-sky-foreground" />
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-primary/10 rounded-lg">
+                      <MapPin className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">Service Area</p>
-                      <p className="text-sm">{serviceArea}</p>
+                      <p className="text-sm font-bold">Location</p>
+                      <p className="text-muted-foreground">Serving Washington State</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="p-6 rounded-2xl bg-sky/50">
-                <div className="flex items-center gap-2 mb-3">
-                  <CalendarDays className="w-4 h-4 text-foreground" />
-                  <h4 className="font-display font-semibold text-foreground">Business Hours</h4>
+              <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10">
+                <div className="flex items-center gap-2 mb-4 font-bold">
+                  <Clock className="w-5 h-5" /> Business Hours
                 </div>
-                <div className="space-y-1 text-sm text-muted-foreground">
-                  <p>{businessHoursMF}</p>
-                  <p>{businessHoursSat}</p>
-                  <p>{businessHoursSun}</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Mon - Fri</span>
+                    <span>7am - 7pm</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Sat</span>
+                    <span>8am - 5pm</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-primary">
+                    <span>Sun</span>
+                    <span>Closed</span>
+                  </div>
                 </div>
               </div>
-
-              <div className="p-6 rounded-2xl bg-sky/50">
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock className="w-4 h-4 text-foreground" />
-                  <h4 className="font-display font-semibold text-foreground">Call Availability</h4>
-                </div>
-                <p className="text-sm text-muted-foreground">{callAvailability}</p>
-              </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </section>
