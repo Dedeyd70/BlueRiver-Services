@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import imageCompression from "browser-image-compression";
-import { isValidEmail } from "@/lib/validation";
+import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import PageMeta from "@/components/PageMeta";
 
 const RequestQuote = () => {
@@ -25,7 +25,10 @@ const RequestQuote = () => {
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [form, setForm] = useState({
-    name: "", email: "", phone: "", address: "", service: searchParams.get("service") || "", description: "", preferred_contact: "email",
+    name: "", email: "", phone: "", address: "", service: searchParams.get("service") || "",
+    description: "", preferred_contact: "email",
+    property_type: "", square_footage: "", bedrooms: "", bathrooms: "",
+    frequency: "", has_pets: false, entry_codes: "",
   });
 
   const { data: services } = useQuery({
@@ -82,6 +85,10 @@ const RequestQuote = () => {
       toast({ title: "Please enter a valid email address.", variant: "destructive" });
       return;
     }
+    if (form.phone.trim() && !isValidUSPhone(form.phone)) {
+      toast({ title: "Please enter a valid US phone number.", variant: "destructive" });
+      return;
+    }
     if (!consent) {
       toast({ title: "Please agree to be contacted.", variant: "destructive" });
       return;
@@ -98,33 +105,44 @@ const RequestQuote = () => {
       }
     } catch { /* allow quote if rate check fails */ }
 
-    const { data: insertedQuote, error } = await supabase.from("quote_requests").insert({
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim() || null,
-      address: form.address.trim() || null,
-      service_type: form.service || null,
-      description: form.description.trim(),
-      preferred_contact: form.preferred_contact,
-      attachment_url: attachmentUrl || null,
-      consent_given: consent,
-      selected_addons: selectedAddons.map((title) => ({ title })),
-    }).select("id").maybeSingle();
-    setLoading(false);
-    if (error) {
-      toast({ title: "Something went wrong.", description: "Please try again later.", variant: "destructive" });
-      return;
+    try {
+      const { data: insertedQuote, error } = await supabase.from("quote_requests").insert({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+        address: form.address.trim() || null,
+        service_type: form.service || null,
+        description: form.description.trim(),
+        preferred_contact: form.preferred_contact,
+        attachment_url: attachmentUrl || null,
+        consent_given: consent,
+        property_type: form.property_type || null,
+        square_footage: form.square_footage || null,
+        bedrooms: form.bedrooms ? parseInt(form.bedrooms) : null,
+        bathrooms: form.bathrooms ? parseInt(form.bathrooms) : null,
+        frequency: form.frequency || null,
+        has_pets: form.has_pets,
+        entry_codes: form.entry_codes.trim() || null,
+        selected_addons: selectedAddons.map((title) => ({ title })),
+      }).select("id").maybeSingle();
+
+      if (error) {
+        toast({ title: "Quote submission failed.", description: "Please try again later.", variant: "destructive" });
+        return;
+      }
+
+      await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, insertedQuote?.id, "quote");
+
+      setCooldown(true);
+      setTimeout(() => setCooldown(false), 30000);
+
+      setSubmitted(true);
+      toast({ title: "Quote received!", description: "Expect a reply within 24 hours." });
+    } catch {
+      toast({ title: "Quote submission failed.", description: "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-
-    // Notify admins
-    await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, insertedQuote?.id, "quote");
-
-    // 30s cooldown
-    setCooldown(true);
-    setTimeout(() => setCooldown(false), 30000);
-
-    setSubmitted(true);
-    toast({ title: "Quote request submitted!", description: "We'll get back to you within 24 hours." });
   };
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -187,6 +205,57 @@ const RequestQuote = () => {
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Address</label>
                   <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
                 </div>
+
+                {/* Property Details */}
+                <div className="grid sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
+                    <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <option value="">Select type</option>
+                      <option value="House">House</option>
+                      <option value="Apartment/Condo">Apartment / Condo</option>
+                      <option value="Office">Office</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
+                    <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
+                    <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
+                    <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Cleaning Frequency</label>
+                    <select value={form.frequency} onChange={update("frequency")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <option value="">Select frequency</option>
+                      <option value="One-Time">One-Time</option>
+                      <option value="Weekly">Weekly</option>
+                      <option value="Bi-Weekly">Bi-Weekly</option>
+                      <option value="Monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
+                      <span className="text-sm font-medium text-foreground">Pets in home</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">Entry / Gate Codes</label>
+                  <Input placeholder="Gate code, lockbox, etc." value={form.entry_codes} onChange={update("entry_codes")} maxLength={100} />
+                </div>
+
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Service Type</label>
                   <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
