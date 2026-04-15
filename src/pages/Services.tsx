@@ -93,6 +93,8 @@ const Services = () => {
               </motion.div>
             );
           })}
+          </>
+          )}
         </div>
       </section>
 
