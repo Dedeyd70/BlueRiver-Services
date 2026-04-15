@@ -20,13 +20,6 @@ const Contact = () => {
   const [cooldown, setCooldown] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", service: "", message: "" });
 
-  const { data: services } = useQuery({
-    queryKey: ["public-services-contact"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
-      return data ?? [];
-    },
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
