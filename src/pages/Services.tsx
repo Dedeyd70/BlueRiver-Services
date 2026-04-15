@@ -122,11 +122,11 @@ const Services = () => {
                     </Button>
                   </motion.div>
                 );
-          })}
-          </>
-          )}
+              })}
+            </div>
           </div>
         </section>
+      )}
       )}
 
       <section className="py-20 md:py-28 bg-hero-gradient text-center">
