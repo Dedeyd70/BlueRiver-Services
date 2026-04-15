@@ -404,7 +404,7 @@ const IndexPage = () => {
       )}
 
       {/* Testimonials */}
-      {(testimonials ?? []).length > 0 && (
+      {(testimonialsLoading || (testimonials ?? []).length > 0) && (
         <section className="py-20 md:py-28 bg-muted/50">
           <div className="container">
             <SectionHeading
@@ -412,6 +412,19 @@ const IndexPage = () => {
               title="What Our Clients Say"
               description="Don't just take our word for it, hear from the people who trust BlueRiver."
             />
+            {testimonialsLoading ? (
+              <div className="grid md:grid-cols-3 gap-6">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="p-6 rounded-2xl bg-card border border-border">
+                    <Skeleton className="h-4 w-24 mb-4" />
+                    <Skeleton className="h-4 w-full mb-1" />
+                    <Skeleton className="h-4 w-full mb-1" />
+                    <Skeleton className="h-4 w-2/3 mb-4" />
+                    <Skeleton className="h-4 w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : (
             <div className="grid md:grid-cols-3 gap-6">
               {(testimonials ?? []).map((t, i) => (
                 <motion.div
