@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -30,6 +31,9 @@ const BookingsAdmin = () => {
     },
   });
 
+  const activeBookings = (bookings ?? []).filter((b) => b.status === "pending" || b.status === "confirmed");
+  const archivedBookings = (bookings ?? []).filter((b) => b.status === "completed" || b.status === "cancelled");
+
   const updateStatus = useMutation({
     mutationFn: async ({ id, status, cancellation_reason }: { id: string; status: string; cancellation_reason?: string }) => {
       const updates: any = { status };
@@ -45,13 +49,12 @@ const BookingsAdmin = () => {
 
   const handlePending = (b: any) => {
     updateStatus.mutate({ id: b.id, status: "pending" });
-    toast({ title: "Reminders paused. Status set to Pending." });
+    toast({ title: "Status set to Pending." });
   };
 
   const handleCompleted = (b: any) => {
     updateStatus.mutate({ id: b.id, status: "completed" });
 
-    // Generate invoice PDF
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text("Invoice", 20, 25);
@@ -66,22 +69,13 @@ const BookingsAdmin = () => {
     doc.text(`Generated: ${format(new Date(), "MMM d, yyyy")}`, 20, 96);
     doc.save(`invoice-${b.name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 
-    const payload = {
-      action: "completed",
-      customer: { name: b.name, email: b.email },
-      service: b.service_type,
-      date: b.booking_date,
-      total: (b as any).total_price,
-    };
-    console.log("[Mimic] Thank You email + Invoice PDF payload:", payload);
-
-    toast({ title: "Success! Generating Invoice PDF and mimic-queuing Thank You email..." });
+    toast({ title: "Marked as completed. Invoice PDF generated." });
   };
 
   const handleCancelConfirm = () => {
     if (!cancelTarget) return;
     updateStatus.mutate({ id: cancelTarget.id, status: "cancelled", cancellation_reason: cancelReason || undefined });
-    toast({ title: `Booking Cancelled. Client notified regarding: ${cancelReason || "No reason provided"}.` });
+    toast({ title: `Booking cancelled. ${cancelReason ? `Reason: ${cancelReason}` : ""}` });
     setCancelTarget(null);
     setCancelReason("");
   };
@@ -91,11 +85,85 @@ const BookingsAdmin = () => {
     return addons;
   };
 
+  const renderBookingCard = (b: any) => {
+    const addons = parseAddons((b as any).selected_addons);
+    const totalPrice = (b as any).total_price;
+    return (
+      <div key={b.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="font-medium text-foreground">{b.name}</h3>
+            <p className="text-sm text-muted-foreground">{b.email} {b.phone && `• ${b.phone}`}</p>
+          </div>
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[b.status] || "bg-muted text-muted-foreground"}`}>
+            {b.status}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+          <div>
+            <span className="text-muted-foreground">Date:</span>
+            <p className="font-medium text-foreground">{format(new Date(b.booking_date), "MMM d, yyyy")}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Time:</span>
+            <p className="font-medium text-foreground">{b.time_slot}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Service:</span>
+            <p className="font-medium text-foreground">{b.service_type || "—"}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Submitted:</span>
+            <p className="font-medium text-foreground">{format(new Date(b.created_at), "MMM d")}</p>
+          </div>
+        </div>
+        {b.property_type && (
+          <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Property:</span> {b.property_type}{b.square_footage ? ` · ${b.square_footage} sq ft` : ""}{b.bedrooms ? ` · ${b.bedrooms} bed` : ""}{b.bathrooms ? ` / ${b.bathrooms} bath` : ""}</p>
+        )}
+        {b.frequency && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Frequency:</span> {b.frequency}</p>}
+        {b.has_pets && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Pets:</span> Yes</p>}
+        {b.entry_codes && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Entry Codes:</span> {b.entry_codes}</p>}
+        {addons.length > 0 && (
+          <div className="text-sm">
+            <span className="text-foreground font-medium">Add-Ons:</span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {addons.map((a, i) => (
+                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium">
+                  {a.title}{a.price ? ` ($${a.price})` : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {totalPrice != null && totalPrice > 0 && (
+          <p className="text-sm font-semibold text-primary">Total: ${Number(totalPrice).toFixed(2)}</p>
+        )}
+        {b.address && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Address:</span> {b.address}</p>}
+        {b.notes && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {b.notes}</p>}
+        {(b as any).cancellation_reason && (
+          <p className="text-sm text-destructive"><span className="font-medium">Cancellation Reason:</span> {(b as any).cancellation_reason}</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {b.status !== "pending" && (
+            <Button variant="outline" size="sm" onClick={() => handlePending(b)}>Pending</Button>
+          )}
+          {b.status !== "completed" && (
+            <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>Completed</Button>
+          )}
+          {b.status !== "cancelled" && (
+            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelTarget(b)}>
+              Cancelled
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-display font-bold text-foreground mb-6">Bookings</h1>
 
-      {/* Cancellation Dialog */}
       <Dialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) { setCancelTarget(null); setCancelReason(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -126,76 +194,30 @@ const BookingsAdmin = () => {
       ) : !bookings?.length ? (
         <p className="text-muted-foreground">No bookings yet.</p>
       ) : (
-        <div className="space-y-3">
-          {bookings.map((b) => {
-            const addons = parseAddons((b as any).selected_addons);
-            const totalPrice = (b as any).total_price;
-            return (
-              <div key={b.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-medium text-foreground">{b.name}</h3>
-                    <p className="text-sm text-muted-foreground">{b.email} {b.phone && `• ${b.phone}`}</p>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[b.status] || "bg-muted text-muted-foreground"}`}>
-                    {b.status}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Date:</span>
-                    <p className="font-medium text-foreground">{format(new Date(b.booking_date), "MMM d, yyyy")}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Time:</span>
-                    <p className="font-medium text-foreground">{b.time_slot}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Service:</span>
-                    <p className="font-medium text-foreground">{b.service_type || "—"}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Submitted:</span>
-                    <p className="font-medium text-foreground">{format(new Date(b.created_at), "MMM d")}</p>
-                  </div>
-                </div>
-                {addons.length > 0 && (
-                  <div className="text-sm">
-                    <span className="text-foreground font-medium">Add-Ons:</span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {addons.map((a, i) => (
-                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium">
-                          {a.title}{a.price ? ` ($${a.price})` : ""}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {totalPrice != null && totalPrice > 0 && (
-                  <p className="text-sm font-semibold text-primary">Total: ${Number(totalPrice).toFixed(2)}</p>
-                )}
-                {b.address && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Address:</span> {b.address}</p>}
-                {b.notes && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {b.notes}</p>}
-                {(b as any).cancellation_reason && (
-                  <p className="text-sm text-destructive"><span className="font-medium">Cancellation Reason:</span> {(b as any).cancellation_reason}</p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {b.status !== "pending" && (
-                    <Button variant="outline" size="sm" onClick={() => handlePending(b)}>Pending</Button>
-                  )}
-                  {b.status !== "completed" && (
-                    <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>Completed</Button>
-                  )}
-                  {b.status !== "cancelled" && (
-                    <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelTarget(b)}>
-                      Cancelled
-                    </Button>
-                  )}
-                </div>
+        <Tabs defaultValue="active">
+          <TabsList className="mb-4">
+            <TabsTrigger value="active">Active ({activeBookings.length})</TabsTrigger>
+            <TabsTrigger value="archived">Archived ({archivedBookings.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="active">
+            {activeBookings.length === 0 ? (
+              <p className="text-muted-foreground">No active bookings.</p>
+            ) : (
+              <div className="space-y-3">
+                {activeBookings.map(renderBookingCard)}
               </div>
-            );
-          })}
-        </div>
+            )}
+          </TabsContent>
+          <TabsContent value="archived">
+            {archivedBookings.length === 0 ? (
+              <p className="text-muted-foreground">No archived bookings.</p>
+            ) : (
+              <div className="space-y-3">
+                {archivedBookings.map(renderBookingCard)}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
