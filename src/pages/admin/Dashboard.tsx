@@ -6,6 +6,19 @@ import { useNavigate } from "react-router-dom"; // Added for navigation
 const Dashboard = () => {
   const navigate = useNavigate(); // Initialize navigation
 
+  // Fetch ALL interactions for the "Total Submissions"
+  const { data: totalAll } = useQuery({
+    queryKey: ["admin-grand-total"],
+    queryFn: async () => {
+      const [bookings, contacts, quotes] = await Promise.all([
+        supabase.from("bookings").select("*", { count: "exact", head: true }),
+        supabase.from("contact_submissions").select("*", { count: "exact", head: true }),
+        supabase.from("quote_requests").select("*", { count: "exact", head: true }),
+      ]);
+      return (bookings.count ?? 0) + (contacts.count ?? 0) + (quotes.count ?? 0);
+    },
+  });
+
   const { data: submissions } = useQuery({
     queryKey: ["admin-submissions-count"],
     queryFn: async () => {
@@ -79,6 +92,14 @@ const Dashboard = () => {
   // Added 'path' to each stat to make them clickable
   const stats = [
     {
+      label: "Total Submissions",
+      value: totalAll ?? 0,
+      icon: BarChart3,
+      color: "text-blue-600",
+      path: "/admin/submissions",
+      description: "Bookings + Quotes + Contacts",
+    },
+    {
       label: "Bookings",
       value: bookingsCount ?? 0,
       icon: CalendarDays,
@@ -99,19 +120,19 @@ const Dashboard = () => {
       color: "text-accent",
       path: "/admin/quotes",
     },
-    {
+    /**{
       label: "Total Submissions",
       value: submissions ?? 0,
       icon: MessageSquare,
       color: "text-primary",
       path: "/admin/submissions",
-    },
+    },*/
     {
       label: "New Inquiries",
       value: pendingCount ?? 0,
       icon: MessageSquare,
       color: "text-amber-500",
-      path: "/admin/submissions",
+      path: "/admin/messagesAdmin",
     },
     { label: "Services", value: servicesCount ?? 0, icon: Wrench, color: "text-accent", path: "/admin/services" },
     { label: "Gallery", value: galleryCount ?? 0, icon: Image, color: "text-accent", path: "/admin/gallery" },
