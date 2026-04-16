@@ -111,7 +111,7 @@ const Dashboard = () => {
       value: pendingBookings ?? 0,
       icon: Clock,
       color: "text-amber-500",
-      path: "/admin/bookings",
+      path: "/admin/bookings?status=pending",
     },
     {
       label: "Quote Requests",
