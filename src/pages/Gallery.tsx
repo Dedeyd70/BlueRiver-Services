@@ -32,8 +32,7 @@ const Gallery = () => {
       return data ?? [];
     },
   });
-
-  const categories = ["All", ...new Set((services ?? []).map((s) => s.title))];
+  const categories = ["All", ...new Set(servicesList.map((s) => s.title))];
 
   // Separate standalone vs grouped
   const allImages = images ?? [];

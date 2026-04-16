@@ -8,6 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { useServices } from "@/hooks/useServices";
 import { format, isBefore, startOfDay, getDay } from "date-fns";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
