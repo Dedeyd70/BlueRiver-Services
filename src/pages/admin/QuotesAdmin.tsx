@@ -130,10 +130,10 @@ const QuotesAdmin = () => {
   };
 
   // --- THIS IS THE COMPLETE CARD FUNCTION WITH ALL BUTTONS ---
-  const renderQuoteCard = (q: any) => {
+  /**const renderQuoteCard = (q: any) => {
     const notes = getNotesForQuote(q.id);
     const isExpanded = expandedNotes === q.id;
-    const addons = parseAddons((q as any).selected_addons);
+    const addons = parseAddons((q as any).selected_addons);*/
 
     return (
       <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
@@ -293,19 +293,73 @@ const QuotesAdmin = () => {
                 {activeQuotes.length === 0 ? (
                   <p className="text-muted-foreground">No active quotes found.</p>
                 ) : (
-                  activeQuotes.map(renderQuoteCard)
+                  activeQuotes.map((q) => {
+                    const notes = getNotesForQuote(q.id);
+                    const isExpanded = expandedNotes === q.id;
+                    const addons = parseAddons((q as any).selected_addons);
+                    return (
+                      <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <h3 className="font-medium text-foreground">{q.name}</h3>
+                            <p className="text-sm text-muted-foreground">{q.email} {q.phone && `• ${q.phone}`}</p>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}>
+                            {q.status}
+                          </span>
+                        </div>
+                        {/* Status Buttons */}
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {q.status !== "converted" && (
+                            <Button variant="default" size="sm" onClick={() => openConvert(q)} className="gap-1">
+                              <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm" onClick={() => setExpandedNotes(isExpanded ? null : q.id)} className="gap-1">
+                            <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
+                          </Button>
+                          {["pending", "reviewed", "responded", "closed"].filter(s => s !== q.status && q.status !== "converted").map(s => (
+                            <Button key={s} variant="ghost" size="sm" onClick={() => updateStatus.mutate({ id: q.id, status: s })} className="capitalize text-xs">
+                              Mark as {s}
+                            </Button>
+                          ))}
+                        </div>
+                        {/* Note Section */}
+                        {isExpanded && (
+                          <div className="mt-3 space-y-2 border-t pt-3">
+                            {notes.map(n => (
+                              <div key={n.id} className="bg-muted/50 p-2 rounded text-xs">
+                                {n.note}
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <Input 
+                                value={newNote} 
+                                onChange={(e) => setNewNote(e.target.value)} 
+                                placeholder="Add note..." 
+                                className="h-8 text-xs" 
+                              />
+                              <Button size="sm" onClick={() => addNote.mutate({ quoteId: q.id, note: newNote })}>Send</Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </TabsContent>
 
             <TabsContent value="archived">
-              <div className="space-y-3">
-                {archivedQuotes.length === 0 ? (
-                  <p className="text-muted-foreground">No archived quotes.</p>
-                ) : (
-                  archivedQuotes.map(renderQuoteCard)
-                )}
-              </div>
+               {/* Repeat the map for archivedQuotes here or use a simplified view */}
+               <div className="space-y-3">
+                {archivedQuotes.map(q => (
+                   <div key={q.id} className="p-4 border rounded-xl opacity-70 bg-muted/20">
+                     <p className="font-medium">{q.name} - <span className="text-xs uppercase font-bold">{q.status}</span></p>
+                     <p className="text-sm text-muted-foreground">{q.service_type}</p>
+                   </div>
+                ))}
+               </div>
             </TabsContent>
           </>
         )}
