@@ -132,7 +132,7 @@ const Dashboard = () => {
       value: pendingCount ?? 0,
       icon: MessageSquare,
       color: "text-amber-500",
-      path: "/admin/messagesAdmin",
+      path: "/admin/messages",
     },
     { label: "Services", value: servicesCount ?? 0, icon: Wrench, color: "text-accent", path: "/admin/services" },
     { label: "Gallery", value: galleryCount ?? 0, icon: Image, color: "text-accent", path: "/admin/gallery" },
