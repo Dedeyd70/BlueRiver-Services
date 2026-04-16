@@ -345,7 +345,7 @@ const QuotesAdmin = () => {
                             {addons.map((a, i) => (
                               <span
                                 key={i}
-                                className="px-3 py-1 rounded-full bg-sky/10 text-sky text-xs font-medium border border-sky/20"
+                                className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
                               >
                                 {a.title}
                               </span>
