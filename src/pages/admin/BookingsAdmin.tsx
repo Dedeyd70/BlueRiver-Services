@@ -212,38 +212,50 @@ const BookingsAdmin = () => {
 
         {/* Cancellation Reason (Locked View) */}
         {(b as any).cancellation_reason && (
-          <p className="text-sm text-destructive font-medium bg-red-50/50 p-2 rounded-md border border-red-100/50">
-            Cancellation Reason: <span className="font-normal">{(b as any).cancellation_reason}</span>
-          </p>
-        )}
+  <div className="mt-2 p-3 bg-red-50/50 border border-red-100/50 rounded-lg">
+    <p className="text-sm text-destructive font-medium">
+      Cancellation Reason: <span className="font-normal">{(b as any).cancellation_reason}</span>
+    </p>
+  </div>
+)}
 
-        {/* Footer Logic: Message for Cancelled, Nothing for Completed, Buttons for Active */}
-        {!isCompleted && (
-          <div className="pt-3 border-t border-border/50">
-            {isCancelled ? (
-              <div className="py-1">
-                <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-                  This booking was cancelled and cannot be modified.
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => handlePending(b)}>
-                  Pending
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
-                  Completed
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                  onClick={() => setCancelTarget(b)}
-                >
-                  Cancelled
-                </Button>
-              </div>
-            )}
+{/* 2. Footer Logic - Hide everything if Completed. Show message if Cancelled. Show buttons if Active. */}
+{!isCompleted && (
+  <div className="pt-3 border-t border-border/50">
+    {isCancelled ? (
+      <div className="py-1">
+        <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+          This booking was cancelled and cannot be modified.
+        </p>
+      </div>
+    ) : (
+      <div className="flex flex-wrap gap-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => handlePending(b)}
+        >
+          Pending
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => handleCompleted(b)}
+        >
+          Completed
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-destructive border-destructive/30 hover:bg-destructive/10"
+          onClick={() => setCancelTarget(b)} // This opens the dialog
+        >
+          Cancelled
+        </Button>
+      </div>
+    )}
+  </div>
+)}
           </div>
         )}
       </div>
