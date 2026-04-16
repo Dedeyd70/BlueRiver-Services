@@ -291,6 +291,8 @@ const QuotesAdmin = () => {
               <div className="space-y-4">
                 {archivedQuotes.map((q) => {
                   const addons = parseAddons(q.selected_addons);
+                  const notes = getNotesForQuote(q.id);
+                  const isExpanded = expandedNotes === q.id;
                   // Logic to determine if the record is "locked"
                   const isLocked = q.status === "closed" || q.status === "converted";
 
