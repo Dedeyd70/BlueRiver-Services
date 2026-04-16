@@ -17,7 +17,6 @@ import {
   Truck,
   Droplets,
   Wind,
-  
   MapPin,
   X,
 } from "lucide-react";
@@ -49,7 +48,11 @@ const fadeUp = {
 
 const whyUs = [
   { icon: Shield, title: "Trusted & Insured", desc: "Fully licensed, bonded, and insured for your peace of mind." },
-  { icon: Clock, title: "Flexible Scheduling", desc: "We work around your schedule — evenings, weekends, you name it." },
+  {
+    icon: Clock,
+    title: "Flexible Scheduling",
+    desc: "We work around your schedule — evenings, weekends, you name it.",
+  },
   { icon: Award, title: "5-Star Rated", desc: "Consistently top-rated by our clients across the region." },
   { icon: Sparkles, title: "Eco-Friendly Options", desc: "Green cleaning products available for a healthier home." },
 ];
@@ -117,7 +120,7 @@ const IndexPage = () => {
         description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today."
       />
       {/* Hero */}
-      <section className="relative min-h-[90vh] flex items-center bg-gray-900 overflow-hidden">
+      <section className="relative min-h-screen flex items-center bg-gray-900 overflow-hidden">
         <div className="absolute inset-0">
           {isLoading ? (
             <div className="w-full h-full bg-gray-900" />
@@ -191,37 +194,37 @@ const IndexPage = () => {
               ))}
             </div>
           ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {mainServices.map((s, i) => {
-              const Icon = iconMap[s.icon] || Sparkles;
-              return (
-                <motion.div key={s.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
-                  <div className="group block p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
-                    {s.image_url ? (
-                      <img
-                        src={s.image_url}
-                        alt={s.title}
-                        className="w-full h-32 object-cover rounded-xl mb-4"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4 group-hover:bg-hero-gradient group-hover:text-primary-foreground transition-all duration-300">
-                        <Icon className="w-6 h-6 text-sky-foreground group-hover:text-primary-foreground" />
-                      </div>
-                    )}
-                    <h3 className="font-display font-semibold text-card-foreground mb-1">{s.title}</h3>
-                    {s.price_starting && (
-                      <p className="text-sm font-medium text-primary mb-2">Starting from {s.price_starting}</p>
-                    )}
-                    <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to={`/book?service=${encodeURIComponent(s.title)}`}>Book Now</Link>
-                    </Button>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {mainServices.map((s, i) => {
+                const Icon = iconMap[s.icon] || Sparkles;
+                return (
+                  <motion.div key={s.id} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
+                    <div className="group block p-6 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
+                      {s.image_url ? (
+                        <img
+                          src={s.image_url}
+                          alt={s.title}
+                          className="w-full h-32 object-cover rounded-xl mb-4"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-sky flex items-center justify-center mb-4 group-hover:bg-hero-gradient group-hover:text-primary-foreground transition-all duration-300">
+                          <Icon className="w-6 h-6 text-sky-foreground group-hover:text-primary-foreground" />
+                        </div>
+                      )}
+                      <h3 className="font-display font-semibold text-card-foreground mb-1">{s.title}</h3>
+                      {s.price_starting && (
+                        <p className="text-sm font-medium text-primary mb-2">Starting from {s.price_starting}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/book?service=${encodeURIComponent(s.title)}`}>Book Now</Link>
+                      </Button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
           )}
           <div className="text-center mt-8">
             <Button variant="outline" asChild>
@@ -418,27 +421,27 @@ const IndexPage = () => {
                 ))}
               </div>
             ) : (
-            <div className="grid md:grid-cols-3 gap-6">
-              {(testimonials ?? []).map((t, i) => (
-                <motion.div
-                  key={t.id}
-                  {...fadeUp}
-                  transition={{ duration: 0.5, delay: i * 0.15 }}
-                  className="p-6 rounded-2xl bg-card border border-border"
-                >
-                  <div className="flex gap-1 mb-4">
-                    {Array.from({ length: t.rating }).map((_, j) => (
-                      <Star key={j} className="w-4 h-4 fill-primary text-primary" />
-                    ))}
-                  </div>
-                  <p className="text-muted-foreground text-sm leading-relaxed mb-4">"{t.content}"</p>
-                  <div>
-                    <p className="font-display font-semibold text-card-foreground text-sm">{t.author_name}</p>
-                    <p className="text-xs text-muted-foreground">{t.author_role}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+              <div className="grid md:grid-cols-3 gap-6">
+                {(testimonials ?? []).map((t, i) => (
+                  <motion.div
+                    key={t.id}
+                    {...fadeUp}
+                    transition={{ duration: 0.5, delay: i * 0.15 }}
+                    className="p-6 rounded-2xl bg-card border border-border"
+                  >
+                    <div className="flex gap-1 mb-4">
+                      {Array.from({ length: t.rating }).map((_, j) => (
+                        <Star key={j} className="w-4 h-4 fill-primary text-primary" />
+                      ))}
+                    </div>
+                    <p className="text-muted-foreground text-sm leading-relaxed mb-4">"{t.content}"</p>
+                    <div>
+                      <p className="font-display font-semibold text-card-foreground text-sm">{t.author_name}</p>
+                      <p className="text-xs text-muted-foreground">{t.author_role}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             )}
           </div>
         </section>
