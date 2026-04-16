@@ -42,7 +42,6 @@ const QuotesAdmin = () => {
     },
   });
 
-  // logic for Active vs Archived
   const activeQuotes = (quotes ?? []).filter((q) => {
     if (statusFilter === "pending") return q.status === "pending";
     return q.status !== "converted" && q.status !== "closed";
@@ -130,7 +129,7 @@ const QuotesAdmin = () => {
     return addons;
   };
 
-  // This function draws the card UI for a single quote
+  // --- THIS IS THE COMPLETE CARD FUNCTION WITH ALL BUTTONS ---
   const renderQuoteCard = (q: any) => {
     const notes = getNotesForQuote(q.id);
     const isExpanded = expandedNotes === q.id;
@@ -152,27 +151,123 @@ const QuotesAdmin = () => {
           </span>
         </div>
 
-        {/* This is a shortened version for readability, keep your full card UI here */}
-        <p className="text-sm text-muted-foreground">{q.description}</p>
-
-        <div className="flex flex-wrap gap-2 mt-4">
-          {q.status !== "converted" && (
-            <Button variant="default" size="sm" onClick={() => openConvert(q)} className="gap-1">
-              <ArrowRightLeft className="w-3 h-3" /> Convert
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setExpandedNotes(isExpanded ? null : q.id)}>
-            Log ({notes.length})
-          </Button>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+          <div>
+            <span className="text-muted-foreground">Service:</span>
+            <p className="font-medium text-foreground">{q.service_type || "—"}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Contact via:</span>
+            <p className="font-medium text-foreground capitalize">{q.preferred_contact}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Submitted:</span>
+            <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
+          </div>
         </div>
 
-        {isExpanded && (
-          <div className="mt-2 text-sm bg-muted p-2 rounded">
-            {notes.map((n) => (
-              <p key={n.id}>{n.note}</p>
-            ))}
+        {addons.length > 0 && (
+          <div className="text-sm">
+            <span className="text-foreground font-medium">Requested Add-Ons:</span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {addons.map((a, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
+                >
+                  {a.title}
+                </span>
+              ))}
+            </div>
           </div>
         )}
+
+        {q.address && (
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground font-medium">Address:</span> {q.address}
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
+          <span className="text-foreground font-medium">Description:</span> {q.description}
+        </p>
+
+        {q.attachment_url && (
+          <a
+            href={q.attachment_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            <ExternalLink className="w-3 h-3" /> View Attachment
+          </a>
+        )}
+
+        <div className="border-t border-border pt-3">
+          <button
+            onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
+            className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
+          >
+            <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
+          </button>
+
+          {isExpanded && (
+            <div className="mt-3 space-y-2">
+              {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
+              {notes.map((n) => (
+                <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                  <p className="text-foreground">{n.note}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
+                  </p>
+                </div>
+              ))}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newNote.trim()) addNote.mutate({ quoteId: q.id, note: newNote.trim() });
+                }}
+                className="flex gap-2"
+              >
+                <Input
+                  value={expandedNotes === q.id ? newNote : ""}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Add a note..."
+                  className="flex-1 h-8 text-sm"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  disabled={addNote.isPending || !newNote.trim()}
+                  className="h-8"
+                >
+                  <Send className="w-3 h-3" />
+                </Button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {q.status !== "converted" && (
+            <Button variant="default" size="sm" onClick={() => openConvert(q)} className="gap-1">
+              <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+            </Button>
+          )}
+          {["pending", "reviewed", "responded", "closed"]
+            .filter((s) => s !== q.status && q.status !== "converted")
+            .map((s) => (
+              <Button
+                key={s}
+                variant="outline"
+                size="sm"
+                onClick={() => updateStatus.mutate({ id: q.id, status: s })}
+                className="capitalize"
+              >
+                {s}
+              </Button>
+            ))}
+        </div>
       </div>
     );
   };
@@ -222,19 +317,51 @@ const QuotesAdmin = () => {
             <DialogTitle>Convert to Booking</DialogTitle>
           </DialogHeader>
           {selectedQuote && (
-            <div className="space-y-4 pt-4">
-              {/* Your existing Dialog content here */}
-              <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} />
-              <Input type="time" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} />
-              <Button onClick={() => convertToBooking.mutate()} className="w-full">
-                Confirm Conversion
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+                <p>
+                  <strong>Name:</strong> {selectedQuote.name}
+                </p>
+                <p>
+                  <strong>Email:</strong> {selectedQuote.email}
+                </p>
+                {selectedQuote.phone && (
+                  <p>
+                    <strong>Phone:</strong> {selectedQuote.phone}
+                  </p>
+                )}
+                {selectedQuote.service_type && (
+                  <p>
+                    <strong>Service:</strong> {selectedQuote.service_type}
+                  </p>
+                )}
+                {selectedQuote.address && (
+                  <p>
+                    <strong>Address:</strong> {selectedQuote.address}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Booking Date</label>
+                <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} required />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Time Slot</label>
+                <Input type="time" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} required />
+              </div>
+              <Button
+                onClick={() => convertToBooking.mutate()}
+                className="w-full"
+                disabled={convertToBooking.isPending}
+              >
+                {convertToBooking.isPending ? "Converting..." : "Convert to Booking"}
               </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
     </div>
-  ); // Ends the return
-}; // Ends the QuotesAdmin component
+  );
+};
 
 export default QuotesAdmin;
