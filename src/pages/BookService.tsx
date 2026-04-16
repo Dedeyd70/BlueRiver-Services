@@ -8,8 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useServices } from "@/hooks/useServices";
 import { format, isBefore, startOfDay, getDay } from "date-fns";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import { notifyAdmins } from "@/lib/notifications";
@@ -55,16 +54,7 @@ const BookService = () => {
     }
   }, [prefilledAddon]);
 
-  const { data: services } = useQuery({
-    queryKey: ["public-services-booking-all"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("title, price_starting, service_category").eq("is_active", true).order("display_order");
-      return data ?? [];
-    },
-  });
-
-  const mainServices = useMemo(() => (services ?? []).filter((s) => (s as any).service_category !== "addon"), [services]);
-  const addons = useMemo(() => (services ?? []).filter((s) => (s as any).service_category === "addon"), [services]);
+  const { mainServices, addons } = useServices();
 
   const { data: availability } = useQuery({
     queryKey: ["availability-settings"],

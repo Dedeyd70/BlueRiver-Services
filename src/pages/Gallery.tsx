@@ -6,25 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import BeforeAfterContainer from "@/components/BeforeAfterContainer";
 import SectionHeading from "@/components/SectionHeading";
-
-const fadeUp = {
-  initial: { opacity: 0, y: 30 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true },
-  transition: { duration: 0.5 },
-};
-
-const Gallery = () => {
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [activeCategory, setActiveCategory] = useState("All");
-
-  const { data: services } = useQuery({
-    queryKey: ["public-services-gallery"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
-      return data ?? [];
-    },
-  });
+import { Skeleton } from "@/components/ui/skeleton";
+import { useServices } from "@/hooks/useServices";
 
   const { data: images } = useQuery({
     queryKey: ["public-gallery"],
