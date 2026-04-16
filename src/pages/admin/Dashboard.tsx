@@ -94,7 +94,7 @@ const Dashboard = () => {
     {
       label: "Total Submissions",
       value: totalAll ?? 0,
-      icon: BarChart3,
+      icon: BarChart2,
       color: "text-blue-600",
       path: "/admin/submissions",
       description: "Bookings + Quotes + Contacts",

@@ -24,6 +24,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useServices } from "@/hooks/useServices";
 import heroImgFallback from "@/assets/hero-cleaning.jpg";
 
 const iconMap: Record<string, any> = {
@@ -48,25 +49,6 @@ const fadeUp = {
 
 const whyUs = [
   { icon: Shield, title: "Trusted & Insured", desc: "Fully licensed, bonded, and insured for your peace of mind." },
-  { icon: Clock, title: "Flexible Scheduling", desc: "Appointments that fit your busy lifestyle." },
-  { icon: Award, title: "Experienced Team", desc: "Trained professionals with years of expertise." },
-  { icon: Sparkles, title: "Attention to Detail", desc: "We don't cut corners, we clean them." },
-];
-
-const IndexPage = () => {
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-  const [heroLoaded, setHeroLoaded] = useState(false);
-  const { data: settings } = useSiteSettings();
-  const { data: allServices, isLoading: servicesLoading } = useQuery({
-    queryKey: ["public-services-home-all"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("*").eq("is_active", true).order("display_order");
-      return data ?? [];
-    },
-  });
-
-  const mainServices = (allServices ?? []).filter((s) => (s as any).service_category !== "addon").slice(0, 4);
-  const addons = (allServices ?? []).filter((s) => (s as any).service_category === "addon");
 
   const { data: testimonials, isLoading: testimonialsLoading } = useQuery({
     queryKey: ["public-testimonials"],
