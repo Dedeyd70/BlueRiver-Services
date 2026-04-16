@@ -9,17 +9,18 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Mail, CheckCircle, ArrowRight, MessageSquare, Send } from "lucide-react";
 
-// 1. Define the structure for TypeScript
+// 1. Interface matches your Supabase screenshot exactly
 interface ContactSubmission {
   id: string;
   created_at: string;
+  updated_at: string;
   name: string;
   email: string;
   phone: string | null;
   service_type: string | null;
   message: string;
   status: string;
-  admin_notes: string | null;
+  admin_notes: string | null; // Matches plural in screenshot
 }
 
 const MessagesAdmin = () => {
@@ -30,7 +31,6 @@ const MessagesAdmin = () => {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [noteContent, setNoteContent] = useState("");
 
-  // 2. Fetch with "Double Casting" to bypass strict type overlap errors
   const { data: messages, isLoading } = useQuery({
     queryKey: ["admin-contact-messages"],
     queryFn: async () => {
@@ -40,25 +40,21 @@ const MessagesAdmin = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-
-      // Cast to unknown first, then to our interface
+      // Double casting to ensure TS recognizes admin_notes
       return (data as unknown as ContactSubmission[]) ?? [];
     },
   });
 
-  // 3. Mutation using Partial type to avoid 'never' assignment errors
   const updateMessage = useMutation({
-    mutationFn: async ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) => {
-      const updates: Partial<ContactSubmission> = {
-        status: status,
-      };
-
-      // Only add admin_notes to the update if it's provided
-      if (admin_note !== undefined) {
-        updates.admin_notes = admin_note;
-      }
-
-      const { error } = await supabase.from("contact_submissions").update(updates as any).eq("id", id);
+    mutationFn: async ({ id, status, admin_notes }: { id: string; status: string; admin_notes?: string }) => {
+      // Use 'as any' to force the update through regardless of local type cache
+      const { error } = await supabase
+        .from("contact_submissions")
+        .update({
+          status: status,
+          admin_notes: admin_notes, // MUST be plural to match your DB
+        } as any)
+        .eq("id", id);
 
       if (error) throw error;
     },
@@ -69,10 +65,10 @@ const MessagesAdmin = () => {
       setNoteContent("");
     },
     onError: (err) => {
-      console.error(err);
+      console.error("Supabase Error:", err);
       toast({
         title: "Update failed.",
-        description: "Verify the admin_notes column exists in Supabase.",
+        description: "Check console for details.",
         variant: "destructive",
       });
     },
@@ -80,62 +76,51 @@ const MessagesAdmin = () => {
 
   const handleConvertToBooking = (m: ContactSubmission) => {
     updateMessage.mutate({ id: m.id, status: "converted" });
-
-    const params = new URLSearchParams();
-    if (m.name) params.set("name", m.name);
-    if (m.email) params.set("email", m.email);
-    if (m.phone) params.set("phone", m.phone);
-    if (m.service_type) params.set("service", m.service_type);
+    const params = new URLSearchParams({
+      name: m.name || "",
+      email: m.email || "",
+      phone: m.phone || "",
+      service: m.service_type || "",
+    });
     navigate(`/book?${params.toString()}`);
   };
 
-  if (isLoading) return <p className="text-muted-foreground p-8">Loading messages...</p>;
+  if (isLoading) return <p className="p-8">Loading messages...</p>;
 
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex items-center gap-3 mb-6">
         <Mail className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display font-bold text-foreground">Contact Messages</h1>
+        <h1 className="text-2xl font-display font-bold">Contact Messages</h1>
       </div>
 
       {!messages?.length ? (
-        <p className="text-muted-foreground">No contact messages yet.</p>
+        <p className="text-muted-foreground">No messages found.</p>
       ) : (
         <div className="space-y-4">
           {messages.map((m: ContactSubmission) => (
             <div key={m.id} className="p-5 rounded-xl border border-border bg-card shadow-sm">
-              <div className="flex items-start justify-between gap-4 mb-3">
+              <div className="flex justify-between items-start mb-3">
                 <div>
-                  <p className="font-semibold text-lg text-foreground">{m.name}</p>
+                  <p className="font-semibold text-lg">{m.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {m.email}
-                    {m.phone ? ` · ${m.phone}` : ""}
+                    {m.email} {m.phone ? `· ${m.phone}` : ""}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <Badge
-                    className={
-                      m.status === "pending"
-                        ? "bg-amber-500 hover:bg-amber-600 text-white"
-                        : "bg-blue-500 hover:bg-blue-600 text-white"
-                    }
-                  >
-                    {m.status}
-                  </Badge>
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <Badge variant={m.status === "pending" ? "default" : "secondary"}>{m.status}</Badge>
+                  <span className="text-[10px] text-muted-foreground uppercase">
                     {format(new Date(m.created_at), "MMM d, h:mm a")}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-muted/30 p-3 rounded-lg mb-4">
-                {m.service_type && (
-                  <p className="text-xs font-bold text-primary mb-1 uppercase italic">{m.service_type}</p>
-                )}
-                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{m.message}</p>
+              <div className="bg-muted/30 p-3 rounded-lg mb-4 text-sm">
+                <p className="text-xs font-bold text-primary uppercase mb-1">{m.service_type || "General Inquiry"}</p>
+                <p className="whitespace-pre-wrap">{m.message}</p>
               </div>
 
-              {/* Activity Log (Admin Notes) */}
+              {/* Activity Log Display */}
               {m.admin_notes && (
                 <div className="mb-4 p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
                   <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">
@@ -151,7 +136,6 @@ const MessagesAdmin = () => {
                     <CheckCircle className="w-4 h-4 mr-1 text-green-500" /> Mark Read
                   </Button>
                 )}
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -160,19 +144,17 @@ const MessagesAdmin = () => {
                     setNoteContent(m.admin_notes || "");
                   }}
                 >
-                  <MessageSquare className="w-4 h-4 mr-1" />
-                  {m.admin_notes ? "Update Log" : "Log Response"}
+                  <MessageSquare className="w-4 h-4 mr-1" /> Log Response
                 </Button>
-
                 <Button variant="secondary" size="sm" onClick={() => handleConvertToBooking(m)}>
-                  <ArrowRight className="w-4 h-4 mr-1" /> Convert to Booking
+                  <ArrowRight className="w-4 h-4 mr-1" /> Convert
                 </Button>
               </div>
 
               {activeNoteId === m.id && (
-                <div className="mt-4 flex gap-2 animate-in fade-in slide-in-from-top-2">
+                <div className="mt-4 flex gap-2">
                   <Input
-                    placeholder="E.g., Called customer, confirmed for Friday..."
+                    placeholder="Describe action taken..."
                     value={noteContent}
                     onChange={(e) => setNoteContent(e.target.value)}
                     className="flex-1"
@@ -183,7 +165,7 @@ const MessagesAdmin = () => {
                       updateMessage.mutate({
                         id: m.id,
                         status: "responded",
-                        admin_note: noteContent,
+                        admin_notes: noteContent,
                       })
                     }
                   >
