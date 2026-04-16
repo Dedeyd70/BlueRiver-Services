@@ -362,6 +362,30 @@ const QuotesAdmin = () => {
                           <span className="text-foreground font-medium">Notes:</span> {q.description}
                         </p>
                       </div>
+                      <div className="border-t border-border pt-3">
+                        <button
+                          onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
+                          className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-3 space-y-2">
+                            {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
+                            {notes.map((n) => (
+                              <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                                <p className="text-foreground">{n.note}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
+                                </p>
+                              </div>
+                            ))}
+
+                            {/* We hide the Input and Button here because the record is finalized */}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Action Row: Only show if NOT locked */}
                       {!isLocked ? (
