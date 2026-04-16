@@ -217,46 +217,40 @@ const BookingsAdmin = () => {
           </p>
         )}
 
-        {/* Action Buttons (Now with Disabled logic) */}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {b.status !== "pending" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePending(b)}
-              disabled={isFinalized}
-              className={isFinalized ? "opacity-50 cursor-not-allowed bg-muted/20" : ""}
-            >
-              Pending
-            </Button>
-          )}
-          {b.status !== "completed" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleCompleted(b)}
-              disabled={isFinalized}
-              className={isFinalized ? "opacity-50 cursor-not-allowed bg-muted/20" : ""}
-            >
-              Completed
-            </Button>
-          )}
-          {b.status !== "cancelled" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive border-destructive/30 hover:bg-destructive/10"
-              onClick={() => setCancelTarget(b)}
-              disabled={isFinalized}
-            >
-              Cancelled
-            </Button>
+        <div className="pt-2 border-t border-border/50">
+          {isCancelled ? (
+            <div className="py-1">
+              <p className="text-sm text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                This booking was cancelled and cannot be modified.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {b.status !== "pending" && (
+                <Button variant="outline" size="sm" onClick={() => handlePending(b)} disabled={isCompleted}>
+                  Pending
+                </Button>
+              )}
+              {b.status !== "completed" && (
+                <Button variant="outline" size="sm" onClick={() => handleCompleted(b)} disabled={isCompleted}>
+                  Completed
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={() => setCancelTarget(b)}
+                disabled={isCompleted}
+              >
+                Cancelled
+              </Button>
+            </div>
           )}
         </div>
       </div>
     );
   };
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
