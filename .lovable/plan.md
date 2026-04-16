@@ -1,129 +1,108 @@
+# Loading, Freezing & Redundancy Sweep
 
+## Root Causes Identified
 
-# Production-Ready Sweep: BlueRiver Services
+### 1. Nested `<Routes>` Causing Initial Render Freeze
 
-## Overview
-Four workstreams: stability fixes, form enhancements for Washington market, UI polish with SEO, and CMS/lead-flow improvements. ~15 files touched, 0 database schema changes needed (all new form fields already exist in the `bookings` and `quote_requests` tables).
+**This is the primary cause of "pages only load after refresh."**
 
----
+In `App.tsx` (lines 89-113), public routes are wrapped in a catch-all `path="*"` route that renders **another nested `<Routes>**` inside it. This is a React Router anti-pattern — the inner `<Routes>` doesn't resolve on the first render cycle because the outer catch-all matches everything including `/admin/*`. On refresh, the browser URL is already set so it resolves correctly.
 
-## 1. Critical Stability — Fix "Freeze" & 400 Error
+**Fix:** Flatten all routes into a single `<Routes>` block. Use a `<Layout>` wrapper component (Navbar + Footer) for public routes instead of nesting.
 
-**Problem:** `setLoading(false)` is called inline after `.insert()` — if Supabase throws, loading stays stuck forever. `MessagesAdmin` doesn't check for errors on `.update()`.
+### 3. Six Duplicate Service Queries
 
-**Files & Changes:**
+The `services` table is queried with 6 different query keys across pages, all fetching nearly identical data:
 
-### `src/pages/BookService.tsx` (lines 157–214)
-- Wrap the insert block (lines 183–214) in `try { ... } catch { toast error } finally { setLoading(false) }`
-- Remove the inline `setLoading(false)` on line 200
+- `public-services` (Services.tsx)
+- `public-services-home-all` (Index.tsx)
+- `public-services-booking-all` (BookService.tsx)
+- `public-services-quote-all` (RequestQuote.tsx)
+- `public-services-gallery` (Gallery.tsx — only needs `title`)
+- `public-services-footer` (Footer.tsx — only needs `title`, limit 4)
 
-### `src/pages/RequestQuote.tsx` (lines 89–127)
-- Same pattern: wrap lines 101–127 in `try/catch/finally`
-- Remove inline `setLoading(false)` on line 113
+**Fix:** Create a shared `useServices()` hook with a single query key. Pages that need subsets (main vs addon, titles only) derive from the cached full list.
 
-### `src/pages/Contact.tsx` (lines ~45–75)
-- Same pattern for the insert block
-- Remove inline `setLoading(false)`
+### 4. `useSiteSettings()` Called 6+ Times Per Page Load
 
-### `src/pages/admin/MessagesAdmin.tsx` (lines 27–30)
-- Destructure `{ error }` from the `.update()` call
-- `if (error) throw error;` so `onError` triggers
-- Add `onError` callback to the mutation with a toast: "Failed to mark as read"
+Called in: Index, Contact, BookService, About, Footer, LocalBusinessSchema. Each call is the same query key so React Query deduplicates, but the hook is imported and invoked redundantly. This is low-impact since React Query caches it, but the repeated imports add bundle weight.
 
----
+**Fix:** No action needed — React Query handles deduplication. This is acceptable.
 
-## 2. Market Readiness — Enhanced Forms
+### 5. QueryClient Has No Default Config
 
-**No DB migrations needed.** The `bookings` table already has: `property_type`, `square_footage`, `bedrooms`, `bathrooms`, `frequency`, `has_pets`, `entry_codes`. The `quote_requests` table has the same columns.
+`const queryClient = new QueryClient()` on line 48 of `App.tsx` has no `staleTime` or `retry` defaults. Every query refetches on every mount/focus by default (staleTime = 0). This causes unnecessary network requests on every navigation.
 
-### `src/pages/BookService.tsx`
-- Expand `form` state to include: `property_type`, `square_footage`, `bedrooms`, `bathrooms`, `frequency`, `has_pets`, `entry_codes`
-- Add form fields after the Address field:
-  - **Property Type** — dropdown: House, Apartment/Condo, Office, Other
-  - **Sq Ft** — text input, placeholder "e.g. 1500"
-  - **Bedrooms / Bathrooms** — two number inputs side by side
-  - **Frequency** — dropdown: One-Time, Weekly, Bi-Weekly, Monthly
-  - **Pets** — Yes/No toggle (checkbox)
-  - **Entry/Gate Codes** — text input, placeholder "Gate code, lockbox, etc."
-- Include all new fields in the `.insert()` payload
-- Add US phone format validation: `/^\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/`
+**Fix:** Set `defaultOptions.queries.staleTime` to 5 minutes and `refetchOnWindowFocus` to false.
 
-### `src/pages/RequestQuote.tsx`
-- Add the same property detail fields (all optional)
-- Include in `.insert()` payload
-- Add US phone validation
+### 6. Gallery Page Has No Loading State
 
-### `src/pages/Contact.tsx`
-- Rename "Service Needed" label to **"Inquiry Type"**
-- Replace service dropdown options with: General Inquiry, Billing Question, Feedback, Employment, Other
-- Add **"Preferred Contact Method"** dropdown: Email, Phone, Text
-- Add US phone validation when phone is provided
+`Gallery.tsx` doesn't check `isLoading` — it renders empty content while data loads, causing a flash of empty content.
 
-### Validation utility (`src/lib/validation.ts`)
-- Add `isValidUSPhone(phone: string): boolean` — validates `(XXX) XXX-XXXX` and common US formats
-- Add `isValidZip(zip: string): boolean` — validates 5-digit zip codes
-- Apply phone validation across all three forms (only when phone field is non-empty)
+### 7. About Page Has No Loading State
+
+`About.tsx` doesn't show any loading indicator while settings/branding load.
 
 ---
 
-## 3. UI Polish & Trust Signals
+## Implementation Plan
 
-### Loading Skeletons
-**`src/pages/Index.tsx`**
-- Import `Skeleton` from `@/components/ui/skeleton`
-- Wrap the services cards section: if `isLoading`, render 3 skeleton cards (h-48 rounded-xl)
-- Wrap testimonials section similarly
+### Step 1 — Fix the nested Routes (freeze fix)
 
-**`src/pages/Services.tsx`**
-- Add `isLoading` from the `useQuery` return
-- Show skeleton cards while loading
+**File: `src/App.tsx**`
 
-### JSON-LD LocalBusiness Schema
-**`src/components/LocalBusinessSchema.tsx`** (new file)
-- Render a `<script type="application/ld+json">` tag with LocalBusiness schema
-- Pull business name, phone, email, service area from `useSiteSettings()`
-- Include: `@type: LocalBusiness`, `areaServed: Washington State`, `telephone`, `email`, `openingHours`
+- Create a `PublicLayout` component that renders `<Navbar />`, `<main><Outlet /></main>`, `<Footer />`
+- Replace the nested `<Routes>` with a flat structure:
 
-**`src/App.tsx`**
-- Import and render `<LocalBusinessSchema />` once at the app level
+```text
+<Routes>
+  {/* Admin */}
+  <Route path="/admin/login" ... />
+  <Route path="/admin/reset-password" ... />
+  <Route path="/admin" element={<AdminLayout />}> ... </Route>
+  
+  {/* Public */}
+  <Route element={<PublicLayout />}>
+    <Route path="/" element={<Index />} />
+    <Route path="/about" ... />
+    ...
+    <Route path="*" element={<NotFound />} />
+  </Route>
+</Routes>
+```
 
-### Hero Image
-- Already uses `object-cover object-center` — confirmed correct on lines 134 and 143 of `Index.tsx`
-- No changes needed here
 
----
 
-## 4. CMS Logic & Lead Flow
+### Step 3 — Add QueryClient defaults
 
-### Convert Contact to Booking
-**`src/pages/admin/MessagesAdmin.tsx`**
-- Add a "Convert to Booking" button on each contact card
-- On click, navigate to `/book?name={}&email={}&phone={}&service={}` using React Router `useNavigate`
+**File: `src/App.tsx**`
 
-**`src/pages/BookService.tsx`**
-- Read `name`, `email`, `phone` from URL search params to pre-fill the form (extend existing `useSearchParams` logic)
+- Configure `new QueryClient({ defaultOptions: { queries: { staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false, retry: 1 } } })`
 
-### Archive Logic
-**`src/pages/admin/BookingsAdmin.tsx`**
-- Filter the default view to show only `pending` and `confirmed` bookings
-- Add a toggle/tab: "Active" vs "Archived" (completed + cancelled)
+### Step 4 — Create shared `useServices` hook
 
-### Toast Specificity
-- BookService success: "Booking confirmed! We'll be in touch within 24 hours." (already close, refine wording)
-- RequestQuote success: "Quote received! Expect a reply within 24 hours."
-- Contact success: "Message sent! We'll respond within 24 hours."
-- All error toasts: include the specific action that failed
+**New file: `src/hooks/useServices.ts**`
 
----
+- Single query key `["public-services"]`, fetches `select("*").eq("is_active", true).order("display_order")`
+- Export `useServices()` returning `{ services, mainServices, addons, isLoading }`
+- Update `Index.tsx`, `Services.tsx`, `BookService.tsx`, `RequestQuote.tsx`, `Gallery.tsx`, `Footer.tsx` to use it
 
-## Implementation Order
-1. `src/lib/validation.ts` — add phone/zip validators
-2. Stability fixes: BookService, RequestQuote, Contact, MessagesAdmin (`try/finally`)
-3. Form enhancements: BookService property fields, RequestQuote property fields, Contact inquiry overhaul
-4. UI: Skeleton components in Index.tsx and Services.tsx
-5. SEO: New `LocalBusinessSchema.tsx` component + add to App.tsx
-6. CMS: MessagesAdmin "Convert to Booking" + BookingsAdmin archive filter
-7. Toast message refinements across all forms
+### Step 5 — Add loading states to Gallery and About
 
-**Estimated file changes:** 10 modified, 1 new component
+**Files: `src/pages/Gallery.tsx`, `src/pages/About.tsx**`
 
+- Add `isLoading` checks with `<Skeleton>` components
+
+### Summary Table
+
+
+| Change                  | Files                  | Impact                      |
+| ----------------------- | ---------------------- | --------------------------- |
+| Flatten nested Routes   | App.tsx                | Fixes freeze/refresh bug    |
+| &nbsp;                  | &nbsp;                 | &nbsp;                      |
+| QueryClient defaults    | App.tsx                | Reduces redundant fetches   |
+| Shared useServices hook | New hook + 6 pages     | Removes 5 duplicate queries |
+| Gallery/About skeletons | Gallery.tsx, About.tsx | Eliminates empty flashes    |
+
+
+**Total: ~8 files modified, 1 new hook file**
