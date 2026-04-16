@@ -105,15 +105,11 @@ const BookingsAdmin = () => {
   const renderBookingCard = (b: any) => {
     const addons = parseAddons((b as any).selected_addons);
     const totalPrice = (b as any).total_price;
-
-    // Lockdown logic: Disable buttons if status is finalized
     const isCancelled = b.status === "cancelled";
     const isCompleted = b.status === "completed";
-    const isFinalized = isCancelled || isCompleted;
 
     return (
       <div key={b.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
-        {/* Header Section */}
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 className="font-medium text-foreground">{b.name}</h3>
@@ -132,7 +128,6 @@ const BookingsAdmin = () => {
           </span>
         </div>
 
-        {/* 4-Column Info Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
           <div>
             <span className="text-muted-foreground">Date:</span>
@@ -152,7 +147,6 @@ const BookingsAdmin = () => {
           </div>
         </div>
 
-        {/* Property & Details Logic (Kept Original) */}
         {b.property_type && (
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Property:</span> {b.property_type}
@@ -161,23 +155,25 @@ const BookingsAdmin = () => {
             {b.bathrooms ? ` / ${b.bathrooms} bath` : ""}
           </p>
         )}
+
         {b.frequency && (
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Frequency:</span> {b.frequency}
           </p>
         )}
+
         {b.has_pets && (
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Pets:</span> Yes
           </p>
         )}
+
         {b.entry_codes && (
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Entry Codes:</span> {b.entry_codes}
           </p>
         )}
 
-        {/* Add-Ons (Kept Original) */}
         {addons.length > 0 && (
           <div className="text-sm">
             <span className="text-foreground font-medium">Add-Ons:</span>
@@ -204,70 +200,84 @@ const BookingsAdmin = () => {
             <span className="text-foreground font-medium">Address:</span> {b.address}
           </p>
         )}
+
         {b.notes && (
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Notes:</span> {b.notes}
           </p>
         )}
 
-        {/* Cancellation Reason (Locked View) */}
         {(b as any).cancellation_reason && (
-  <div className="mt-2 p-3 bg-red-50/50 border border-red-100/50 rounded-lg">
-    <p className="text-sm text-destructive font-medium">
-      Cancellation Reason: <span className="font-normal">{(b as any).cancellation_reason}</span>
-    </p>
-  </div>
-)}
+          <div className="mt-2 p-3 bg-red-50/50 border border-red-100/50 rounded-lg">
+            <p className="text-sm text-destructive font-medium">
+              Cancellation Reason: <span className="font-normal">{(b as any).cancellation_reason}</span>
+            </p>
+          </div>
+        )}
 
-{/* 2. Footer Logic - Hide everything if Completed. Show message if Cancelled. Show buttons if Active. */}
-{!isCompleted && (
-  <div className="pt-3 border-t border-border/50">
-    {isCancelled ? (
-      <div className="py-1">
-        <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-          This booking was cancelled and cannot be modified.
-        </p>
-      </div>
-    ) : (
-      <div className="flex flex-wrap gap-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => handlePending(b)}
-        >
-          Pending
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => handleCompleted(b)}
-        >
-          Completed
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-destructive border-destructive/30 hover:bg-destructive/10"
-          onClick={() => setCancelTarget(b)} // This opens the dialog
-        >
-          Cancelled
-        </Button>
-      </div>
-    )}
-  </div>
-)}
+        {!isCompleted && (
+          <div className="pt-3 border-t border-border/50">
+            {isCancelled ? (
+              <div className="py-1">
+                <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                  This booking was cancelled and cannot be modified.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => handlePending(b)}>
+                  Pending
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
+                  Completed
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => setCancelTarget(b)}
+                >
+                  Cancelled
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
     );
   };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-display font-bold text-foreground">Bookings</h1>
       </div>
 
-      {/* Cancellation Dialog Logic remains here ... */}
+      <Dialog open={!!cancelTarget} onOpenChange={() => setCancelTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Booking</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Reason for cancellation</label>
+              <Textarea
+                placeholder="Enter reason..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelTarget(null)}>
+              Back
+            </Button>
+            <Button variant="destructive" onClick={handleCancelConfirm}>
+              Confirm Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
