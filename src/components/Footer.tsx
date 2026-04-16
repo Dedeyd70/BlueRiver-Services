@@ -52,7 +52,7 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
           <div>
             <h4 className="font-display font-semibold mb-4">Services</h4>
             <div className="flex flex-col gap-2">
-              {(services ?? []).map((s) => (
+              {services.slice(0, 4).map((s) => (
                 <Link key={s.title} to="/services" className="text-sm text-navy-foreground/70 hover:text-primary transition-colors">{s.title}</Link>
               ))}
             </div>
