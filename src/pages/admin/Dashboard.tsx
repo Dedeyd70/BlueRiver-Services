@@ -57,10 +57,23 @@ const Dashboard = () => {
     },
   });
 
+  // Fetch ALL quote requests for the total
   const { data: quotesCount } = useQuery({
     queryKey: ["admin-quotes-count"],
     queryFn: async () => {
       const { count } = await supabase.from("quote_requests").select("*", { count: "exact", head: true });
+      return count ?? 0;
+    },
+  });
+
+  // Fetch ONLY pending quote requests
+  const { data: pendingQuotes } = useQuery({
+    queryKey: ["admin-pending-quotes-count"],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("quote_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending"); // This is the filter you were missing
       return count ?? 0;
     },
   });
@@ -119,6 +132,13 @@ const Dashboard = () => {
       icon: FileQuestion,
       color: "text-accent",
       path: "/admin/quotes",
+    },
+    {
+      label: "Pending Quotes",
+      value: pendingQuotes ?? 0,
+      icon: FileQuestion,
+      color: "text-amber-500",
+      path: "/admin/quotes?status=pending",
     },
     {
       label: "Contact Submissions",
