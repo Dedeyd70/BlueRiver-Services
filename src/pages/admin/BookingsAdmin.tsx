@@ -217,37 +217,35 @@ const BookingsAdmin = () => {
           </p>
         )}
 
-        <div className="pt-2 border-t border-border/50">
-          {isCancelled ? (
-            <div className="py-1">
-              <p className="text-sm text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-                This booking was cancelled and cannot be modified.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {b.status !== "pending" && (
-                <Button variant="outline" size="sm" onClick={() => handlePending(b)} disabled={isCompleted}>
+        {/* Footer Logic: Message for Cancelled, Nothing for Completed, Buttons for Active */}
+        {!isCompleted && (
+          <div className="pt-3 border-t border-border/50">
+            {isCancelled ? (
+              <div className="py-1">
+                <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                  This booking was cancelled and cannot be modified.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => handlePending(b)}>
                   Pending
                 </Button>
-              )}
-              {b.status !== "completed" && (
-                <Button variant="outline" size="sm" onClick={() => handleCompleted(b)} disabled={isCompleted}>
+                <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
                   Completed
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                onClick={() => setCancelTarget(b)}
-                disabled={isCompleted}
-              >
-                Cancelled
-              </Button>
-            </div>
-          )}
-        </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => setCancelTarget(b)}
+                >
+                  Cancelled
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
