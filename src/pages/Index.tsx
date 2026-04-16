@@ -112,7 +112,7 @@ const IndexPage = () => {
   });
 
   const heroImg = homepageImages?.hero ?? null;
-  const mainSrc = typeof heroImg === 'string' ? heroImg : heroImgFallback;
+  const mainSrc = typeof heroImg === "string" ? heroImg : heroImgFallback;
 
   return (
     <div className="overflow-hidden">
@@ -126,14 +126,15 @@ const IndexPage = () => {
           {isLoading ? (
             /* Skeleton state while fetching from DB */
             <div className="w-full h-full bg-gray-800 animate-pulse" />
-              <img
-                src={mainSrc}
-                alt="Professional cleaning team at work"
-                className={`w-full h-full object-cover object-center transition-opacity duration-700 ${
-                  heroLoaded ? "opacity-100" : "opacity-0"
-                }`}
-                onLoad={() => setHeroLoaded(true)}
-              />
+          ) : (
+            <img
+              src={mainSrc}
+              alt="Professional cleaning team at work"
+              className={`w-full h-full object-cover object-center transition-opacity duration-700 ${
+                heroLoaded ? "opacity-100" : "opacity-0"
+              }`}
+              onLoad={() => setHeroLoaded(true)}
+            />
           )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
