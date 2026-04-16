@@ -58,7 +58,7 @@ const MessagesAdmin = () => {
         updates.admin_notes = admin_note;
       }
 
-      const { error } = await supabase.from("contact_submissions").update(updates).eq("id", id);
+      const { error } = await supabase.from("contact_submissions").update(updates as any).eq("id", id);
 
       if (error) throw error;
     },
