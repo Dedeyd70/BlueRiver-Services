@@ -49,6 +49,17 @@ const fadeUp = {
 
 const whyUs = [
   { icon: Shield, title: "Trusted & Insured", desc: "Fully licensed, bonded, and insured for your peace of mind." },
+  { icon: Clock, title: "Flexible Scheduling", desc: "We work around your schedule — evenings, weekends, you name it." },
+  { icon: Award, title: "5-Star Rated", desc: "Consistently top-rated by our clients across the region." },
+  { icon: Sparkles, title: "Eco-Friendly Options", desc: "Green cleaning products available for a healthier home." },
+];
+
+const IndexPage = () => {
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [heroLoaded, setHeroLoaded] = useState(false);
+  const { data: settings } = useSiteSettings();
+  const { mainServices: mainServicesAll, addons, isLoading: servicesLoading } = useServices();
+  const mainServices = mainServicesAll.slice(0, 4);
 
   const { data: testimonials, isLoading: testimonialsLoading } = useQuery({
     queryKey: ["public-testimonials"],
