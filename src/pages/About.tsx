@@ -5,6 +5,7 @@ import { Heart, Eye, Users, Award } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 import defaultLogo from "@/assets/blueriver-logo.png";
 
 const values = [
