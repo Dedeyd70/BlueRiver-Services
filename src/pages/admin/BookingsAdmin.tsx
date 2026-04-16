@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ const statusColors: Record<string, string> = {
 const BookingsAdmin = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const statusFilter = searchParams.get("status");
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -31,11 +34,25 @@ const BookingsAdmin = () => {
     },
   });
 
-  const activeBookings = (bookings ?? []).filter((b) => b.status === "pending" || b.status === "confirmed");
+  // If statusFilter is 'pending', show only pending. Otherwise, show both pending and confirmed.
+  const activeBookings = (bookings ?? []).filter((b) => {
+    if (statusFilter === "pending") {
+      return b.status === "pending";
+    }
+    return b.status === "pending" || b.status === "confirmed";
+  });
   const archivedBookings = (bookings ?? []).filter((b) => b.status === "completed" || b.status === "cancelled");
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status, cancellation_reason }: { id: string; status: string; cancellation_reason?: string }) => {
+    mutationFn: async ({
+      id,
+      status,
+      cancellation_reason,
+    }: {
+      id: string;
+      status: string;
+      cancellation_reason?: string;
+    }) => {
       const updates: any = { status };
       if (cancellation_reason !== undefined) updates.cancellation_reason = cancellation_reason;
       const { error } = await supabase.from("bookings").update(updates).eq("id", id);
@@ -93,9 +110,13 @@ const BookingsAdmin = () => {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 className="font-medium text-foreground">{b.name}</h3>
-            <p className="text-sm text-muted-foreground">{b.email} {b.phone && `• ${b.phone}`}</p>
+            <p className="text-sm text-muted-foreground">
+              {b.email} {b.phone && `• ${b.phone}`}
+            </p>
           </div>
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[b.status] || "bg-muted text-muted-foreground"}`}>
+          <span
+            className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[b.status] || "bg-muted text-muted-foreground"}`}
+          >
             {b.status}
           </span>
         </div>
@@ -118,18 +139,39 @@ const BookingsAdmin = () => {
           </div>
         </div>
         {b.property_type && (
-          <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Property:</span> {b.property_type}{b.square_footage ? ` · ${b.square_footage} sq ft` : ""}{b.bedrooms ? ` · ${b.bedrooms} bed` : ""}{b.bathrooms ? ` / ${b.bathrooms} bath` : ""}</p>
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground font-medium">Property:</span> {b.property_type}
+            {b.square_footage ? ` · ${b.square_footage} sq ft` : ""}
+            {b.bedrooms ? ` · ${b.bedrooms} bed` : ""}
+            {b.bathrooms ? ` / ${b.bathrooms} bath` : ""}
+          </p>
         )}
-        {b.frequency && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Frequency:</span> {b.frequency}</p>}
-        {b.has_pets && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Pets:</span> Yes</p>}
-        {b.entry_codes && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Entry Codes:</span> {b.entry_codes}</p>}
+        {b.frequency && (
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground font-medium">Frequency:</span> {b.frequency}
+          </p>
+        )}
+        {b.has_pets && (
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground font-medium">Pets:</span> Yes
+          </p>
+        )}
+        {b.entry_codes && (
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground font-medium">Entry Codes:</span> {b.entry_codes}
+          </p>
+        )}
         {addons.length > 0 && (
           <div className="text-sm">
             <span className="text-foreground font-medium">Add-Ons:</span>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {addons.map((a, i) => (
-                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium">
-                  {a.title}{a.price ? ` ($${a.price})` : ""}
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
+                >
+                  {a.title}
+                  {a.price ? ` ($${a.price})` : ""}
                 </span>
               ))}
             </div>
@@ -138,20 +180,39 @@ const BookingsAdmin = () => {
         {totalPrice != null && totalPrice > 0 && (
           <p className="text-sm font-semibold text-primary">Total: ${Number(totalPrice).toFixed(2)}</p>
         )}
-        {b.address && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Address:</span> {b.address}</p>}
-        {b.notes && <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {b.notes}</p>}
+        {b.address && (
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground font-medium">Address:</span> {b.address}
+          </p>
+        )}
+        {b.notes && (
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground font-medium">Notes:</span> {b.notes}
+          </p>
+        )}
         {(b as any).cancellation_reason && (
-          <p className="text-sm text-destructive"><span className="font-medium">Cancellation Reason:</span> {(b as any).cancellation_reason}</p>
+          <p className="text-sm text-destructive">
+            <span className="font-medium">Cancellation Reason:</span> {(b as any).cancellation_reason}
+          </p>
         )}
         <div className="flex flex-wrap gap-2">
           {b.status !== "pending" && (
-            <Button variant="outline" size="sm" onClick={() => handlePending(b)}>Pending</Button>
+            <Button variant="outline" size="sm" onClick={() => handlePending(b)}>
+              Pending
+            </Button>
           )}
           {b.status !== "completed" && (
-            <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>Completed</Button>
+            <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
+              Completed
+            </Button>
           )}
           {b.status !== "cancelled" && (
-            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelTarget(b)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={() => setCancelTarget(b)}
+            >
               Cancelled
             </Button>
           )}
@@ -164,13 +225,22 @@ const BookingsAdmin = () => {
     <div>
       <h1 className="text-2xl font-display font-bold text-foreground mb-6">Bookings</h1>
 
-      <Dialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) { setCancelTarget(null); setCancelReason(""); } }}>
+      <Dialog
+        open={!!cancelTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setCancelTarget(null);
+            setCancelReason("");
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Cancel Booking</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Cancelling booking for <strong className="text-foreground">{cancelTarget?.name}</strong>. Please provide a reason:
+            Cancelling booking for <strong className="text-foreground">{cancelTarget?.name}</strong>. Please provide a
+            reason:
           </p>
           <Textarea
             value={cancelReason}
@@ -179,7 +249,13 @@ const BookingsAdmin = () => {
             rows={3}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setCancelTarget(null); setCancelReason(""); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCancelTarget(null);
+                setCancelReason("");
+              }}
+            >
               Back
             </Button>
             <Button variant="destructive" onClick={handleCancelConfirm}>
@@ -196,25 +272,25 @@ const BookingsAdmin = () => {
       ) : (
         <Tabs defaultValue="active">
           <TabsList className="mb-4">
-            <TabsTrigger value="active">Active ({activeBookings.length})</TabsTrigger>
+            <TabsTrigger value="active">
+              {statusFilter === "pending"
+                ? `Pending Only (${activeBookings.length})`
+                : `Active (${activeBookings.length})`}
+            </TabsTrigger>
             <TabsTrigger value="archived">Archived ({archivedBookings.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="active">
             {activeBookings.length === 0 ? (
               <p className="text-muted-foreground">No active bookings.</p>
             ) : (
-              <div className="space-y-3">
-                {activeBookings.map(renderBookingCard)}
-              </div>
+              <div className="space-y-3">{activeBookings.map(renderBookingCard)}</div>
             )}
           </TabsContent>
           <TabsContent value="archived">
             {archivedBookings.length === 0 ? (
               <p className="text-muted-foreground">No archived bookings.</p>
             ) : (
-              <div className="space-y-3">
-                {archivedBookings.map(renderBookingCard)}
-              </div>
+              <div className="space-y-3">{archivedBookings.map(renderBookingCard)}</div>
             )}
           </TabsContent>
         </Tabs>
