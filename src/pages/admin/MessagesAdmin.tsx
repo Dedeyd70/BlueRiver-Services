@@ -9,6 +9,18 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Mail, CheckCircle, ArrowRight, MessageSquare, Send } from "lucide-react";
 
+interface ContactSubmission {
+  id: string;
+  created_at: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  service_type: string | null;
+  message: string;
+  status: string;
+  admin_notes: string | null; // This stops the "does not exist" errors
+}
+
 const MessagesAdmin = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
