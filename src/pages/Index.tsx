@@ -119,13 +119,13 @@ const IndexPage = () => {
         title="Home"
         description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today."
       />
-{/* Hero Section */}
-<section className="relative min-h-[50vh] md:min-h-screen flex items-center bg-gray-900 overflow-hidden">
-  <div className="absolute inset-0">
+      {/* Hero Section */}
+    <section className="relative min-h-[50vh] md:min-h-screen flex items-center bg-gray-900 overflow-hidden">
+    <div className="absolute inset-0">
     {isLoading ? (
       /* Skeleton state while fetching from DB */
-      <div className="w-full h-full bg-gray-800 animate-pulse" />
-    ) : (
+        <div className="w-full h-full bg-gray-800 animate-pulse" />
+      ) : (
       <picture>
         {/* 1. Desktop version from DB (shown if screen >= 1024px) */}
         {heroImgDesktop && (
@@ -153,9 +153,9 @@ const IndexPage = () => {
           onLoad={() => setHeroLoaded(true)}
         />
       </picture>
-    )}
-  </div>
-</section>
+      )}
+     </div>
+    </section>
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
         <div className="container relative z-10 py-32">
           <div className="max-w-2xl">
