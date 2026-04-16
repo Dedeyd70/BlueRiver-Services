@@ -120,22 +120,40 @@ const IndexPage = () => {
         title="Home"
         description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today."
       />
+
       {/* Hero Section */}
       <section className="relative min-h-[50vh] md:min-h-screen flex items-center bg-gray-900 overflow-hidden">
         <div className="absolute inset-0">
           {isLoading ? (
-            /* Skeleton state while fetching from DB */
             <div className="w-full h-full bg-gray-800 animate-pulse" />
           ) : (
-            <img
-              src={mainSrc}
-              alt="Professional cleaning team at work"
-              className={`w-full h-full object-cover object-right transition-opacity duration-700 ${
-                heroLoaded ? "opacity-100" : "opacity-0"
-              }`}
-              onLoad={() => setHeroLoaded(true)}
-            />
+            <>
+              {/* 1. The Image Layer */}
+              <img
+                src={mainSrc}
+                alt="Professional cleaning team at work"
+                className={`w-full h-full object-cover transition-opacity duration-700 
+                ${heroLoaded ? "opacity-100" : "opacity-0"} 
+                /* Responsive positioning: Center on mobile, Lock-Right on desktop */
+                object-center lg:object-right-top`}
+                onLoad={() => setHeroLoaded(true)}
+                loading="eager"
+              />
+
+              {/* 2. The Dynamic Overlay Layer (Robustness for Text) */}
+              {/* This ensures white text is readable even if the image is bright white */}
+              <div className="absolute inset-0 bg-black/40 lg:bg-transparent lg:bg-gradient-to-r lg:from-black/70 lg:via-black/20 lg:to-transparent z-10" />
+            </>
           )}
+        </div>
+
+        {/* 3. The Content Layer */}
+        <div className="relative z-20 container mx-auto px-4">
+          <div className="max-w-3xl">
+            {
+              "BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today."
+            }
+          </div>
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
         <div className="container relative z-10 py-32">
