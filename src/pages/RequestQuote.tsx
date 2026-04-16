@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { notifyAdmins } from "@/lib/notifications";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -32,8 +32,6 @@ const RequestQuote = () => {
 
   const { mainServices, addons } = useServices();
 
-  const mainServices = useMemo(() => (services ?? []).filter((s) => (s as any).service_category !== "addon"), [services]);
-  const addons = useMemo(() => (services ?? []).filter((s) => (s as any).service_category === "addon"), [services]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);

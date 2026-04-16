@@ -9,7 +9,19 @@ import SectionHeading from "@/components/SectionHeading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useServices } from "@/hooks/useServices";
 
-  const { data: images } = useQuery({
+const fadeUp = {
+  initial: { opacity: 0, y: 30 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.5 },
+};
+
+const Gallery = () => {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const { services: servicesList, isLoading: servicesLoading } = useServices();
+
+  const { data: images, isLoading: imagesLoading } = useQuery({
     queryKey: ["public-gallery"],
     queryFn: async () => {
       const { data } = await supabase
