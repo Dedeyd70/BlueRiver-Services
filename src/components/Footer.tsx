@@ -2,19 +2,12 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useServices } from "@/hooks/useServices";
 import logo from "@/assets/blueriver-logo.png";
 
 const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
   const { data: settings } = useSiteSettings();
-  const { data: services } = useQuery({
-    queryKey: ["public-services-footer"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order").limit(4);
-      return data ?? [];
-    },
-  });
+  const { services } = useServices();
 
   const phone = settings?.phone || "(206) 317-8300";
   const phoneLink = settings?.phone_link || "+12063178300";
@@ -59,7 +52,7 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
           <div>
             <h4 className="font-display font-semibold mb-4">Services</h4>
             <div className="flex flex-col gap-2">
-              {(services ?? []).map((s) => (
+              {services.slice(0, 4).map((s) => (
                 <Link key={s.title} to="/services" className="text-sm text-navy-foreground/70 hover:text-primary transition-colors">{s.title}</Link>
               ))}
             </div>

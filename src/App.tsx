@@ -6,8 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import ScrollToTop from "@/components/ScrollToTop";
 import BackToTop from "@/components/BackToTop";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import PublicLayout from "@/components/PublicLayout";
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Services from "./pages/Services";
@@ -28,24 +27,29 @@ import ServicesAdmin from "./pages/admin/ServicesAdmin";
 import GalleryAdmin from "./pages/admin/GalleryAdmin";
 import TestimonialsAdmin from "./pages/admin/TestimonialsAdmin";
 import SettingsAdmin from "./pages/admin/SettingsAdmin";
-import PaymentSettingsAdmin from "./pages/admin/PaymentSettingsAdmin";
 import AccountSettings from "./pages/admin/AccountSettings";
 import ResetPassword from "./pages/admin/ResetPassword";
 import PrivacyPolicyAdmin from "./pages/admin/PrivacyPolicyAdmin";
 import BookingsAdmin from "./pages/admin/BookingsAdmin";
 import QuotesAdmin from "./pages/admin/QuotesAdmin";
-import AvailabilityAdmin from "./pages/admin/AvailabilityAdmin";
 import TermsAdmin from "./pages/admin/TermsAdmin";
 import LegalAdmin from "./pages/admin/LegalAdmin";
 import InvoicesAdmin from "./pages/admin/InvoicesAdmin";
 import MessagesAdmin from "./pages/admin/MessagesAdmin";
-
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
 import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
 import LocalBusinessSchema from "./components/LocalBusinessSchema";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -66,7 +70,6 @@ const App = () => (
               <Route path="submissions" element={<Submissions />} />
               <Route path="services" element={<ServicesAdmin />} />
               <Route path="gallery" element={<GalleryAdmin />} />
-              
               <Route path="testimonials" element={<TestimonialsAdmin />} />
               <Route path="settings" element={<SettingsAdmin />} />
               <Route path="account" element={<AccountSettings />} />
@@ -80,37 +83,25 @@ const App = () => (
               <Route path="homepage-images" element={<HomepageImagesAdmin />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="invoices" element={<InvoicesAdmin />} />
-              {/* Redirects for removed standalone routes */}
               <Route path="availability" element={<SettingsAdmin />} />
               <Route path="payment" element={<SettingsAdmin />} />
             </Route>
 
             {/* Public routes */}
-            <Route
-              path="*"
-              element={
-                <>
-                  <Navbar />
-                  <main>
-                    <Routes>
-                      <Route path="/" element={<Index />} />
-                      <Route path="/about" element={<About />} />
-                      <Route path="/services" element={<Services />} />
-                      <Route path="/gallery" element={<Gallery />} />
-                      <Route path="/contact" element={<Contact />} />
-                      <Route path="/book" element={<BookService />} />
-                      <Route path="/quote" element={<RequestQuote />} />
-                      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                      <Route path="/terms-of-service" element={<TermsOfService />} />
-                      <Route path="/liability-disclaimer" element={<LiabilityDisclaimer />} />
-                      <Route path="/cancellation-policy" element={<CancellationPolicy />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </main>
-                  <Footer />
-                </>
-              }
-            />
+            <Route element={<PublicLayout />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/services" element={<Services />} />
+              <Route path="/gallery" element={<Gallery />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/book" element={<BookService />} />
+              <Route path="/quote" element={<RequestQuote />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms-of-service" element={<TermsOfService />} />
+              <Route path="/liability-disclaimer" element={<LiabilityDisclaimer />} />
+              <Route path="/cancellation-policy" element={<CancellationPolicy />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

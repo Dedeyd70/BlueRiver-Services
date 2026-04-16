@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageSquare, Wrench, Star, Clock, Image, CalendarDays, FileQuestion, BarChart3 } from "lucide-react";
+import { MessageSquare, Wrench, Star, Clock, Image, CalendarDays, FileQuestion, BarChart2 } from "lucide-react";
 import { useNavigate } from "react-router-dom"; // Added for navigation
 
 const Dashboard = () => {
@@ -94,7 +94,7 @@ const Dashboard = () => {
     {
       label: "Total Submissions",
       value: totalAll ?? 0,
-      icon: BarChart3,
+      icon: BarChart2,
       color: "text-blue-600",
       path: "/admin/submissions",
       description: "Bookings + Quotes + Contacts",
