@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessageSquare, Wrench, Star, Clock, Image, CalendarDays, FileQuestion } from "lucide-react";
+import { useNavigate } from "react-router-dom"; // Added for navigation
 
 const Dashboard = () => {
+  const navigate = useNavigate(); // Initialize navigation
+
   const { data: submissions } = useQuery({
     queryKey: ["admin-submissions-count"],
     queryFn: async () => {
@@ -14,7 +17,10 @@ const Dashboard = () => {
   const { data: pendingCount } = useQuery({
     queryKey: ["admin-pending-count"],
     queryFn: async () => {
-      const { count } = await supabase.from("contact_submissions").select("*", { count: "exact", head: true }).eq("status", "pending");
+      const { count } = await supabase
+        .from("contact_submissions")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending");
       return count ?? 0;
     },
   });
@@ -30,7 +36,10 @@ const Dashboard = () => {
   const { data: pendingBookings } = useQuery({
     queryKey: ["admin-pending-bookings"],
     queryFn: async () => {
-      const { count } = await supabase.from("bookings").select("*", { count: "exact", head: true }).eq("status", "pending");
+      const { count } = await supabase
+        .from("bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending");
       return count ?? 0;
     },
   });
@@ -67,15 +76,52 @@ const Dashboard = () => {
     },
   });
 
+  // Added 'path' to each stat to make them clickable
   const stats = [
-    { label: "Bookings", value: bookingsCount ?? 0, icon: CalendarDays, color: "text-primary" },
-    { label: "Pending Bookings", value: pendingBookings ?? 0, icon: Clock, color: "text-amber-500" },
-    { label: "Quote Requests", value: quotesCount ?? 0, icon: FileQuestion, color: "text-accent" },
-    { label: "Submissions", value: submissions ?? 0, icon: MessageSquare, color: "text-primary" },
-    { label: "Pending", value: pendingCount ?? 0, icon: Clock, color: "text-amber-500" },
-    { label: "Services", value: servicesCount ?? 0, icon: Wrench, color: "text-accent" },
-    { label: "Gallery", value: galleryCount ?? 0, icon: Image, color: "text-accent" },
-    { label: "Testimonials", value: testimonialsCount ?? 0, icon: Star, color: "text-primary" },
+    {
+      label: "Bookings",
+      value: bookingsCount ?? 0,
+      icon: CalendarDays,
+      color: "text-primary",
+      path: "/admin/bookings",
+    },
+    {
+      label: "Pending Bookings",
+      value: pendingBookings ?? 0,
+      icon: Clock,
+      color: "text-amber-500",
+      path: "/admin/bookings",
+    },
+    {
+      label: "Quote Requests",
+      value: quotesCount ?? 0,
+      icon: FileQuestion,
+      color: "text-accent",
+      path: "/admin/quotes",
+    },
+    {
+      label: "Total Submissions",
+      value: submissions ?? 0,
+      icon: MessageSquare,
+      color: "text-primary",
+      path: "/admin/submissions",
+    },
+    {
+      label: "New Inquiries",
+      value: pendingCount ?? 0,
+      icon: MessageSquare,
+      color: "text-amber-500",
+      path: "/admin/submissions",
+    },
+    { label: "Services", value: servicesCount ?? 0, icon: Wrench, color: "text-accent", path: "/admin/services" },
+    { label: "Gallery", value: galleryCount ?? 0, icon: Image, color: "text-accent", path: "/admin/gallery" },
+    {
+      label: "Testimonials",
+      value: testimonialsCount ?? 0,
+      icon: Star,
+      color: "text-primary",
+      path: "/admin/testimonials",
+    },
   ];
 
   return (
@@ -83,7 +129,11 @@ const Dashboard = () => {
       <h1 className="text-2xl font-display font-bold text-foreground mb-6">Dashboard</h1>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {stats.map((s) => (
-          <div key={s.label} className="bg-card border border-border rounded-xl p-4 sm:p-5">
+          <div
+            key={s.label}
+            onClick={() => navigate(s.path)} // Added click handler
+            className="bg-card border border-border rounded-xl p-4 sm:p-5 cursor-pointer hover:bg-muted/50 transition-all hover:shadow-sm active:scale-95"
+          >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs sm:text-sm text-muted-foreground">{s.label}</span>
               <s.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${s.color}`} />
