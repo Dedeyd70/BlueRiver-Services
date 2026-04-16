@@ -196,5 +196,5 @@ const QuotesAdmin = () => {
       </Dialog>
     </div>
   );
-    
+};    
 export default QuotesAdmin;
