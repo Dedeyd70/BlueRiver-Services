@@ -112,9 +112,7 @@ const IndexPage = () => {
   });
 
   const heroImg = homepageImages?.hero ?? null;
-  const desktopSrc = heroImg?.desktop_url;
-  const tabletSrc = heroImg?.tablet_url;
-  const mainSrc = heroImg?.url || heroImgFallback;
+  const mainSrc = typeof heroImg === 'string' ? heroImg : heroImgFallback;
 
   return (
     <div className="overflow-hidden">
@@ -128,24 +126,14 @@ const IndexPage = () => {
           {isLoading ? (
             /* Skeleton state while fetching from DB */
             <div className="w-full h-full bg-gray-800 animate-pulse" />
-          ) : (
-            <picture>
-              {/* 1. Desktop version from DB (shown if screen >= 1024px) */}
-              {heroImgDesktop && <source media="(min-width: 1024px)" srcSet={heroImgDesktop} />}
-
-              {/* 2. Tablet version from DB (shown if screen >= 768px) */}
-              {heroImgTablet && <source media="(min-width: 768px)" srcSet={heroImgTablet} />}
-
-              {/* 3. Main Image / Fallback (Base version from DB) */}
               <img
-                src={heroImg || heroImgFallback}
+                src={mainSrc}
                 alt="Professional cleaning team at work"
                 className={`w-full h-full object-cover object-center transition-opacity duration-700 ${
                   heroLoaded ? "opacity-100" : "opacity-0"
                 }`}
                 onLoad={() => setHeroLoaded(true)}
               />
-            </picture>
           )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
