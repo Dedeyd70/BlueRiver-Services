@@ -4,11 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"; // Add this
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Mail, CheckCircle, ArrowRight, MessageSquare, Send } from "lucide-react";
 
+// 1. Define the structure so TypeScript recognizes the new admin_notes column
 interface ContactSubmission {
   id: string;
   created_at: string;
@@ -18,7 +19,7 @@ interface ContactSubmission {
   service_type: string | null;
   message: string;
   status: string;
-  admin_notes: string | null; // This stops the "does not exist" errors
+  admin_notes: string | null;
 }
 
 const MessagesAdmin = () => {
@@ -26,10 +27,11 @@ const MessagesAdmin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Track which message is being responded to and the note content
+  // State for handling the inline response/note UI
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [noteContent, setNoteContent] = useState("");
 
+  // 2. Fetch messages and cast them to our interface
   const { data: messages, isLoading } = useQuery({
     queryKey: ["admin-contact-messages"],
     queryFn: async () => {
@@ -37,22 +39,23 @@ const MessagesAdmin = () => {
         .from("contact_submissions")
         .select("*")
         .order("created_at", { ascending: false });
+
       if (error) throw error;
-      return data ?? [];
+      return (data as ContactSubmission[]) ?? [];
     },
   });
 
-  // Flexible mutation to handle Read, Responded, or Converted
+  // 3. Unified mutation to update status and/or notes
   const updateMessage = useMutation({
     mutationFn: async ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) => {
       const { error } = await supabase
         .from("contact_submissions")
         .update({
           status: status,
-          // If your table has a 'notes' or 'admin_notes' column
           admin_notes: admin_note,
         })
         .eq("id", id);
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -63,12 +66,16 @@ const MessagesAdmin = () => {
     },
     onError: (err) => {
       console.error(err);
-      toast({ title: "Update failed.", description: "Check backend column names.", variant: "destructive" });
+      toast({
+        title: "Update failed.",
+        description: "Verify the admin_notes column exists in Supabase.",
+        variant: "destructive",
+      });
     },
   });
 
-  const handleConvertToBooking = (m: any) => {
-    // Optional: Mark as converted in DB first
+  const handleConvertToBooking = (m: ContactSubmission) => {
+    // Optional: Auto-update status when converting
     updateMessage.mutate({ id: m.id, status: "converted" });
 
     const params = new URLSearchParams();
@@ -79,7 +86,7 @@ const MessagesAdmin = () => {
     navigate(`/book?${params.toString()}`);
   };
 
-  if (isLoading) return <p className="text-muted-foreground">Loading messages...</p>;
+  if (isLoading) return <p className="text-muted-foreground p-8">Loading messages...</p>;
 
   return (
     <div className="max-w-5xl mx-auto p-4">
@@ -92,7 +99,8 @@ const MessagesAdmin = () => {
         <p className="text-muted-foreground">No contact messages yet.</p>
       ) : (
         <div className="space-y-4">
-          {messages.map((m) => (
+          {/* 4. Typed the 'm' variable here to fix 'Property does not exist' errors */}
+          {messages.map((m: ContactSubmission) => (
             <div key={m.id} className="p-5 rounded-xl border border-border bg-card shadow-sm">
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div>
@@ -103,7 +111,13 @@ const MessagesAdmin = () => {
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <Badge className={m.status === "pending" ? "bg-amber-500" : "bg-blue-500"}>{m.status}</Badge>
+                  <Badge
+                    className={
+                      m.status === "pending" ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-500 hover:bg-blue-600"
+                    }
+                  >
+                    {m.status}
+                  </Badge>
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     {format(new Date(m.created_at), "MMM d, h:mm a")}
                   </span>
@@ -117,51 +131,59 @@ const MessagesAdmin = () => {
                 <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{m.message}</p>
               </div>
 
-              {/* Activity Log / Admin Notes Display */}
+              {/* Activity Log (Admin Notes) Section */}
               {m.admin_notes && (
                 <div className="mb-4 p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
                   <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">
                     <MessageSquare className="w-3 h-3" /> Activity Log:
                   </p>
-                  <p className="text-sm text-blue-900">{m.admin_notes}</p>
+                  <p className="text-sm text-blue-900 italic">"{m.admin_notes}"</p>
                 </div>
               )}
 
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
-                {/* Standard Mark Read */}
+                {/* Status Transitions */}
                 {m.status === "pending" && (
                   <Button variant="ghost" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "read" })}>
                     <CheckCircle className="w-4 h-4 mr-1 text-green-500" /> Mark Read
                   </Button>
                 )}
 
-                {/* Respond Action */}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setActiveNoteId(activeNoteId === m.id ? null : m.id)}
+                  onClick={() => {
+                    setActiveNoteId(activeNoteId === m.id ? null : m.id);
+                    setNoteContent(m.admin_notes || "");
+                  }}
                 >
-                  <MessageSquare className="w-4 h-4 mr-1" /> {m.admin_notes ? "Edit Log" : "Log Response"}
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                  {m.admin_notes ? "Update Log" : "Log Response"}
                 </Button>
 
-                {/* Convert Action */}
                 <Button variant="secondary" size="sm" onClick={() => handleConvertToBooking(m)}>
                   <ArrowRight className="w-4 h-4 mr-1" /> Convert to Booking
                 </Button>
               </div>
 
-              {/* Course of Action Input Field */}
+              {/* Action Box (Visible when 'Log Response' is clicked) */}
               {activeNoteId === m.id && (
                 <div className="mt-4 flex gap-2 animate-in fade-in slide-in-from-top-2">
                   <Input
-                    placeholder="Describe course of action (e.g. Responded via email)..."
+                    placeholder="E.g., Called customer, confirmed for Friday..."
                     value={noteContent}
                     onChange={(e) => setNoteContent(e.target.value)}
                     className="flex-1"
                   />
                   <Button
                     size="sm"
-                    onClick={() => updateMessage.mutate({ id: m.id, status: "responded", admin_note: noteContent })}
+                    onClick={() =>
+                      updateMessage.mutate({
+                        id: m.id,
+                        status: "responded",
+                        admin_note: noteContent,
+                      })
+                    }
                   >
                     <Send className="w-4 h-4" />
                   </Button>
