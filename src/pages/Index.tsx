@@ -112,6 +112,7 @@ const IndexPage = () => {
   });
 
   const heroImg = homepageImages?.hero ?? null;
+
   const mainSrc = typeof heroImg === "string" ? heroImg : heroImgFallback;
 
   return (
@@ -122,32 +123,23 @@ const IndexPage = () => {
       />
 
       {/* Hero Section */}
+
       <section className="relative min-h-[50vh] md:min-h-screen flex items-center bg-gray-900 overflow-hidden">
         <div className="absolute inset-0">
           {isLoading ? (
+            /* Skeleton state while fetching from DB */
+
             <div className="w-full h-full bg-gray-800 animate-pulse" />
           ) : (
-            <>
-              {/* The Image: Note we keep object-right to prioritize the person */}
-              <img
-                src={mainSrc}
-                alt="BlueRiver Professional Cleaning"
-                className={`w-full h-full object-cover object-right transition-opacity duration-700 
-            ${heroLoaded ? "opacity-100" : "opacity-0"}`}
-                onLoad={() => setHeroLoaded(true)}
-              />
-
-              {/* LIGHTER GRADIENT: Only darkens the left 40% where the text sits */}
-              <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent z-10" />
-            </>
+            <img
+              src={mainSrc}
+              alt="Professional cleaning team at work"
+              className={`w-full h-full object-cover object-right transition-opacity duration-700 ${
+                heroLoaded ? "opacity-100" : "opacity-0"
+              }`}
+              onLoad={() => setHeroLoaded(true)}
+            />
           )}
-        </div>
-
-        {/* Content Layer: Ensure z-index is higher than the gradient */}
-        <div className="relative z-20 container mx-auto px-6">
-          <div className="max-w-xl">
-            {/* Your text will now be bright white and the image will be visible behind it */}
-          </div>
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
         <div className="container relative z-10 py-32">
