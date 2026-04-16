@@ -288,27 +288,102 @@ const QuotesAdmin = () => {
             </TabsContent>
 
             <TabsContent value="archived">
-              <div className="space-y-3">
-                {archivedQuotes.map((q) => (
-                  <div
-                    key={q.id}
-                    className="p-4 border rounded-xl opacity-60 bg-muted/20 flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="font-medium">{q.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {q.service_type} • {q.status}
-                      </p>
+              <div className="space-y-4">
+                {archivedQuotes.map((q) => {
+                  const addons = parseAddons(q.selected_addons);
+                  // Logic to determine if the record is "locked"
+                  const isLocked = q.status === "closed" || q.status === "converted";
+
+                  return (
+                    <div key={q.id} className="bg-card border border-border rounded-xl p-6 space-y-4 relative">
+                      {/* Header */}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-medium text-xl text-foreground">{q.name}</h3>
+                          <p className="text-muted-foreground">
+                            {q.email} <span className="mx-1">•</span> {q.phone}
+                          </p>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm border ${
+                            q.status === "closed"
+                              ? "bg-red-50 text-red-500 border-red-100"
+                              : "bg-green-50 text-green-600 border-green-100"
+                          }`}
+                        >
+                          {q.status}
+                        </span>
+                      </div>
+
+                      {/* 4-Column Info Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-2">
+                        <div>
+                          <p className="text-muted-foreground mb-1">Date:</p>
+                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground mb-1">Time:</p>
+                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "HH:mm")}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground mb-1">Service:</p>
+                          <p className="font-medium text-foreground leading-tight">
+                            {q.service_type || "General Inquiry"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground mb-1">Submitted:</p>
+                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d")}</p>
+                        </div>
+                      </div>
+
+                      {/* Add-Ons */}
+                      {addons.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-foreground">Add-Ons:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {addons.map((a, i) => (
+                              <span
+                                key={i}
+                                className="px-3 py-1 rounded-full bg-sky/10 text-sky text-xs font-medium border border-sky/20"
+                              >
+                                {a.title}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-1 text-sm">
+                        <p className="text-muted-foreground">
+                          <span className="text-foreground font-medium">Address:</span> {q.address || "N/A"}
+                        </p>
+                        <p className="text-muted-foreground">
+                          <span className="text-foreground font-medium">Notes:</span> {q.description}
+                        </p>
+                      </div>
+
+                      {/* Action Row: Only show if NOT locked */}
+                      {!isLocked ? (
+                        <div className="flex gap-3 pt-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => updateStatus.mutate({ id: q.id, status: "pending" })}
+                            className="rounded-lg px-6 py-2 h-auto text-sm font-medium border-border/60 hover:bg-muted"
+                          >
+                            Restore to Pending
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="pt-2">
+                          <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                            This record is finalized and cannot be modified.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => updateStatus.mutate({ id: q.id, status: "pending" })}
-                    >
-                      Restore
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </TabsContent>
           </>
