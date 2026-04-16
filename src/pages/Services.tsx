@@ -5,8 +5,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import SectionHeading from "@/components/SectionHeading";
 import { Home, Building2, SprayCan, Truck, Droplets, Wind, Sparkles, CheckCircle } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useServices } from "@/hooks/useServices";
 
 const iconMap: Record<string, any> = { Home, Building2, SprayCan, Truck, Droplets, Wind, Sparkles };
 
@@ -18,16 +17,7 @@ const fadeUp = {
 };
 
 const Services = () => {
-  const { data: services, isLoading } = useQuery({
-    queryKey: ["public-services"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("*").eq("is_active", true).order("display_order");
-      return data ?? [];
-    },
-  });
-
-  const mainServices = (services ?? []).filter((s) => (s as any).service_category !== "addon");
-  const addons = (services ?? []).filter((s) => (s as any).service_category === "addon");
+  const { mainServices, addons, isLoading } = useServices();
 
   return (
     <div>

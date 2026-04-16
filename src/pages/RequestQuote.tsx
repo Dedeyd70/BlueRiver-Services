@@ -8,8 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CheckCircle, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useServices } from "@/hooks/useServices";
 import imageCompression from "browser-image-compression";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import PageMeta from "@/components/PageMeta";
@@ -31,13 +30,7 @@ const RequestQuote = () => {
     frequency: "", has_pets: false, entry_codes: "",
   });
 
-  const { data: services } = useQuery({
-    queryKey: ["public-services-quote-all"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("title, price_starting, service_category").eq("is_active", true).order("display_order");
-      return data ?? [];
-    },
-  });
+  const { mainServices, addons } = useServices();
 
   const mainServices = useMemo(() => (services ?? []).filter((s) => (s as any).service_category !== "addon"), [services]);
   const addons = useMemo(() => (services ?? []).filter((s) => (s as any).service_category === "addon"), [services]);
