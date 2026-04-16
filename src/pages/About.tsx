@@ -51,18 +51,27 @@ const About = () => {
       <section className="py-20 md:py-28">
         <div className="container">
           <div className="max-w-3xl mx-auto">
-            <motion.div {...fadeUp} className="space-y-8 text-center">
-              <img src={logoUrl} alt="BlueRiver Services" className="h-28 md:h-36 w-auto mx-auto object-contain" />
-              <h2 className="text-3xl font-display font-bold text-foreground">
-                {settings?.about_mission_title || "Our Mission"}
-              </h2>
-              <p className="text-muted-foreground leading-relaxed">
-                {settings?.about_mission_p1 || "At BlueRiver Services, we believe that a clean space is more than just tidy surfaces, it's about creating environments where people feel comfortable, productive, and at ease."}
-              </p>
-              <p className="text-muted-foreground leading-relaxed">
-                {settings?.about_mission_p2 || "Our name reflects what we stand for: the steady flow of a blue river. Consistent, refreshing, and dependable."}
-              </p>
-            </motion.div>
+            {settingsLoading ? (
+              <div className="space-y-6">
+                <Skeleton className="h-28 w-28 mx-auto rounded-xl" />
+                <Skeleton className="h-8 w-1/2 mx-auto" />
+                <Skeleton className="h-4 w-3/4 mx-auto" />
+                <Skeleton className="h-4 w-2/3 mx-auto" />
+              </div>
+            ) : (
+              <motion.div {...fadeUp} className="space-y-8 text-center">
+                <img src={logoUrl} alt="BlueRiver Services" className="h-28 md:h-36 w-auto mx-auto object-contain" />
+                <h2 className="text-3xl font-display font-bold text-foreground">
+                  {settings?.about_mission_title || "Our Mission"}
+                </h2>
+                <p className="text-muted-foreground leading-relaxed">
+                  {settings?.about_mission_p1 || "At BlueRiver Services, we believe that a clean space is more than just tidy surfaces, it's about creating environments where people feel comfortable, productive, and at ease."}
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {settings?.about_mission_p2 || "Our name reflects what we stand for: the steady flow of a blue river. Consistent, refreshing, and dependable."}
+                </p>
+              </motion.div>
+            )}
           </div>
         </div>
       </section>
