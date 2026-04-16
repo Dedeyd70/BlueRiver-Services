@@ -148,10 +148,11 @@ const QuotesAdmin = () => {
                 {activeQuotes.map((q) => {
                   const notes = getNotesForQuote(q.id);
                   const isExpanded = expandedNotes === q.id;
-                  const addons = parseAddons(q.selected_addons);
+                  const addons = parseAddons((q as any).selected_addons);
 
                   return (
                     <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                      {/* Header Info */}
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <h3 className="font-medium text-foreground">{q.name}</h3>
@@ -160,35 +161,37 @@ const QuotesAdmin = () => {
                           </p>
                         </div>
                         <span
-                          className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[q.status] || "bg-muted"}`}
+                          className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}
                         >
                           {q.status}
                         </span>
                       </div>
 
+                      {/* The 3-Column Detail Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
                         <div>
-                          <span className="text-muted-foreground text-xs">Service:</span>
-                          <p className="font-medium">{q.service_type || "—"}</p>
+                          <span className="text-muted-foreground">Service:</span>
+                          <p className="font-medium text-foreground">{q.service_type || "—"}</p>
                         </div>
                         <div>
-                          <span className="text-muted-foreground text-xs">Contact via:</span>
-                          <p className="font-medium capitalize">{q.preferred_contact}</p>
+                          <span className="text-muted-foreground">Contact via:</span>
+                          <p className="font-medium text-foreground capitalize">{q.preferred_contact}</p>
                         </div>
                         <div>
-                          <span className="text-muted-foreground text-xs">Submitted:</span>
-                          <p className="font-medium">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
+                          <span className="text-muted-foreground">Submitted:</span>
+                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
                         </div>
                       </div>
 
+                      {/* The Sky-Blue Add-ons */}
                       {addons.length > 0 && (
                         <div className="text-sm">
-                          <span className="text-foreground font-medium text-xs">Requested Add-Ons:</span>
+                          <span className="text-foreground font-medium">Requested Add-Ons:</span>
                           <div className="flex flex-wrap gap-1.5 mt-1">
                             {addons.map((a, i) => (
                               <span
                                 key={i}
-                                className="px-2 py-0.5 rounded-full bg-sky/10 text-sky text-xs font-medium border border-sky/20"
+                                className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
                               >
                                 {a.title}
                               </span>
@@ -197,7 +200,12 @@ const QuotesAdmin = () => {
                         </div>
                       )}
 
-                      <p className="text-sm text-muted-foreground leading-relaxed">
+                      {q.address && (
+                        <p className="text-sm text-muted-foreground">
+                          <span className="text-foreground font-medium">Address:</span> {q.address}
+                        </p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
                         <span className="text-foreground font-medium">Description:</span> {q.description}
                       </p>
 
@@ -206,68 +214,73 @@ const QuotesAdmin = () => {
                           href={q.attachment_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
+                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                         >
                           <ExternalLink className="w-3 h-3" /> View Attachment
                         </a>
                       )}
 
-                      <div className="border-t pt-3 flex flex-wrap gap-2">
-                        {q.status !== "converted" && (
-                          <Button size="sm" onClick={() => openConvert(q)} className="gap-1.5">
-                            <ArrowRightLeft className="w-3.5 h-3.5" /> Convert to Booking
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
+                      {/* Activity Log Section */}
+                      <div className="border-t border-border pt-3">
+                        <button
                           onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
-                          className="gap-1.5"
+                          className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
                         >
                           <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
-                        </Button>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-3 space-y-2">
+                            {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
+                            {notes.map((n) => (
+                              <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                                <p className="text-foreground">{n.note}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
+                                </p>
+                              </div>
+                            ))}
+                            <div className="flex gap-2">
+                              <Input
+                                value={newNote}
+                                onChange={(e) => setNewNote(e.target.value)}
+                                placeholder="Add a note..."
+                                className="flex-1 h-8 text-sm"
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => addNote.mutate({ quoteId: q.id, note: newNote })}
+                                className="h-8"
+                              >
+                                <Send className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-2">
+                        {q.status !== "converted" && (
+                          <Button variant="default" size="sm" onClick={() => openConvert(q)} className="gap-1">
+                            <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                          </Button>
+                        )}
                         {["pending", "reviewed", "responded", "closed"]
                           .filter((s) => s !== q.status && q.status !== "converted")
                           .map((s) => (
                             <Button
                               key={s}
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               onClick={() => updateStatus.mutate({ id: q.id, status: s })}
-                              className="capitalize text-xs"
+                              className="capitalize"
                             >
                               {s}
                             </Button>
                           ))}
                       </div>
-
-                      {isExpanded && (
-                        <div className="mt-3 space-y-3 bg-muted/30 p-3 rounded-lg border border-border/50">
-                          {notes.map((n) => (
-                            <div key={n.id} className="text-xs space-y-1">
-                              <p className="text-foreground">{n.note}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {format(new Date(n.created_at), "MMM d, h:mm a")}
-                              </p>
-                            </div>
-                          ))}
-                          <div className="flex gap-2">
-                            <Input
-                              value={newNote}
-                              onChange={(e) => setNewNote(e.target.value)}
-                              placeholder="Add internal note..."
-                              className="h-8 text-xs bg-background"
-                            />
-                            <Button
-                              size="sm"
-                              className="h-8 px-3"
-                              onClick={() => addNote.mutate({ quoteId: q.id, note: newNote })}
-                            >
-                              <Send className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
