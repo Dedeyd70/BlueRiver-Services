@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import BeforeAfterContainer from "@/components/BeforeAfterContainer";
 import SectionHeading from "@/components/SectionHeading";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useServices } from "@/hooks/useServices";
 
 const fadeUp = {
   initial: { opacity: 0, y: 30 },
@@ -17,16 +19,9 @@ const fadeUp = {
 const Gallery = () => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [activeCategory, setActiveCategory] = useState("All");
+  const { services: servicesList, isLoading: servicesLoading } = useServices();
 
-  const { data: services } = useQuery({
-    queryKey: ["public-services-gallery"],
-    queryFn: async () => {
-      const { data } = await supabase.from("services").select("title").eq("is_active", true).order("display_order");
-      return data ?? [];
-    },
-  });
-
-  const { data: images } = useQuery({
+  const { data: images, isLoading: imagesLoading } = useQuery({
     queryKey: ["public-gallery"],
     queryFn: async () => {
       const { data } = await supabase
@@ -37,8 +32,7 @@ const Gallery = () => {
       return data ?? [];
     },
   });
-
-  const categories = ["All", ...new Set((services ?? []).map((s) => s.title))];
+  const categories = ["All", ...new Set(servicesList.map((s) => s.title))];
 
   // Separate standalone vs grouped
   const allImages = images ?? [];
@@ -95,6 +89,14 @@ const Gallery = () => {
 
       <section className="py-20 md:py-28">
         <div className="container">
+          {imagesLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="w-full h-48 md:h-56 rounded-2xl" />
+              ))}
+            </div>
+          ) : (
+          <>
           {/* Category Filter Bar */}
           <div className="flex flex-wrap gap-2 mb-8 justify-center">
             {categories.map((cat) => (
@@ -155,6 +157,8 @@ const Gallery = () => {
               </div>
             </>
           ) : null}
+          </>
+          )}
         </div>
       </section>
 
