@@ -157,6 +157,8 @@ const Gallery = () => {
               </div>
             </>
           ) : null}
+          </>
+          )}
         </div>
       </section>
 
