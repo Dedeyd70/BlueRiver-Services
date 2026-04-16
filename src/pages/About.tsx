@@ -23,7 +23,7 @@ const fadeUp = {
 };
 
 const About = () => {
-  const { data: settings } = useSiteSettings();
+  const { data: settings, isLoading: settingsLoading } = useSiteSettings();
   const { data: branding } = useQuery({
     queryKey: ["public-branding"],
     queryFn: async () => {
