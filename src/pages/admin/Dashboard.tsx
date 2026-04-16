@@ -120,13 +120,13 @@ const Dashboard = () => {
       color: "text-accent",
       path: "/admin/quotes",
     },
-    /**{
-      label: "Total Submissions",
+    {
+      label: "Contact Submissions",
       value: submissions ?? 0,
       icon: MessageSquare,
       color: "text-primary",
       path: "/admin/submissions",
-    },*/
+    },
     {
       label: "New Inquiries",
       value: pendingCount ?? 0,
