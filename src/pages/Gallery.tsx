@@ -89,6 +89,14 @@ const Gallery = () => {
 
       <section className="py-20 md:py-28">
         <div className="container">
+          {imagesLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="w-full h-48 md:h-56 rounded-2xl" />
+              ))}
+            </div>
+          ) : (
+          <>
           {/* Category Filter Bar */}
           <div className="flex flex-wrap gap-2 mb-8 justify-center">
             {categories.map((cat) => (
