@@ -121,7 +121,7 @@ const IndexPage = () => {
         description="BlueRiver Services offers reliable residential and commercial cleaning across Washington State. Get a free quote today."
       />
       {/* Hero Section */}
-      <section className="relative min-h-[50vh] flex items-center bg-gray-900 overflow-hidden">
+      <section className="relative min-h-screen flex items-center bg-gray-900 overflow-hidden">
         <div className="absolute inset-0">
           {isLoading ? (
             /* Skeleton state while fetching from DB */
