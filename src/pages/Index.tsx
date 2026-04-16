@@ -112,6 +112,9 @@ const IndexPage = () => {
   });
 
   const heroImg = homepageImages?.hero ?? null;
+  const desktopSrc = heroImg?.desktop_url;
+  const tabletSrc = heroImg?.tablet_url;
+  const mainSrc = heroImg?.url || heroImgFallback;
 
   return (
     <div className="overflow-hidden">
