@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { notifyAdmins } from "@/lib/notifications";
+import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -37,8 +38,7 @@ interface DraftForm {
   tax_rate: number;
   notes: string;
   validity_days: number;
-  condition_multiplier: number;
-  manual_adjustment: number;
+  line_items: LineItem[];
 }
 
 const emptyDraft: DraftForm = {
@@ -50,17 +50,7 @@ const emptyDraft: DraftForm = {
   tax_rate: 0,
   notes: "",
   validity_days: 7,
-  condition_multiplier: 1,
-  manual_adjustment: 0,
-};
-
-const conditionMultiplierFor = (level?: string | null): number => {
-  switch ((level || "").toLowerCase()) {
-    case "light": return 0.9;
-    case "heavy": return 1.3;
-    case "standard": return 1.0;
-    default: return 1.0;
-  }
+  line_items: [],
 };
 
 const QuotesAdmin = () => {
@@ -116,6 +106,30 @@ const QuotesAdmin = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("quote_drafts").select("*");
       if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: pricingServiceTypes } = useQuery({
+    queryKey: ["pricing-service-types"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("service_types").select("*");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: pricingRules } = useQuery({
+    queryKey: ["pricing-rules"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("service_pricing_rules").select("*");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: conditionSettings } = useQuery({
+    queryKey: ["condition-settings"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("condition_settings").select("*");
       return (data ?? []) as any[];
     },
   });
@@ -201,8 +215,7 @@ const QuotesAdmin = () => {
         tax_rate: Number(payload.tax_rate) || 0,
         notes: payload.notes || null,
         validity_days: Number(payload.validity_days) || 7,
-        condition_multiplier: Number(payload.condition_multiplier) || 1,
-        manual_adjustment: Number(payload.manual_adjustment) || 0,
+        line_items: payload.line_items as any,
         breakdown,
         prepared_by: user?.id ?? null,
       };
@@ -276,30 +289,35 @@ const QuotesAdmin = () => {
 
   const openPrepare = (q: any) => {
     const existing = draftMap[q.id];
+    const defaultTax = Number(settings?.tax_rate ?? 0) || 0;
+
     if (existing) {
+      const existingItems: LineItem[] = Array.isArray(existing.line_items) && existing.line_items.length > 0
+        ? existing.line_items
+        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax).lineItems;
       setDraftForm({
         service_type: existing.service_type ?? "",
         scope: existing.scope ?? "",
         base_price: Number(existing.base_price) || 0,
         addons: Array.isArray(existing.addons) ? existing.addons : [],
         discount: Number(existing.discount) || 0,
-        tax_rate: Number(existing.tax_rate) || 0,
+        tax_rate: Number(existing.tax_rate) || defaultTax,
         notes: existing.notes ?? "",
         validity_days: Number(existing.validity_days) || 7,
-        condition_multiplier: Number(existing.condition_multiplier) || 1,
-        manual_adjustment: Number(existing.manual_adjustment) || 0,
+        line_items: existingItems,
       });
     } else {
-      // Prefill hints from submission
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
-      const defaultTax = Number(settings?.tax_rate ?? 0) || 0;
+      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax);
+      const baseItem = computed.lineItems.find((i) => i.type === "base");
       setDraftForm({
         ...emptyDraft,
         service_type: q.service_type ?? "",
         scope: q.description ?? "",
         addons: submittedAddons.map((a: any) => ({ title: a.title || "Add-on", price: Number(a.price) || 0 })),
         tax_rate: defaultTax,
-        condition_multiplier: conditionMultiplierFor((q as any).condition_level),
+        base_price: baseItem ? baseItem.unit_price : 0,
+        line_items: computed.lineItems,
       });
     }
     setPrepareTarget(q);
@@ -321,29 +339,29 @@ const QuotesAdmin = () => {
     return addons;
   };
 
-  // Live preview totals for prepare dialog
-  const previewBase = Number(draftForm.base_price || 0);
-  const previewMult = Number(draftForm.condition_multiplier || 1);
-  const previewAdjustedBase = previewBase * previewMult;
-  const previewAddons = draftForm.addons.reduce((s, a) => s + (Number(a.price) || 0), 0);
-  const previewManual = Number(draftForm.manual_adjustment || 0);
-  const previewDiscount = Number(draftForm.discount || 0);
-  const previewSubtotal = previewAdjustedBase + previewAddons + previewManual - previewDiscount;
-  const previewTax = previewSubtotal * (Number(draftForm.tax_rate || 0) / 100);
-  const previewTotal = previewSubtotal + previewTax;
+  // Live recompute via engine (integer math)
+  const preview = recomputeFromLineItems(draftForm.line_items, Number(draftForm.tax_rate) || 0);
+
+  const updateLineItem = (idx: number, patch: Partial<LineItem>) => {
+    const next = draftForm.line_items.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+    setDraftForm({ ...draftForm, line_items: next });
+  };
+  const removeLineItem = (idx: number) => {
+    setDraftForm({ ...draftForm, line_items: draftForm.line_items.filter((_, i) => i !== idx) });
+  };
+  const addCustomLineItem = () => {
+    setDraftForm({
+      ...draftForm,
+      line_items: [...draftForm.line_items, { name: "Custom item", quantity: 1, unit_price: 0, total_price: 0, type: "addon" }],
+    });
+  };
 
   const buildBreakdown = () => ({
-    base: previewBase,
-    condition_multiplier: previewMult,
-    adjusted_base: previewAdjustedBase,
-    addons: draftForm.addons.map((a) => ({ title: a.title, price: Number(a.price) || 0 })),
-    addons_total: previewAddons,
-    manual_adjustment: previewManual,
-    discount: previewDiscount,
-    subtotal: previewSubtotal,
+    line_items: preview.lineItems,
+    subtotal: preview.subtotal,
     tax_rate: Number(draftForm.tax_rate || 0),
-    tax_amount: previewTax,
-    total: previewTotal,
+    tax_amount: preview.tax,
+    total: preview.total,
     computed_at: new Date().toISOString(),
   });
 
@@ -800,24 +818,6 @@ const QuotesAdmin = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium">Base price ($)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.base_price}
-                  onChange={(e) => setDraftForm({ ...draftForm, base_price: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Discount ($)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.discount}
-                  onChange={(e) => setDraftForm({ ...draftForm, discount: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
                 <label className="text-xs font-medium">Tax rate (%)</label>
                 <Input
                   type="number"
@@ -826,93 +826,64 @@ const QuotesAdmin = () => {
                   onChange={(e) => setDraftForm({ ...draftForm, tax_rate: Number(e.target.value) })}
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium">
-                  Condition multiplier
-                  {prepareTarget && (prepareTarget as any).condition_level && (
-                    <span className="text-muted-foreground font-normal ml-1">
-                      (suggested {conditionMultiplierFor((prepareTarget as any).condition_level)} for {(prepareTarget as any).condition_level})
-                    </span>
-                  )}
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.condition_multiplier}
-                  onChange={(e) => setDraftForm({ ...draftForm, condition_multiplier: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Manual adjustment ($)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.manual_adjustment}
-                  onChange={(e) => setDraftForm({ ...draftForm, manual_adjustment: Number(e.target.value) })}
-                  placeholder="+/- override"
-                />
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs text-muted-foreground">
+                  Pricing is auto-calculated from the database pricing engine. Edit any line below to adjust.
+                </p>
               </div>
             </div>
 
-
-            {/* Add-ons */}
+            {/* Itemized Pricing Table */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium">Add-ons</label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDraftForm({ ...draftForm, addons: [...draftForm.addons, { title: "", price: 0 }] })}
-                  className="h-7 gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add
+                <label className="text-sm font-semibold">Itemized Pricing</label>
+                <Button type="button" size="sm" variant="outline" onClick={addCustomLineItem} className="h-7 gap-1">
+                  <Plus className="w-3 h-3" /> Add line
                 </Button>
               </div>
-              {draftForm.addons.length === 0 && (
-                <p className="text-xs text-muted-foreground italic">No add-ons.</p>
-              )}
-              {draftForm.addons.map((a, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <Input
-                    placeholder="Title"
-                    value={a.title}
-                    onChange={(e) => {
-                      const next = [...draftForm.addons];
-                      next[i] = { ...next[i], title: e.target.value };
-                      setDraftForm({ ...draftForm, addons: next });
-                    }}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="Price"
-                    value={a.price as number}
-                    onChange={(e) => {
-                      const next = [...draftForm.addons];
-                      next[i] = { ...next[i], price: Number(e.target.value) };
-                      setDraftForm({ ...draftForm, addons: next });
-                    }}
-                    className="w-28"
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      const next = draftForm.addons.filter((_, idx) => idx !== i);
-                      setDraftForm({ ...draftForm, addons: next });
-                    }}
-                    className="h-9 w-9"
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
+              <div className="border border-border rounded-lg overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+                  <div className="col-span-6">Item</div>
+                  <div className="col-span-2 text-right">Qty</div>
+                  <div className="col-span-2 text-right">Unit ($)</div>
+                  <div className="col-span-2 text-right">Total</div>
                 </div>
-              ))}
+                {draftForm.line_items.length === 0 && (
+                  <p className="px-3 py-4 text-xs text-muted-foreground italic">No line items. Add the service type and rooms in the customer form, or add custom lines.</p>
+                )}
+                {draftForm.line_items.map((it, idx) => {
+                  const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+                  return (
+                    <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-t border-border">
+                      <Input
+                        className="col-span-6 h-9"
+                        value={it.name}
+                        onChange={(e) => updateLineItem(idx, { name: e.target.value })}
+                      />
+                      <Input
+                        type="number" step="1" min="0"
+                        className="col-span-2 h-9 text-right"
+                        value={it.quantity}
+                        onChange={(e) => updateLineItem(idx, { quantity: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                      />
+                      <Input
+                        type="number" step="1" min="0"
+                        className="col-span-2 h-9 text-right"
+                        value={it.unit_price}
+                        onChange={(e) => updateLineItem(idx, { unit_price: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                      />
+                      <div className="col-span-1 text-right text-sm font-medium">${lineTotal.toFixed(2)}</div>
+                      <Button
+                        type="button" size="icon" variant="ghost"
+                        onClick={() => removeLineItem(idx)}
+                        className="col-span-1 h-8 w-8 justify-self-end"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -924,24 +895,11 @@ const QuotesAdmin = () => {
               />
             </div>
 
-            {/* Live breakdown */}
+            {/* Live totals */}
             <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span>${previewBase.toFixed(2)}</span></div>
-              {previewMult !== 1 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">× Condition ({previewMult})</span><span>${previewAdjustedBase.toFixed(2)}</span></div>
-              )}
-              {previewAddons > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">+ Add-ons</span><span>${previewAddons.toFixed(2)}</span></div>
-              )}
-              {previewManual !== 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">{previewManual >= 0 ? "+" : "−"} Manual adjustment</span><span>{previewManual < 0 ? "-" : ""}${Math.abs(previewManual).toFixed(2)}</span></div>
-              )}
-              {previewDiscount > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">− Discount</span><span>-${previewDiscount.toFixed(2)}</span></div>
-              )}
-              <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Subtotal</span><span>${previewSubtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({draftForm.tax_rate || 0}%)</span><span>${previewTax.toFixed(2)}</span></div>
-              <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>Total</span><span>${previewTotal.toFixed(2)}</span></div>
+              <div className="flex justify-between border-t border-border pt-1"><span className="text-muted-foreground">Subtotal</span><span>${preview.subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({draftForm.tax_rate || 0}%)</span><span>${preview.tax.toFixed(2)}</span></div>
+              <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>Total</span><span>${preview.total.toFixed(2)}</span></div>
             </div>
           </div>
 
