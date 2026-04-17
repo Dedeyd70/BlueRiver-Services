@@ -116,6 +116,7 @@ const RequestQuote = () => {
         has_pets: form.has_pets,
         entry_codes: form.entry_codes.trim() || null,
         selected_addons: selectedAddons.map((title) => ({ title })),
+        status: "requested",
       }).select("id").maybeSingle();
 
       if (error) {
