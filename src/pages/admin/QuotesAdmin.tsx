@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { ExternalLink, ArrowRightLeft, MessageSquare, Send, Download, PlayCircle, XCircle } from "lucide-react";
+import { ExternalLink, ArrowRightLeft, MessageSquare, Send, Download, PlayCircle, XCircle, FileEdit, Plus, Trash2, Mail } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -23,6 +23,33 @@ const statusColors: Record<string, string> = {
 
 const statusLabel = (s: string) => s.replace("_", " ");
 
+interface DraftAddon {
+  title: string;
+  price: number | string;
+}
+
+interface DraftForm {
+  service_type: string;
+  scope: string;
+  base_price: number;
+  addons: DraftAddon[];
+  discount: number;
+  tax_rate: number;
+  notes: string;
+  validity_days: number;
+}
+
+const emptyDraft: DraftForm = {
+  service_type: "",
+  scope: "",
+  base_price: 0,
+  addons: [],
+  discount: 0,
+  tax_rate: 0,
+  notes: "",
+  validity_days: 7,
+};
+
 const QuotesAdmin = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -36,6 +63,8 @@ const QuotesAdmin = () => {
   const [newNote, setNewNote] = useState("");
   const [closeTarget, setCloseTarget] = useState<any>(null);
   const [closeReason, setCloseReason] = useState("");
+  const [prepareTarget, setPrepareTarget] = useState<any>(null);
+  const [draftForm, setDraftForm] = useState<DraftForm>(emptyDraft);
 
   const { data: quotes, isLoading } = useQuery({
     queryKey: ["admin-quotes"],
@@ -68,6 +97,18 @@ const QuotesAdmin = () => {
       return map;
     },
   });
+
+  const { data: drafts } = useQuery({
+    queryKey: ["admin-quote-drafts"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("quote_drafts").select("*");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const draftMap: Record<string, any> = {};
+  (drafts ?? []).forEach((d) => (draftMap[d.quote_id] = d));
 
   const activeQuotes = (quotes ?? []).filter((q) => {
     if (statusFilter === "requested") return q.status === "requested";
@@ -134,11 +175,40 @@ const QuotesAdmin = () => {
     },
   });
 
+  const saveDraft = useMutation({
+    mutationFn: async ({ quoteId, payload, isUpdate }: { quoteId: string; payload: DraftForm; isUpdate: boolean }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const row = {
+        quote_id: quoteId,
+        service_type: payload.service_type || null,
+        scope: payload.scope || null,
+        base_price: Number(payload.base_price) || 0,
+        addons: payload.addons.map((a) => ({ title: a.title, price: Number(a.price) || 0 })),
+        discount: Number(payload.discount) || 0,
+        tax_rate: Number(payload.tax_rate) || 0,
+        notes: payload.notes || null,
+        validity_days: Number(payload.validity_days) || 7,
+        prepared_by: user?.id ?? null,
+      };
+      const { error } = await (supabase as any)
+        .from("quote_drafts")
+        .upsert(row, { onConflict: "quote_id" });
+      if (error) throw error;
+      await logActivity(quoteId, isUpdate ? "Quote draft updated" : "Quote prepared");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-quote-drafts"] });
+      qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+      setPrepareTarget(null);
+      toast({ title: "Quote saved" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const convertToBooking = useMutation({
     mutationFn: async () => {
       if (!selectedQuote || !bookingDate || !timeSlot) throw new Error("Please select date and time");
 
-      // Read auto-approve setting
       const { data: settingsRows } = await supabase
         .from("site_settings")
         .select("setting_key, setting_value")
@@ -188,9 +258,42 @@ const QuotesAdmin = () => {
     setConvertDialogOpen(true);
   };
 
+  const openPrepare = (q: any) => {
+    const existing = draftMap[q.id];
+    if (existing) {
+      setDraftForm({
+        service_type: existing.service_type ?? "",
+        scope: existing.scope ?? "",
+        base_price: Number(existing.base_price) || 0,
+        addons: Array.isArray(existing.addons) ? existing.addons : [],
+        discount: Number(existing.discount) || 0,
+        tax_rate: Number(existing.tax_rate) || 0,
+        notes: existing.notes ?? "",
+        validity_days: Number(existing.validity_days) || 7,
+      });
+    } else {
+      // Prefill hints from submission
+      const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
+      const defaultTax = Number(settings?.tax_rate ?? 0) || 0;
+      setDraftForm({
+        ...emptyDraft,
+        service_type: q.service_type ?? "",
+        scope: q.description ?? "",
+        addons: submittedAddons.map((a: any) => ({ title: a.title || "Add-on", price: Number(a.price) || 0 })),
+        tax_rate: defaultTax,
+      });
+    }
+    setPrepareTarget(q);
+  };
+
   const handleDownloadPdf = (q: any) => {
+    const draft = draftMap[q.id];
+    if (!draft) {
+      toast({ title: "Prepare quote first", description: "Please prepare quote before generating PDF", variant: "destructive" });
+      return;
+    }
     if (!branding || !settings) return;
-    generateQuotePdf(q, branding, settings);
+    generateQuotePdf(q, branding, settings, draft);
   };
 
   const getNotesForQuote = (quoteId: string) => (allNotes ?? []).filter((n) => n.quote_id === quoteId);
@@ -198,6 +301,14 @@ const QuotesAdmin = () => {
     if (!addons || !Array.isArray(addons)) return [];
     return addons;
   };
+
+  // Live preview totals for prepare dialog
+  const previewSubtotal =
+    Number(draftForm.base_price || 0) +
+    draftForm.addons.reduce((s, a) => s + (Number(a.price) || 0), 0) -
+    Number(draftForm.discount || 0);
+  const previewTax = previewSubtotal * (Number(draftForm.tax_rate || 0) / 100);
+  const previewTotal = previewSubtotal + previewTax;
 
   return (
     <TooltipProvider>
@@ -220,6 +331,7 @@ const QuotesAdmin = () => {
                   const notes = getNotesForQuote(q.id);
                   const isExpanded = expandedNotes === q.id;
                   const addons = parseAddons((q as any).selected_addons);
+                  const hasDraft = !!draftMap[q.id];
                   const canConvert = q.status === "in_progress" && notes.length > 0;
 
                   return (
@@ -231,11 +343,18 @@ const QuotesAdmin = () => {
                             {q.email} {q.phone && `• ${q.phone}`}
                           </p>
                         </div>
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}
-                        >
-                          {statusLabel(q.status)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {hasDraft && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-medium">
+                              Quote prepared
+                            </span>
+                          )}
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}
+                          >
+                            {statusLabel(q.status)}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
@@ -339,6 +458,43 @@ const QuotesAdmin = () => {
                         )}
 
                         {q.status === "in_progress" && (
+                          <Button variant="outline" size="sm" onClick={() => openPrepare(q)} className="gap-1">
+                            <FileEdit className="w-3 h-3" /> {hasDraft ? "Edit Quote" : "Prepare Quote"}
+                          </Button>
+                        )}
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadPdf(q)}
+                                className="gap-1"
+                                aria-disabled={!hasDraft}
+                                disabled={!hasDraft}
+                              >
+                                <Download className="w-3 h-3" /> Generate Quote PDF
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          {!hasDraft && (
+                            <TooltipContent>Please prepare quote before generating PDF</TooltipContent>
+                          )}
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button variant="outline" size="sm" disabled className="gap-1">
+                                <Mail className="w-3 h-3" /> Send Quote
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>Email integration coming soon</TooltipContent>
+                        </Tooltip>
+
+                        {q.status === "in_progress" && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span>
@@ -368,10 +524,6 @@ const QuotesAdmin = () => {
                             )}
                           </Tooltip>
                         )}
-
-                        <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(q)} className="gap-1">
-                          <Download className="w-3 h-3" /> Quote PDF
-                        </Button>
 
                         <Button
                           variant="outline"
@@ -504,6 +656,159 @@ const QuotesAdmin = () => {
           </>
         )}
       </Tabs>
+
+      {/* Prepare Quote dialog */}
+      <Dialog open={!!prepareTarget} onOpenChange={(o) => !o && setPrepareTarget(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{draftMap[prepareTarget?.id] ? "Edit Quote" : "Prepare Quote"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Service type</label>
+                <Input
+                  value={draftForm.service_type}
+                  onChange={(e) => setDraftForm({ ...draftForm, service_type: e.target.value })}
+                  placeholder="e.g. Deep Cleaning"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Validity (days)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={draftForm.validity_days}
+                  onChange={(e) => setDraftForm({ ...draftForm, validity_days: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Scope / description</label>
+              <Textarea
+                rows={3}
+                value={draftForm.scope}
+                onChange={(e) => setDraftForm({ ...draftForm, scope: e.target.value })}
+                placeholder="What's included in the service..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Base price ($)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={draftForm.base_price}
+                  onChange={(e) => setDraftForm({ ...draftForm, base_price: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Discount ($)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={draftForm.discount}
+                  onChange={(e) => setDraftForm({ ...draftForm, discount: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Tax rate (%)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={draftForm.tax_rate}
+                  onChange={(e) => setDraftForm({ ...draftForm, tax_rate: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            {/* Add-ons */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium">Add-ons</label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDraftForm({ ...draftForm, addons: [...draftForm.addons, { title: "", price: 0 }] })}
+                  className="h-7 gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Add
+                </Button>
+              </div>
+              {draftForm.addons.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No add-ons.</p>
+              )}
+              {draftForm.addons.map((a, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input
+                    placeholder="Title"
+                    value={a.title}
+                    onChange={(e) => {
+                      const next = [...draftForm.addons];
+                      next[i] = { ...next[i], title: e.target.value };
+                      setDraftForm({ ...draftForm, addons: next });
+                    }}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="Price"
+                    value={a.price as number}
+                    onChange={(e) => {
+                      const next = [...draftForm.addons];
+                      next[i] = { ...next[i], price: Number(e.target.value) };
+                      setDraftForm({ ...draftForm, addons: next });
+                    }}
+                    className="w-28"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => {
+                      const next = draftForm.addons.filter((_, idx) => idx !== i);
+                      setDraftForm({ ...draftForm, addons: next });
+                    }}
+                    className="h-9 w-9"
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Notes (what's included / excluded)</label>
+              <Textarea
+                rows={3}
+                value={draftForm.notes}
+                onChange={(e) => setDraftForm({ ...draftForm, notes: e.target.value })}
+              />
+            </div>
+
+            {/* Live preview */}
+            <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>${previewSubtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({draftForm.tax_rate || 0}%)</span><span>${previewTax.toFixed(2)}</span></div>
+              <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>Total</span><span>${previewTotal.toFixed(2)}</span></div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrepareTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => prepareTarget && saveDraft.mutate({ quoteId: prepareTarget.id, payload: draftForm, isUpdate: !!draftMap[prepareTarget.id] })}
+              disabled={saveDraft.isPending}
+            >
+              {saveDraft.isPending ? "Saving..." : "Save Quote"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Convert dialog */}
       <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
