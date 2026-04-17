@@ -718,9 +718,34 @@ const QuotesAdmin = () => {
                   <div><span className="text-muted-foreground">Sq ft:</span> <span className="font-medium">{prepareTarget.square_footage || "—"}</span></div>
                   <div><span className="text-muted-foreground">Frequency:</span> <span className="font-medium">{prepareTarget.frequency || "—"}</span></div>
                   <div><span className="text-muted-foreground">Bedrooms:</span> <span className="font-medium">{prepareTarget.bedrooms ?? "—"}</span></div>
-                  <div><span className="text-muted-foreground">Bathrooms:</span> <span className="font-medium">{prepareTarget.bathrooms ?? "—"}</span></div>
+                  <div>
+                    <span className="text-muted-foreground">Bathrooms:</span>{" "}
+                    <span className="font-medium">
+                      {((prepareTarget as any).full_bathrooms != null || (prepareTarget as any).half_bathrooms != null)
+                        ? `Full: ${(prepareTarget as any).full_bathrooms ?? 0} · Half: ${(prepareTarget as any).half_bathrooms ?? 0}`
+                        : (prepareTarget.bathrooms ?? "—")}
+                    </span>
+                  </div>
                   <div><span className="text-muted-foreground">Kitchens:</span> <span className="font-medium">{(prepareTarget as any).kitchen_count ?? "—"}</span></div>
                   <div><span className="text-muted-foreground">Pets:</span> <span className="font-medium">{prepareTarget.has_pets ? "Yes" : "No"}</span></div>
+                  {(prepareTarget as any).living_rooms != null && (
+                    <div><span className="text-muted-foreground">Living rooms:</span> <span className="font-medium">{(prepareTarget as any).living_rooms}</span></div>
+                  )}
+                  {(prepareTarget as any).office_rooms != null && (
+                    <div><span className="text-muted-foreground">Office rooms:</span> <span className="font-medium">{(prepareTarget as any).office_rooms}</span></div>
+                  )}
+                  {(prepareTarget as any).floor_type && (
+                    <div><span className="text-muted-foreground">Floor:</span> <span className="font-medium capitalize">{(prepareTarget as any).floor_type}</span></div>
+                  )}
+                  {(prepareTarget as any).property_size && (
+                    <div><span className="text-muted-foreground">Size:</span> <span className="font-medium capitalize">{(prepareTarget as any).property_size}</span></div>
+                  )}
+                  {(prepareTarget as any).has_cabinets != null && (
+                    <div><span className="text-muted-foreground">Cabinets:</span> <span className="font-medium">{(prepareTarget as any).has_cabinets ? "Yes" : "No"}</span></div>
+                  )}
+                  {(prepareTarget as any).is_empty_property != null && (
+                    <div><span className="text-muted-foreground">Empty:</span> <span className="font-medium">{(prepareTarget as any).is_empty_property ? "Yes" : "No"}</span></div>
+                  )}
                 </div>
                 {prepareTarget.entry_codes && (
                   <div className="text-xs"><span className="text-muted-foreground">Entry codes:</span> <span className="font-medium">{prepareTarget.entry_codes}</span></div>
