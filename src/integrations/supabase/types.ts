@@ -175,6 +175,30 @@ export type Database = {
         }
         Relationships: []
       }
+      condition_settings: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          surcharge_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          surcharge_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          surcharge_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contact_submissions: {
         Row: {
           admin_notes: string | null
@@ -459,6 +483,7 @@ export type Database = {
           condition_multiplier: number
           discount: number
           id: string
+          line_items: Json
           manual_adjustment: number
           notes: string | null
           prepared_at: string
@@ -477,6 +502,7 @@ export type Database = {
           condition_multiplier?: number
           discount?: number
           id?: string
+          line_items?: Json
           manual_adjustment?: number
           notes?: string | null
           prepared_at?: string
@@ -495,6 +521,7 @@ export type Database = {
           condition_multiplier?: number
           discount?: number
           id?: string
+          line_items?: Json
           manual_adjustment?: number
           notes?: string | null
           prepared_at?: string
@@ -649,6 +676,65 @@ export type Database = {
           service_type?: string | null
           square_footage?: string | null
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      service_pricing_rules: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          service_type_id: string
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          service_type_id: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          service_type_id?: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_pricing_rules_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_types: {
+        Row: {
+          base_price: number
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          base_price?: number
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          base_price?: number
+          created_at?: string
+          id?: string
+          name?: string
           updated_at?: string
         }
         Relationships: []
