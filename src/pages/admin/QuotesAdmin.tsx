@@ -289,30 +289,35 @@ const QuotesAdmin = () => {
 
   const openPrepare = (q: any) => {
     const existing = draftMap[q.id];
+    const defaultTax = Number(settings?.tax_rate ?? 0) || 0;
+
     if (existing) {
+      const existingItems: LineItem[] = Array.isArray(existing.line_items) && existing.line_items.length > 0
+        ? existing.line_items
+        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax).lineItems;
       setDraftForm({
         service_type: existing.service_type ?? "",
         scope: existing.scope ?? "",
         base_price: Number(existing.base_price) || 0,
         addons: Array.isArray(existing.addons) ? existing.addons : [],
         discount: Number(existing.discount) || 0,
-        tax_rate: Number(existing.tax_rate) || 0,
+        tax_rate: Number(existing.tax_rate) || defaultTax,
         notes: existing.notes ?? "",
         validity_days: Number(existing.validity_days) || 7,
-        condition_multiplier: Number(existing.condition_multiplier) || 1,
-        manual_adjustment: Number(existing.manual_adjustment) || 0,
+        line_items: existingItems,
       });
     } else {
-      // Prefill hints from submission
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
-      const defaultTax = Number(settings?.tax_rate ?? 0) || 0;
+      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax);
+      const baseItem = computed.lineItems.find((i) => i.type === "base");
       setDraftForm({
         ...emptyDraft,
         service_type: q.service_type ?? "",
         scope: q.description ?? "",
         addons: submittedAddons.map((a: any) => ({ title: a.title || "Add-on", price: Number(a.price) || 0 })),
         tax_rate: defaultTax,
-        condition_multiplier: conditionMultiplierFor((q as any).condition_level),
+        base_price: baseItem ? baseItem.unit_price : 0,
+        line_items: computed.lineItems,
       });
     }
     setPrepareTarget(q);
@@ -334,29 +339,29 @@ const QuotesAdmin = () => {
     return addons;
   };
 
-  // Live preview totals for prepare dialog
-  const previewBase = Number(draftForm.base_price || 0);
-  const previewMult = Number(draftForm.condition_multiplier || 1);
-  const previewAdjustedBase = previewBase * previewMult;
-  const previewAddons = draftForm.addons.reduce((s, a) => s + (Number(a.price) || 0), 0);
-  const previewManual = Number(draftForm.manual_adjustment || 0);
-  const previewDiscount = Number(draftForm.discount || 0);
-  const previewSubtotal = previewAdjustedBase + previewAddons + previewManual - previewDiscount;
-  const previewTax = previewSubtotal * (Number(draftForm.tax_rate || 0) / 100);
-  const previewTotal = previewSubtotal + previewTax;
+  // Live recompute via engine (integer math)
+  const preview = recomputeFromLineItems(draftForm.line_items, Number(draftForm.tax_rate) || 0);
+
+  const updateLineItem = (idx: number, patch: Partial<LineItem>) => {
+    const next = draftForm.line_items.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+    setDraftForm({ ...draftForm, line_items: next });
+  };
+  const removeLineItem = (idx: number) => {
+    setDraftForm({ ...draftForm, line_items: draftForm.line_items.filter((_, i) => i !== idx) });
+  };
+  const addCustomLineItem = () => {
+    setDraftForm({
+      ...draftForm,
+      line_items: [...draftForm.line_items, { name: "Custom item", quantity: 1, unit_price: 0, total_price: 0, type: "addon" }],
+    });
+  };
 
   const buildBreakdown = () => ({
-    base: previewBase,
-    condition_multiplier: previewMult,
-    adjusted_base: previewAdjustedBase,
-    addons: draftForm.addons.map((a) => ({ title: a.title, price: Number(a.price) || 0 })),
-    addons_total: previewAddons,
-    manual_adjustment: previewManual,
-    discount: previewDiscount,
-    subtotal: previewSubtotal,
+    line_items: preview.lineItems,
+    subtotal: preview.subtotal,
     tax_rate: Number(draftForm.tax_rate || 0),
-    tax_amount: previewTax,
-    total: previewTotal,
+    tax_amount: preview.tax,
+    total: preview.total,
     computed_at: new Date().toISOString(),
   });
 
