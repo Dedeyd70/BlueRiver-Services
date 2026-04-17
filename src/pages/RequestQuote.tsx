@@ -222,69 +222,9 @@ const RequestQuote = () => {
                   <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
                 </div>
 
-                {/* Property Details */}
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
-                    <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                      <option value="">Select type</option>
-                      <option value="House">House</option>
-                      <option value="Apartment/Condo">Apartment / Condo</option>
-                      <option value="Office">Office</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
-                    <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
-                  </div>
-                </div>
-                <div className="grid sm:grid-cols-3 gap-5">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
-                    <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
-                    <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Kitchens</label>
-                    <Input type="number" min="0" max="10" placeholder="0" value={form.kitchen_count} onChange={update("kitchen_count")} />
-                  </div>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Cleaning Frequency</label>
-                    <select value={form.frequency} onChange={update("frequency")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                      <option value="">Select frequency</option>
-                      <option value="One-Time">One-Time</option>
-                      <option value="Weekly">Weekly</option>
-                      <option value="Bi-Weekly">Bi-Weekly</option>
-                      <option value="Monthly">Monthly</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
-                    <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                      <option value="">Select condition</option>
-                      <option value="light">Light</option>
-                      <option value="standard">Standard</option>
-                      <option value="heavy">Heavy</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="quote-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
-                  <label htmlFor="quote-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
-                </div>
+                {/* Service Type — drives the form */}
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">Entry / Gate Codes</label>
-                  <Input placeholder="Gate code, lockbox, etc." value={form.entry_codes} onChange={update("entry_codes")} maxLength={100} />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">Service Type</label>
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">Service Type *</label>
                   <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     <option value="">Select a service</option>
                     {mainServices.map((s) => (
@@ -292,7 +232,260 @@ const RequestQuote = () => {
                     ))}
                     <option value="Other">Other</option>
                   </select>
+                  {!form.service && (
+                    <p className="text-xs text-muted-foreground mt-1.5">Choose a service to see relevant details.</p>
+                  )}
                 </div>
+
+                {form.service && (
+                  <>
+                    {/* Common: Property Type & Sq Ft */}
+                    <div className="border border-border rounded-lg p-4 bg-card space-y-4">
+                      <h3 className="text-sm font-semibold text-foreground">Property</h3>
+                      <div className="grid sm:grid-cols-2 gap-5">
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
+                          <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                            <option value="">Select type</option>
+                            <option value="House">House</option>
+                            <option value="Apartment/Condo">Apartment / Condo</option>
+                            <option value="Office">Office</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
+                          <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Residential / Deep Cleaning group */}
+                    {(serviceGroup === "residential" || serviceGroup === "deep") && (
+                      <div className="border border-border rounded-lg p-4 bg-card space-y-4">
+                        <h3 className="text-sm font-semibold text-foreground">
+                          {serviceGroup === "deep" ? "Deep Cleaning Details" : "Residential Details"}
+                        </h3>
+                        <div className="grid sm:grid-cols-3 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Full Bathrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.full_bathrooms} onChange={update("full_bathrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Half Bathrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.half_bathrooms} onChange={update("half_bathrooms")} />
+                          </div>
+                        </div>
+                        <div className="grid sm:grid-cols-3 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Living Rooms / Halls</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.living_rooms} onChange={update("living_rooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">
+                              Kitchens {serviceGroup === "deep" && <span className="text-primary">★</span>}
+                            </label>
+                            <Input type="number" min="0" max="10" placeholder="0" value={form.kitchen_count} onChange={update("kitchen_count")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">
+                              Condition Level {serviceGroup === "deep" && <span className="text-destructive">*</span>}
+                            </label>
+                            <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select condition</option>
+                              <option value="light">Light</option>
+                              <option value="standard">Standard</option>
+                              <option value="heavy">Heavy</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Commercial group */}
+                    {serviceGroup === "commercial" && (
+                      <div className="border border-border rounded-lg p-4 bg-card space-y-4">
+                        <h3 className="text-sm font-semibold text-foreground">Commercial Details</h3>
+                        <div className="grid sm:grid-cols-2 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
+                            <Input type="number" min="0" max="50" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Office Rooms / Sections</label>
+                            <Input type="number" min="0" max="100" placeholder="0" value={form.office_rooms} onChange={update("office_rooms")} />
+                          </div>
+                        </div>
+                        <div className="grid sm:grid-cols-3 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Floor Type</label>
+                            <select value={form.floor_type} onChange={update("floor_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select floor</option>
+                              <option value="carpet">Carpet</option>
+                              <option value="tile">Tile</option>
+                              <option value="mixed">Mixed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Property Size</label>
+                            <select value={form.property_size} onChange={update("property_size")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select size</option>
+                              <option value="small">Small</option>
+                              <option value="medium">Medium</option>
+                              <option value="large">Large</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Frequency</label>
+                            <select value={form.frequency} onChange={update("frequency")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select frequency</option>
+                              <option value="One-Time">One-Time</option>
+                              <option value="Weekly">Weekly</option>
+                              <option value="Bi-Weekly">Bi-Weekly</option>
+                              <option value="Monthly">Monthly</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Move In / Move Out group */}
+                    {serviceGroup === "move" && (
+                      <div className="border border-border rounded-lg p-4 bg-card space-y-4">
+                        <h3 className="text-sm font-semibold text-foreground">Move In / Move Out Details</h3>
+                        <div className="grid sm:grid-cols-3 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Kitchens <span className="text-primary">★</span></label>
+                            <Input type="number" min="0" max="10" placeholder="0" value={form.kitchen_count} onChange={update("kitchen_count")} />
+                          </div>
+                        </div>
+                        <div className="grid sm:grid-cols-3 gap-5 items-end">
+                          <div className="flex items-center gap-2 h-10">
+                            <Checkbox id="quote-cabinets" checked={form.has_cabinets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_cabinets: !!v }))} />
+                            <label htmlFor="quote-cabinets" className="text-sm font-medium text-foreground cursor-pointer">Include cabinets</label>
+                          </div>
+                          <div className="flex items-center gap-2 h-10">
+                            <Checkbox id="quote-empty" checked={form.is_empty_property} onCheckedChange={(v) => setForm((f) => ({ ...f, is_empty_property: !!v }))} />
+                            <label htmlFor="quote-empty" className="text-sm font-medium text-foreground cursor-pointer">Property is empty</label>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
+                            <select value={form.condition_level || "heavy"} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="light">Light</option>
+                              <option value="standard">Standard</option>
+                              <option value="heavy">Heavy (typical)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recurring group */}
+                    {serviceGroup === "recurring" && (
+                      <div className="border border-border rounded-lg p-4 bg-card space-y-4">
+                        <h3 className="text-sm font-semibold text-foreground">Recurring Cleaning Details</h3>
+                        <div className="grid sm:grid-cols-3 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Kitchens</label>
+                            <Input type="number" min="0" max="10" placeholder="0" value={form.kitchen_count} onChange={update("kitchen_count")} />
+                          </div>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Frequency</label>
+                            <select value={form.frequency} onChange={update("frequency")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select frequency</option>
+                              <option value="Weekly">Weekly</option>
+                              <option value="Bi-Weekly">Bi-Weekly</option>
+                              <option value="Monthly">Monthly</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Maintenance Condition</label>
+                            <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select condition</option>
+                              <option value="light">Light</option>
+                              <option value="standard">Standard</option>
+                              <option value="heavy">Heavy</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generic fallback */}
+                    {serviceGroup === "generic" && (
+                      <div className="border border-border rounded-lg p-4 bg-card space-y-4">
+                        <h3 className="text-sm font-semibold text-foreground">Details</h3>
+                        <div className="grid sm:grid-cols-3 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
+                            <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Kitchens</label>
+                            <Input type="number" min="0" max="10" placeholder="0" value={form.kitchen_count} onChange={update("kitchen_count")} />
+                          </div>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-5">
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Cleaning Frequency</label>
+                            <select value={form.frequency} onChange={update("frequency")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select frequency</option>
+                              <option value="One-Time">One-Time</option>
+                              <option value="Weekly">Weekly</option>
+                              <option value="Bi-Weekly">Bi-Weekly</option>
+                              <option value="Monthly">Monthly</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
+                            <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                              <option value="">Select condition</option>
+                              <option value="light">Light</option>
+                              <option value="standard">Standard</option>
+                              <option value="heavy">Heavy</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Common: Pets + Entry codes */}
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="quote-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
+                      <label htmlFor="quote-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1.5 block">Entry / Gate Codes</label>
+                      <Input placeholder="Gate code, lockbox, etc." value={form.entry_codes} onChange={update("entry_codes")} maxLength={100} />
+                    </div>
+                  </>
+                )}
 
                 {/* Add-ons as requested extras */}
                 {form.service && addons.length > 0 && (
