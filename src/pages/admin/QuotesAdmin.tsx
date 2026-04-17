@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { notifyAdmins } from "@/lib/notifications";
+import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -37,8 +38,7 @@ interface DraftForm {
   tax_rate: number;
   notes: string;
   validity_days: number;
-  condition_multiplier: number;
-  manual_adjustment: number;
+  line_items: LineItem[];
 }
 
 const emptyDraft: DraftForm = {
@@ -50,17 +50,7 @@ const emptyDraft: DraftForm = {
   tax_rate: 0,
   notes: "",
   validity_days: 7,
-  condition_multiplier: 1,
-  manual_adjustment: 0,
-};
-
-const conditionMultiplierFor = (level?: string | null): number => {
-  switch ((level || "").toLowerCase()) {
-    case "light": return 0.9;
-    case "heavy": return 1.3;
-    case "standard": return 1.0;
-    default: return 1.0;
-  }
+  line_items: [],
 };
 
 const QuotesAdmin = () => {
@@ -116,6 +106,30 @@ const QuotesAdmin = () => {
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("quote_drafts").select("*");
       if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: pricingServiceTypes } = useQuery({
+    queryKey: ["pricing-service-types"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("service_types").select("*");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: pricingRules } = useQuery({
+    queryKey: ["pricing-rules"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("service_pricing_rules").select("*");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: conditionSettings } = useQuery({
+    queryKey: ["condition-settings"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("condition_settings").select("*");
       return (data ?? []) as any[];
     },
   });
