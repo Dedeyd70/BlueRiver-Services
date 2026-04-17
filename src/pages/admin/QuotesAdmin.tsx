@@ -818,24 +818,6 @@ const QuotesAdmin = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium">Base price ($)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.base_price}
-                  onChange={(e) => setDraftForm({ ...draftForm, base_price: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Discount ($)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.discount}
-                  onChange={(e) => setDraftForm({ ...draftForm, discount: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
                 <label className="text-xs font-medium">Tax rate (%)</label>
                 <Input
                   type="number"
@@ -844,93 +826,64 @@ const QuotesAdmin = () => {
                   onChange={(e) => setDraftForm({ ...draftForm, tax_rate: Number(e.target.value) })}
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium">
-                  Condition multiplier
-                  {prepareTarget && (prepareTarget as any).condition_level && (
-                    <span className="text-muted-foreground font-normal ml-1">
-                      (suggested {conditionMultiplierFor((prepareTarget as any).condition_level)} for {(prepareTarget as any).condition_level})
-                    </span>
-                  )}
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.condition_multiplier}
-                  onChange={(e) => setDraftForm({ ...draftForm, condition_multiplier: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Manual adjustment ($)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={draftForm.manual_adjustment}
-                  onChange={(e) => setDraftForm({ ...draftForm, manual_adjustment: Number(e.target.value) })}
-                  placeholder="+/- override"
-                />
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs text-muted-foreground">
+                  Pricing is auto-calculated from the database pricing engine. Edit any line below to adjust.
+                </p>
               </div>
             </div>
 
-
-            {/* Add-ons */}
+            {/* Itemized Pricing Table */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium">Add-ons</label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDraftForm({ ...draftForm, addons: [...draftForm.addons, { title: "", price: 0 }] })}
-                  className="h-7 gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add
+                <label className="text-sm font-semibold">Itemized Pricing</label>
+                <Button type="button" size="sm" variant="outline" onClick={addCustomLineItem} className="h-7 gap-1">
+                  <Plus className="w-3 h-3" /> Add line
                 </Button>
               </div>
-              {draftForm.addons.length === 0 && (
-                <p className="text-xs text-muted-foreground italic">No add-ons.</p>
-              )}
-              {draftForm.addons.map((a, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <Input
-                    placeholder="Title"
-                    value={a.title}
-                    onChange={(e) => {
-                      const next = [...draftForm.addons];
-                      next[i] = { ...next[i], title: e.target.value };
-                      setDraftForm({ ...draftForm, addons: next });
-                    }}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="Price"
-                    value={a.price as number}
-                    onChange={(e) => {
-                      const next = [...draftForm.addons];
-                      next[i] = { ...next[i], price: Number(e.target.value) };
-                      setDraftForm({ ...draftForm, addons: next });
-                    }}
-                    className="w-28"
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      const next = draftForm.addons.filter((_, idx) => idx !== i);
-                      setDraftForm({ ...draftForm, addons: next });
-                    }}
-                    className="h-9 w-9"
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
+              <div className="border border-border rounded-lg overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+                  <div className="col-span-6">Item</div>
+                  <div className="col-span-2 text-right">Qty</div>
+                  <div className="col-span-2 text-right">Unit ($)</div>
+                  <div className="col-span-2 text-right">Total</div>
                 </div>
-              ))}
+                {draftForm.line_items.length === 0 && (
+                  <p className="px-3 py-4 text-xs text-muted-foreground italic">No line items. Add the service type and rooms in the customer form, or add custom lines.</p>
+                )}
+                {draftForm.line_items.map((it, idx) => {
+                  const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+                  return (
+                    <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-t border-border">
+                      <Input
+                        className="col-span-6 h-9"
+                        value={it.name}
+                        onChange={(e) => updateLineItem(idx, { name: e.target.value })}
+                      />
+                      <Input
+                        type="number" step="1" min="0"
+                        className="col-span-2 h-9 text-right"
+                        value={it.quantity}
+                        onChange={(e) => updateLineItem(idx, { quantity: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                      />
+                      <Input
+                        type="number" step="1" min="0"
+                        className="col-span-2 h-9 text-right"
+                        value={it.unit_price}
+                        onChange={(e) => updateLineItem(idx, { unit_price: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                      />
+                      <div className="col-span-1 text-right text-sm font-medium">${lineTotal.toFixed(2)}</div>
+                      <Button
+                        type="button" size="icon" variant="ghost"
+                        onClick={() => removeLineItem(idx)}
+                        className="col-span-1 h-8 w-8 justify-self-end"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -942,24 +895,11 @@ const QuotesAdmin = () => {
               />
             </div>
 
-            {/* Live breakdown */}
+            {/* Live totals */}
             <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span>${previewBase.toFixed(2)}</span></div>
-              {previewMult !== 1 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">× Condition ({previewMult})</span><span>${previewAdjustedBase.toFixed(2)}</span></div>
-              )}
-              {previewAddons > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">+ Add-ons</span><span>${previewAddons.toFixed(2)}</span></div>
-              )}
-              {previewManual !== 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">{previewManual >= 0 ? "+" : "−"} Manual adjustment</span><span>{previewManual < 0 ? "-" : ""}${Math.abs(previewManual).toFixed(2)}</span></div>
-              )}
-              {previewDiscount > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">− Discount</span><span>-${previewDiscount.toFixed(2)}</span></div>
-              )}
-              <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Subtotal</span><span>${previewSubtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({draftForm.tax_rate || 0}%)</span><span>${previewTax.toFixed(2)}</span></div>
-              <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>Total</span><span>${previewTotal.toFixed(2)}</span></div>
+              <div className="flex justify-between border-t border-border pt-1"><span className="text-muted-foreground">Subtotal</span><span>${preview.subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({draftForm.tax_rate || 0}%)</span><span>${preview.tax.toFixed(2)}</span></div>
+              <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>Total</span><span>${preview.total.toFixed(2)}</span></div>
             </div>
           </div>
 
