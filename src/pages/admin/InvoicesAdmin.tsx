@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { FileText, Plus, DollarSign, Download, Loader2 } from "lucide-react";
+import { FileText, Plus, DollarSign, Download } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import jsPDF from "jspdf";
 
@@ -22,55 +21,62 @@ interface InvoiceForm {
   customer_name: string;
   customer_email: string;
   services: { title: string; price: number }[];
-  total_amount: number;
+  subtotal: number;
+  tax_rate: number;
   payment_method: string;
   notes: string;
   due_date: string;
   booking_id: string | null;
-  quote_id: string | null;
 }
 
 const emptyForm: InvoiceForm = {
   customer_name: "",
   customer_email: "",
   services: [],
-  total_amount: 0,
+  subtotal: 0,
+  tax_rate: 0,
   payment_method: "",
   notes: "",
   due_date: "",
   booking_id: null,
-  quote_id: null,
 };
 
 const generateInvoicePDF = (inv: any) => {
   const doc = new jsPDF();
   doc.setFontSize(18);
-  doc.text("Invoice", 20, 25);
+  doc.text("INVOICE", 20, 25);
   doc.setFontSize(11);
-  doc.text(`Customer: ${inv.customer_name}`, 20, 40);
-  doc.text(`Email: ${inv.customer_email}`, 20, 48);
-  doc.text(`Issued: ${format(new Date(inv.issued_date), "MMM d, yyyy")}`, 20, 56);
-  doc.text(`Due: ${inv.due_date ? format(new Date(inv.due_date), "MMM d, yyyy") : "N/A"}`, 20, 64);
-  doc.text(`Total: $${Number(inv.total_amount).toFixed(2)}`, 20, 72);
-  doc.text(`Paid: $${Number(inv.amount_paid).toFixed(2)}`, 20, 80);
-  doc.text(`Status: ${inv.payment_status}`, 20, 88);
-  if (inv.payment_method) doc.text(`Method: ${inv.payment_method}`, 20, 96);
+  if (inv.invoice_number) doc.text(`Invoice #: ${inv.invoice_number}`, 20, 33);
+  doc.text(`Customer: ${inv.customer_name}`, 20, 44);
+  doc.text(`Email: ${inv.customer_email}`, 20, 52);
+  doc.text(`Issued: ${format(new Date(inv.issued_date), "MMM d, yyyy")}`, 20, 60);
+  doc.text(`Due: ${inv.due_date ? format(new Date(inv.due_date), "MMM d, yyyy") : "N/A"}`, 20, 68);
 
   const services = Array.isArray(inv.services) ? inv.services : [];
+  let y = 82;
   if (services.length) {
-    let y = inv.payment_method ? 112 : 104;
     doc.text("Services:", 20, y);
     services.forEach((s: any) => {
       y += 8;
       doc.text(`• ${s.title || "Item"} — $${Number(s.price || 0).toFixed(2)}`, 24, y);
     });
+    y += 6;
   }
+
+  doc.text(`Subtotal: $${Number(inv.subtotal || 0).toFixed(2)}`, 20, y); y += 8;
+  doc.text(`Tax (${Number(inv.tax_rate || 0).toFixed(2)}%): $${Number(inv.tax_amount || 0).toFixed(2)}`, 20, y); y += 8;
+  doc.setFontSize(13);
+  doc.text(`Total: $${Number(inv.total_amount).toFixed(2)}`, 20, y); y += 8;
+  doc.setFontSize(11);
+  doc.text(`Paid: $${Number(inv.amount_paid).toFixed(2)}`, 20, y); y += 8;
+  doc.text(`Status: ${inv.payment_status}`, 20, y); y += 8;
+  if (inv.payment_method) { doc.text(`Method: ${inv.payment_method}`, 20, y); y += 8; }
 
   if (inv.notes) {
     doc.text(`Notes: ${inv.notes}`, 20, doc.internal.pageSize.height - 30);
   }
 
-  doc.save(`invoice-${inv.customer_name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+  doc.save(`invoice-${inv.invoice_number || inv.customer_name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
 };
 
 const InvoicesAdmin = () => {
@@ -81,8 +87,6 @@ const InvoicesAdmin = () => {
   const [paymentOpen, setPaymentOpen] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [form, setForm] = useState<InvoiceForm>({ ...emptyForm });
-  const [selectedBookingId, setSelectedBookingId] = useState<string>("");
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string>("");
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["admin-invoices"],
@@ -96,52 +100,30 @@ const InvoicesAdmin = () => {
     },
   });
 
-  const { data: bookings, isLoading: bookingsLoading } = useQuery({
-    queryKey: ["admin-bookings-for-invoice"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("bookings")
-        .select("id, name, email, service_type, total_price, selected_addons, booking_date")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      return data ?? [];
-    },
-  });
-
-  const { data: quotes, isLoading: quotesLoading } = useQuery({
-    queryKey: ["admin-quotes-for-invoice"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("quote_requests")
-        .select("id, name, email, service_type, selected_addons")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      return data ?? [];
-    },
-  });
-
   const createInvoice = useMutation({
     mutationFn: async () => {
+      const taxAmount = +(form.subtotal * (form.tax_rate / 100)).toFixed(2);
+      const totalAmount = +(form.subtotal + taxAmount).toFixed(2);
       const { error } = await supabase.from("invoices").insert({
         customer_name: form.customer_name,
         customer_email: form.customer_email,
         services: form.services as any,
-        total_amount: form.total_amount,
+        subtotal: form.subtotal,
+        tax_rate: form.tax_rate,
+        tax_amount: taxAmount,
+        total_amount: totalAmount,
         payment_method: form.payment_method || null,
         notes: form.notes || null,
         due_date: form.due_date || null,
         booking_id: form.booking_id || null,
-        quote_id: form.quote_id || null,
         created_by: user?.id || null,
-      });
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
       setOpen(false);
       setForm({ ...emptyForm });
-      setSelectedBookingId("");
-      setSelectedQuoteId("");
       toast({ title: "Invoice created" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -184,109 +166,32 @@ const InvoicesAdmin = () => {
     },
   });
 
-  const prefillFromBooking = (bookingId: string) => {
-    const b = bookings?.find((x) => x.id === bookingId);
-    if (!b) return;
-    const addons = Array.isArray(b.selected_addons) ? (b.selected_addons as any[]) : [];
-    const services = [
-      ...(b.service_type ? [{ title: b.service_type, price: 0 }] : []),
-      ...addons.map((a: any) => ({ title: a.title || "", price: a.price || 0 })),
-    ];
-    setForm({
-      ...form,
-      customer_name: b.name,
-      customer_email: b.email,
-      services,
-      total_amount: Number(b.total_price) || 0,
-      booking_id: b.id,
-      quote_id: null,
-    });
-    setSelectedBookingId(bookingId);
-    setSelectedQuoteId("");
-  };
-
-  const prefillFromQuote = (quoteId: string) => {
-    const q = quotes?.find((x) => x.id === quoteId);
-    if (!q) return;
-    const addons = Array.isArray(q.selected_addons) ? (q.selected_addons as any[]) : [];
-    const services = [
-      ...(q.service_type ? [{ title: q.service_type, price: 0 }] : []),
-      ...addons.map((a: any) => ({ title: a.title || "", price: a.price || 0 })),
-    ];
-    setForm({
-      ...form,
-      customer_name: q.name,
-      customer_email: q.email,
-      services,
-      total_amount: 0,
-      booking_id: null,
-      quote_id: q.id,
-    });
-    setSelectedQuoteId(quoteId);
-    setSelectedBookingId("");
-  };
-
   const handleOpenChange = (o: boolean) => {
     setOpen(o);
-    if (!o) {
-      setForm({ ...emptyForm });
-      setSelectedBookingId("");
-      setSelectedQuoteId("");
-    }
+    if (!o) setForm({ ...emptyForm });
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <FileText className="w-5 h-5 text-primary" />
           <h1 className="text-2xl font-display font-bold text-foreground">Invoices</h1>
         </div>
         <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setForm({ ...emptyForm }); setSelectedBookingId(""); setSelectedQuoteId(""); }}>
-              <Plus className="w-4 h-4 mr-2" /> New Invoice
+            <Button variant="outline" onClick={() => setForm({ ...emptyForm })}>
+              <Plus className="w-4 h-4 mr-2" /> Manual Invoice
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Create Invoice</DialogTitle>
+              <DialogTitle>Create Manual Invoice</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Pre-fill from Booking</label>
-                {bookingsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading bookings...</div>
-                ) : (
-                  <Select value={selectedBookingId} onValueChange={prefillFromBooking}>
-                    <SelectTrigger><SelectValue placeholder="Select a booking..." /></SelectTrigger>
-                    <SelectContent>
-                      {bookings?.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name} — {b.service_type || "No service"} ({format(new Date(b.booking_date), "MMM d")})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Pre-fill from Quote</label>
-                {quotesLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading quotes...</div>
-                ) : (
-                  <Select value={selectedQuoteId} onValueChange={prefillFromQuote}>
-                    <SelectTrigger><SelectValue placeholder="Select a quote..." /></SelectTrigger>
-                    <SelectContent>
-                      {quotes?.map((q) => (
-                        <SelectItem key={q.id} value={q.id}>
-                          {q.name} — {q.service_type || "No service"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Invoices are normally generated automatically when a booking is marked Completed. Use this only for manual adjustments.
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Customer Name *</label>
@@ -297,10 +202,14 @@ const InvoicesAdmin = () => {
                   <Input value={form.customer_email} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Total Amount ($)</label>
-                  <Input type="number" min={0} step={0.01} value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: Number(e.target.value) })} />
+                  <label className="text-sm font-medium mb-1 block">Subtotal ($)</label>
+                  <Input type="number" min={0} step={0.01} value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Tax (%)</label>
+                  <Input type="number" min={0} step={0.01} value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: Number(e.target.value) })} />
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Due Date</label>
@@ -326,25 +235,41 @@ const InvoicesAdmin = () => {
           </DialogContent>
         </Dialog>
       </div>
+      <p className="text-sm text-muted-foreground mb-6">Invoices are automatically generated when a booking is marked as Completed.</p>
 
       {isLoading ? (
         <p className="text-muted-foreground">Loading...</p>
       ) : !invoices?.length ? (
-        <p className="text-muted-foreground">No invoices yet. Create one from a booking or quote.</p>
+        <p className="text-muted-foreground">No invoices yet. Complete a booking to generate one.</p>
       ) : (
         <div className="space-y-3">
           {invoices.map((inv) => (
             <div key={inv.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h3 className="font-medium text-foreground">{inv.customer_name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-foreground">{inv.customer_name}</h3>
+                    {(inv as any).invoice_number && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                        {(inv as any).invoice_number}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground">{inv.customer_email}</p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[inv.payment_status] || "bg-muted text-muted-foreground"}`}>
                   {inv.payment_status}
                 </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <p className="font-medium text-foreground">${Number((inv as any).subtotal || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Tax:</span>
+                  <p className="font-medium text-foreground">${Number((inv as any).tax_amount || 0).toFixed(2)}</p>
+                </div>
                 <div>
                   <span className="text-muted-foreground">Total:</span>
                   <p className="font-medium text-foreground">${Number(inv.total_amount).toFixed(2)}</p>
@@ -356,10 +281,6 @@ const InvoicesAdmin = () => {
                 <div>
                   <span className="text-muted-foreground">Issued:</span>
                   <p className="font-medium text-foreground">{format(new Date(inv.issued_date), "MMM d, yyyy")}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Due:</span>
-                  <p className="font-medium text-foreground">{inv.due_date ? format(new Date(inv.due_date), "MMM d, yyyy") : "—"}</p>
                 </div>
               </div>
               {inv.payment_method && (

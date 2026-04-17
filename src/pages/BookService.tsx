@@ -186,9 +186,10 @@ const BookService = () => {
         return;
       }
     } catch { /* proceed if check fails */ }
-    // Determine initial status based on approval mode
-    const approvalMode = siteSettings?.booking_approval_mode || "auto";
-    const initialStatus = approvalMode === "manual" ? "pending" : "confirmed";
+    // Determine initial status based on auto-approve setting
+    const autoApprove = siteSettings?.auto_approve_bookings === "true"
+      || siteSettings?.booking_approval_mode === "auto";
+    const initialStatus = autoApprove ? "confirmed" : "pending";
 
     try {
       const { data: insertedBooking, error } = await supabase.from("bookings").insert({
