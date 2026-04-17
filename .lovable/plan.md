@@ -1,82 +1,70 @@
 
 
-# Two-Layer Quote Model: Customer Form + Admin Builder
+# Service-Driven Dynamic Quote Form
 
-Preserves all existing fields and UI. Only **adds** the missing pieces and **extends** the admin Prepare-Quote dialog with structured pricing inputs.
+Extends the existing `RequestQuote.tsx` form with **service-conditional field groups** and adds the missing structured fields. All current fields, validation, upload logic, and admin views are preserved — we only add new fields and conditional grouping.
 
 ---
 
 ## 1. Database — additive only
 
-**`quote_requests`** — add columns (none removed):
-- `kitchen_count integer` (nullable) — kitchen yes/no or count
-- `condition_level text` (nullable) — `'light' | 'standard' | 'heavy'`
+Add columns to `quote_requests` (none removed):
 
-**`quote_drafts`** — add columns (none removed):
-- `condition_multiplier numeric default 1` — applied to base price
-- `manual_adjustment numeric default 0` — admin override
-- `breakdown jsonb default '{}'` — snapshot of room/condition/addons used to compute total (audit trail)
+| Column | Type | Purpose |
+|---|---|---|
+| `full_bathrooms` | integer | Split from generic bathrooms |
+| `half_bathrooms` | integer | Split from generic bathrooms |
+| `living_rooms` | integer | Living rooms / halls count |
+| `office_rooms` | integer | Commercial: office sections |
+| `floor_type` | text | Commercial: carpet/tile/mixed |
+| `property_size` | text | Commercial: small/medium/large |
+| `has_cabinets` | boolean | Move-in/out: cabinets included |
+| `is_empty_property` | boolean | Move-in/out: empty toggle |
 
-No existing column is renamed or dropped. No status changes.
+Existing `bedrooms`, `bathrooms`, `kitchen_count`, `condition_level`, `frequency`, `selected_addons`, `property_type`, `square_footage`, `has_pets`, `entry_codes` all remain unchanged for backward compatibility.
 
 ---
 
-## 2. Customer form — `src/pages/RequestQuote.tsx`
+## 2. Customer Form — `src/pages/RequestQuote.tsx`
 
-**Keep everything currently there.** Add only the two missing fields:
+### Reorder: Service Type moves to the top
+Service Type select is repositioned **above** property details so the form becomes service-driven. Contact fields (name/email/phone/address) stay where they are.
 
-- **Kitchen** — number input (0–10) labelled "Kitchens" placed next to Bedrooms/Bathrooms grid.
-- **Condition Level** — select with options `Light`, `Standard`, `Heavy`, placed near Frequency.
+### Conditional field groups (rendered only after service selected)
 
-**Confirm absent (already true):** no price display, no totals, no calculator. The form remains pure data collection.
+Each group is wrapped in a labeled section card. Logic uses simple service-name matching (case-insensitive contains) against existing service titles:
 
-Submit payload extended with `kitchen_count` and `condition_level`. All other fields (property_type, sq ft, bedrooms, bathrooms, frequency, pets, entry codes, addons, description, attachment) stay exactly as-is.
+| Service match | Group rendered |
+|---|---|
+| "residential" / "regular" / "standard" | **Residential**: bedrooms, full baths, half baths, living rooms, kitchens, condition, addons |
+| "deep" | **Deep Cleaning**: bedrooms, full baths, half baths, kitchens (highlighted), living rooms, condition (required emphasis), addons |
+| "commercial" / "office" | **Commercial**: bathrooms, office rooms, floor type select, property size select, frequency |
+| "move" | **Move In/Out**: bedrooms, bathrooms, kitchens, cabinets toggle, empty property toggle, condition (default heavy), addons |
+| "recurring" / "weekly" / "monthly" / "bi-weekly" | **Recurring**: bedrooms, bathrooms, kitchens, frequency, condition (maintenance) |
+| any other / unmatched | Falls back to current generic layout |
+
+**Preserved as-is:** name, email, phone, address, preferred_contact, property_type, square_footage, has_pets, entry_codes, description, attachment upload, consent checkbox, rate-limit, validation, submit handler structure.
+
+Submit payload extended with the new fields (all nullable).
 
 ---
 
 ## 3. Admin Quote Builder — `src/pages/admin/QuotesAdmin.tsx`
 
-The existing **Prepare Quote** dialog gets a new read-only "Property Summary" panel above the pricing inputs and an extended pricing section.
+The existing **Property Summary** panel in the Prepare Quote dialog gains the new fields. No layout overhaul — just additional rows/chips conditional on which fields are populated:
 
-### New "Property Summary" panel (read-only)
-Renders from the original `quote_requests` row:
-- Service type · Property type · Sq ft
-- Bedrooms · Bathrooms · **Kitchens** · Pets
-- **Condition level** (badge: Light/Standard/Heavy)
-- Frequency · Entry codes
-- Customer-selected add-ons (chips)
-- Description (collapsed, expandable)
+- Bathrooms displays as `Full: X · Half: Y` when split values exist, else falls back to generic `bathrooms`
+- Living rooms / Office rooms shown when present
+- Floor type, property size, cabinets, empty property shown when present
+- Service type displayed at top (already present)
 
-This panel is purely informational — admin sees the full intake at a glance.
-
-### Extended pricing inputs (additive to current draft form)
-Existing fields remain: base price, addons list, discount, tax_rate, notes, validity_days. **Add:**
-
-- **Condition multiplier** — auto-suggested from `condition_level` (Light = 0.9, Standard = 1.0, Heavy = 1.3) but editable.
-- **Manual adjustment** — signed numeric override (+/−) applied after multiplier.
-- **Live breakdown card** showing:
-  ```
-  Base                       $X
-  × Condition (1.3 Heavy)    $Y
-  + Add-ons                  $Z
-  + Manual adjustment        $A
-  − Discount                 $D
-  Subtotal                   $S
-  Tax (n%)                   $T
-  ─────────────────────────
-  Total                      $TOTAL
-  ```
-
-On Save, the computed `breakdown` JSON is stored alongside the draft so the PDF and any later audit reflect the exact composition.
-
-### PDF generation — `src/lib/quotePdf.ts`
-Pricing section extended to render the same breakdown shown in the dialog (base, condition multiplier line, addons, manual adjustment, discount, subtotal, tax, total). No template restructuring — only the Pricing block gains rows.
+Pricing logic, condition multiplier, manual adjustment, breakdown card — all unchanged.
 
 ---
 
-## 4. Consistency rule
+## 4. PDF — no change required
 
-Because the customer form already uses one shared schema (`quote_requests`) regardless of selected service, no service-specific branching is introduced. The two new fields apply uniformly to every service type. Admin builder reads the same fields for every quote.
+`quotePdf.ts` reads from the admin `quote_drafts`, not from the raw request, so no PDF changes are needed for this iteration.
 
 ---
 
@@ -84,11 +72,10 @@ Because the customer form already uses one shared schema (`quote_requests`) rega
 
 | File | Change |
 |---|---|
-| **New migration** | Add `kitchen_count`, `condition_level` to `quote_requests`; add `condition_multiplier`, `manual_adjustment`, `breakdown` to `quote_drafts` |
-| `src/pages/RequestQuote.tsx` | Add Kitchen number + Condition Level select; include in insert payload |
-| `src/pages/admin/QuotesAdmin.tsx` | Add Property Summary panel + condition multiplier + manual adjustment inputs + live breakdown in Prepare Quote dialog |
-| `src/lib/quotePdf.ts` | Render condition multiplier and manual adjustment rows in pricing block |
-| `src/integrations/supabase/types.ts` | Auto-regenerated to reflect new columns |
+| **New migration** | Add 8 nullable columns to `quote_requests` |
+| `src/pages/RequestQuote.tsx` | Reorder Service Type to top; add `renderServiceFields()` switch with grouped sections; extend insert payload |
+| `src/pages/admin/QuotesAdmin.tsx` | Property Summary panel renders new fields when present |
+| `src/integrations/supabase/types.ts` | Auto-regenerated |
 
-No UI redesign, no removed fields, no schema renames, no service-specific forms.
+No removed fields, no UI redesign, no breaking schema changes.
 
