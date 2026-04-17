@@ -561,13 +561,21 @@ export type Database = {
           description: string
           email: string
           entry_codes: string | null
+          floor_type: string | null
           frequency: string | null
+          full_bathrooms: number | null
+          half_bathrooms: number | null
+          has_cabinets: boolean | null
           has_pets: boolean | null
           id: string
+          is_empty_property: boolean | null
           kitchen_count: number | null
+          living_rooms: number | null
           name: string
+          office_rooms: number | null
           phone: string | null
           preferred_contact: string | null
+          property_size: string | null
           property_type: string | null
           selected_addons: Json | null
           service_type: string | null
@@ -587,13 +595,21 @@ export type Database = {
           description: string
           email: string
           entry_codes?: string | null
+          floor_type?: string | null
           frequency?: string | null
+          full_bathrooms?: number | null
+          half_bathrooms?: number | null
+          has_cabinets?: boolean | null
           has_pets?: boolean | null
           id?: string
+          is_empty_property?: boolean | null
           kitchen_count?: number | null
+          living_rooms?: number | null
           name: string
+          office_rooms?: number | null
           phone?: string | null
           preferred_contact?: string | null
+          property_size?: string | null
           property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
@@ -613,13 +629,21 @@ export type Database = {
           description?: string
           email?: string
           entry_codes?: string | null
+          floor_type?: string | null
           frequency?: string | null
+          full_bathrooms?: number | null
+          half_bathrooms?: number | null
+          has_cabinets?: boolean | null
           has_pets?: boolean | null
           id?: string
+          is_empty_property?: boolean | null
           kitchen_count?: number | null
+          living_rooms?: number | null
           name?: string
+          office_rooms?: number | null
           phone?: string | null
           preferred_contact?: string | null
+          property_size?: string | null
           property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
