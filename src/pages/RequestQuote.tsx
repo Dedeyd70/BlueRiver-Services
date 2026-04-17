@@ -218,7 +218,7 @@ const RequestQuote = () => {
                     <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
                   </div>
                 </div>
-                <div className="grid sm:grid-cols-2 gap-5">
+                <div className="grid sm:grid-cols-3 gap-5">
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
                     <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
@@ -226,6 +226,10 @@ const RequestQuote = () => {
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
                     <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Kitchens</label>
+                    <Input type="number" min="0" max="10" placeholder="0" value={form.kitchen_count} onChange={update("kitchen_count")} />
                   </div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-5">
@@ -239,12 +243,19 @@ const RequestQuote = () => {
                       <option value="Monthly">Monthly</option>
                     </select>
                   </div>
-                  <div className="flex items-end pb-1">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
-                      <span className="text-sm font-medium text-foreground">Pets in home</span>
-                    </label>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
+                    <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <option value="">Select condition</option>
+                      <option value="light">Light</option>
+                      <option value="standard">Standard</option>
+                      <option value="heavy">Heavy</option>
+                    </select>
                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="quote-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
+                  <label htmlFor="quote-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Entry / Gate Codes</label>
