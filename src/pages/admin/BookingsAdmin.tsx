@@ -8,7 +8,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import jsPDF from "jspdf";
+import { useAuth } from "@/hooks/useAuth";
+import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
+import { notifyAdmins } from "@/lib/notifications";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
