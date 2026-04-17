@@ -78,6 +78,7 @@ export type Database = {
           phone: string | null
           preferred_contact: string | null
           property_type: string | null
+          quote_id: string | null
           selected_addons: Json | null
           service_type: string | null
           square_footage: string | null
@@ -104,6 +105,7 @@ export type Database = {
           phone?: string | null
           preferred_contact?: string | null
           property_type?: string | null
+          quote_id?: string | null
           selected_addons?: Json | null
           service_type?: string | null
           square_footage?: string | null
@@ -130,6 +132,7 @@ export type Database = {
           phone?: string | null
           preferred_contact?: string | null
           property_type?: string | null
+          quote_id?: string | null
           selected_addons?: Json | null
           service_type?: string | null
           square_footage?: string | null
@@ -138,7 +141,15 @@ export type Database = {
           total_price?: number | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bookings_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       branding_settings: {
         Row: {
@@ -306,12 +317,16 @@ export type Database = {
           customer_name: string
           due_date: string | null
           id: string
+          invoice_number: string | null
           issued_date: string
           notes: string | null
           payment_method: string | null
           payment_status: string
           quote_id: string | null
           services: Json
+          subtotal: number
+          tax_amount: number
+          tax_rate: number
           total_amount: number
           updated_at: string
         }
@@ -324,12 +339,16 @@ export type Database = {
           customer_name: string
           due_date?: string | null
           id?: string
+          invoice_number?: string | null
           issued_date?: string
           notes?: string | null
           payment_method?: string | null
           payment_status?: string
           quote_id?: string | null
           services?: Json
+          subtotal?: number
+          tax_amount?: number
+          tax_rate?: number
           total_amount?: number
           updated_at?: string
         }
@@ -342,12 +361,16 @@ export type Database = {
           customer_name?: string
           due_date?: string | null
           id?: string
+          invoice_number?: string | null
           issued_date?: string
           notes?: string | null
           payment_method?: string | null
           payment_status?: string
           quote_id?: string | null
           services?: Json
+          subtotal?: number
+          tax_amount?: number
+          tax_rate?: number
           total_amount?: number
           updated_at?: string
         }
@@ -466,6 +489,7 @@ export type Database = {
           attachment_url: string | null
           bathrooms: number | null
           bedrooms: number | null
+          close_reason: string | null
           consent_given: boolean
           created_at: string
           description: string
@@ -489,6 +513,7 @@ export type Database = {
           attachment_url?: string | null
           bathrooms?: number | null
           bedrooms?: number | null
+          close_reason?: string | null
           consent_given?: boolean
           created_at?: string
           description: string
@@ -512,6 +537,7 @@ export type Database = {
           attachment_url?: string | null
           bathrooms?: number | null
           bedrooms?: number | null
+          close_reason?: string | null
           consent_given?: boolean
           created_at?: string
           description?: string
