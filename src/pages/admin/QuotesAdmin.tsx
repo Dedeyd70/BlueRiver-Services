@@ -345,9 +345,19 @@ const QuotesAdmin = () => {
                                 <Button
                                   variant="default"
                                   size="sm"
-                                  onClick={() => openConvert(q)}
+                                  onClick={() => {
+                                    if (!canConvert) {
+                                      toast({
+                                        title: "Activity log required",
+                                        description: "Please add at least one interaction before converting this quote",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    openConvert(q);
+                                  }}
                                   className="gap-1"
-                                  disabled={!canConvert}
+                                  aria-disabled={!canConvert}
                                 >
                                   <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
                                 </Button>
