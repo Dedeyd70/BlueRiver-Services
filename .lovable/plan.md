@@ -1,114 +1,72 @@
 
 
-# Database-Driven Itemized Pricing Engine
+# Dynamic Service Fields — DB-Driven Form + Pricing
 
-Refactors pricing into a structured, integer-based, DB-driven engine. Preserves existing UI shells, fields, and flows — only swaps the pricing internals and extends the admin Prepare-Quote dialog with an itemized table.
+## What already exists (preserve, don't rebuild)
+- `service_types` table with base_price ✅
+- `service_pricing_rules` table with category + unit_price ✅
+- `condition_settings` table with integer surcharges ✅
+- `quote_drafts.line_items` JSONB ✅
+- Itemized Prepare-Quote table in `QuotesAdmin.tsx` ✅
+- `pricingEngine.ts` computing line items ✅
+- Quote PDF rendering line items ✅
+- Customer form with dynamic groups in `RequestQuote.tsx` ✅
+- Admin "Pricing Settings" tab ✅
 
----
+## What's missing (the gap)
+- `ROOM_CATEGORIES` array is **hardcoded** in `PricingSettings.tsx` — categories should be admin-defined per service
+- Customer form groups (`residential`/`deep`/`commercial`/`move`/`recurring`) are **hardcoded by name-matching** — should be driven by DB
+- No `service_fields` table linking field definitions to a service
 
-## 1. Database — three new tables + line-items column
+## The change — additive only
 
-**`service_types`** (new)
-- `id uuid pk`, `name text unique`, `base_price integer not null default 0`
-- Seeded from existing `services` (main category only) by name match
-
-**`service_pricing_rules`** (new)
-- `id uuid pk`, `service_type_id uuid → service_types(id)`, `category text` (Bedroom/Bathroom/FullBath/HalfBath/Kitchen/LivingRoom/OfficeRoom), `unit_price integer not null default 0`
-- Unique `(service_type_id, category)`
-
-**`condition_settings`** (new)
-- `id uuid pk`, `name text unique` (Light/Standard/Heavy/Post-Renovation), `surcharge_amount integer not null default 0`
-- Seeded: Light=0, Standard=20, Heavy=50, Post-Renovation=100
-
-**`quote_drafts`** — add `line_items jsonb default '[]'` (keeps existing columns; `condition_multiplier`/`manual_adjustment` retained for backward-compat but no longer used by new UI)
-
-**`invoices`** — already has `services jsonb`; reuse it for line-items in same shape.
-
-RLS: admin-manage / public-read on the three new tables (matches existing patterns).
-
----
-
-## 2. Admin → new "Pricing Settings" tab
-
-Added under existing `SettingsAdmin.tsx` as a 4th tab — no nav restructure.
-
-- **Service base prices** — table of service_types with integer input
-- **Category rules** — per service, editable rows (Bedroom $, Bathroom $, Kitchen $, Office $, LivingRoom $)
-- **Condition surcharges** — 4 fixed rows, integer inputs
-
-All inputs `type="number" step="1" min="0"`; reject non-integer on save.
-
----
-
-## 3. Pricing engine — `src/lib/pricingEngine.ts` (new)
-
-Pure function:
+### 1. New table: `service_fields`
 ```
-computeQuote(request, rules, conditionSurcharge, addons, taxRate) → {
-  lineItems: [{name, quantity, unit_price, total_price, type}],
-  subtotal, tax, total
-}
+id uuid pk
+service_type_id uuid → service_types(id) on delete cascade
+field_key text         -- e.g. "bedrooms", "office_rooms"
+label text             -- "Bedrooms"
+input_type text        -- 'number' | 'select' | 'toggle'
+options jsonb default '[]'  -- for select inputs
+required boolean default false
+display_order integer default 0
+unique(service_type_id, field_key)
 ```
-- Pulls base from `service_types`, multiplies room counts by matching rule unit_price
-- Appends each customer-selected addon (uses parsed integer of `price_starting`)
-- Appends condition surcharge as its own line item
-- Integer math throughout (`Math.round`); no multipliers, no manual adjustment
+RLS: admin manage / public read (matches existing pattern).
 
----
+Seed from current hardcoded categories so nothing breaks for existing services (Bedrooms, Bathrooms, FullBath, HalfBath, Kitchen, LivingRoom, OfficeRoom — number inputs).
 
-## 4. Prepare-Quote dialog — `QuotesAdmin.tsx`
+### 2. Admin "Configure Service" — extend `PricingSettings.tsx`
+- Replace hardcoded `ROOM_CATEGORIES` with `service_fields` rows fetched per service
+- Each service card gains: list of fields (label + input_type + price input), "+ Add Field" dialog (key, label, input_type, required), delete button per row
+- `service_pricing_rules.category` continues to map to `field_key` (already aligned — no schema change to that table)
+- New service flow: `ServicesAdmin.tsx` Create → after insert into `services`, also insert matching `service_types` row, then toast "Configure pricing in Settings → Pricing"
 
-Replaces the current pricing inputs with an **Itemized Pricing Table**:
+### 3. Dynamic customer form — refactor `RequestQuote.tsx`
+- Fetch `service_fields` for selected service via React Query
+- Replace hardcoded `serviceGroup` switch with single generic renderer that maps each field to the right control (`number` → Input, `select` → select with options, `toggle` → Checkbox)
+- Keep all existing common fields (name/email/phone/address/property/sq ft/condition/addons/description/upload) untouched
+- Submit payload: existing typed columns kept for known keys (bedrooms, bathrooms, etc.); unknown custom keys stored in a new `custom_fields jsonb` column on `quote_requests` (additive, nullable)
 
-| Item | Qty | Unit Price | Total |
-|---|---|---|---|
-| Base Service | 1 | $X | $X |
-| Bedrooms | 3 | $15 | $45 |
-| Bathrooms | 2 | $25 | $50 |
-| Kitchens | 1 | $30 | $30 |
-| Office Rooms | … | … | … |
-| Add-on: Oven | 1 | $40 | $40 |
-| Condition (Heavy) | 1 | $50 | $50 |
+### 4. Pricing engine — `pricingEngine.ts`
+- Already category-driven via `service_pricing_rules.category === field_key` — only change: read field values dynamically from `quote_requests.custom_fields` (fallback) **plus** existing typed columns. No formula change.
 
-- Auto-populated on dialog open via `computeQuote(...)` from request fields
-- Each row is **editable** (qty + unit price) so admin can tweak without leaving the engine
-- Totals (subtotal/tax/total) recompute live
-- **Removed from UI**: condition multiplier input, manual adjustment input
-- **Property Summary panel** unchanged — still shows full intake
-- On Save: `line_items` JSON stored in `quote_drafts.line_items`; `base_price` mirrors base row for backward-compat
+### 5. Prepare Quote dialog — `QuotesAdmin.tsx`
+- No UI change. Itemized table already renders whatever line items the engine produces, so adding new field types automatically flows through.
 
----
+### 6. Quote PDF
+- No change. Already renders `line_items` array generically.
 
-## 5. PDF — `src/lib/quotePdf.ts`
-
-Pricing block rewritten to render the line_items table (Item / Qty / Unit / Total) followed by Subtotal · Tax · Total. Falls back to legacy rendering if `line_items` empty (covers older drafts).
-
----
-
-## 6. Customer form — `src/pages/RequestQuote.tsx`
-
-**No structural changes** (the dynamic service-driven form from the previous step already collects every input the engine needs: bedrooms, full/half baths, kitchens, living rooms, office rooms, condition_level, addons). No pricing exposed to customer.
-
----
-
-## 7. Invoice alignment — `src/lib/createInvoiceFromBooking.ts`
-
-When converting quote → booking → invoice, copy the quote draft's `line_items` into `invoices.services` so the invoice mirrors the quote breakdown. Invoice numbering already uses `INV-YYYY-NNNN` via DB trigger; switch prefix to `BR-` per spec.
-
----
-
-## 8. Files Touched
+## Files Touched
 
 | File | Change |
 |---|---|
-| **New migration** | Create `service_types`, `service_pricing_rules`, `condition_settings` (+ seed); add `line_items` to `quote_drafts`; update invoice-number trigger prefix to `BR-` |
-| `src/lib/pricingEngine.ts` | NEW — pure compute function |
-| `src/pages/admin/SettingsAdmin.tsx` | Add "Pricing" tab |
-| `src/components/admin/PricingSettings.tsx` | NEW — three editor sections |
-| `src/pages/admin/QuotesAdmin.tsx` | Swap pricing inputs for itemized editable table; remove multiplier + manual adjustment from UI |
-| `src/lib/quotePdf.ts` | Render line_items table |
-| `src/lib/createInvoiceFromBooking.ts` | Pass through line_items when invoice originates from a quote-linked booking |
+| **New migration** | Create `service_fields` table + RLS; add `custom_fields jsonb` to `quote_requests`; seed default fields for existing service_types |
+| `src/components/admin/PricingSettings.tsx` | Replace `ROOM_CATEGORIES` constant with DB-driven fields; add field CRUD UI per service |
+| `src/pages/admin/ServicesAdmin.tsx` | On create, also upsert `service_types` row; success toast links to Pricing tab |
+| `src/pages/RequestQuote.tsx` | Replace hardcoded group switch with `<DynamicFields service_type_id=... />` renderer; keep all common fields |
+| `src/lib/pricingEngine.ts` | Read custom_fields jsonb in addition to typed columns |
 | `src/integrations/supabase/types.ts` | Auto-regenerated |
 
-No removed customer fields, no UI redesign of public pages, no breaking changes to existing quote/booking records (legacy fields kept, new path is additive).
+No removed tables, no removed UI, no breaking changes. Existing quotes/bookings/PDFs continue working.
 
