@@ -124,48 +124,20 @@ export function computeQuote(
         .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
     : [];
 
-  if (serviceFields.length > 0) {
-    serviceFields.forEach((f) => {
-      const qty = readField(f.field_key);
-      if (!qty || qty <= 0) return;
-      // Pricing rule key matches field_key (DB-driven). Fallback: match by label-derived legacy keys.
-      const rule = ruleFor(f.field_key);
-      const unit = intify(rule?.unit_price ?? 0);
-      items.push({
-        name: f.label,
-        quantity: qty,
-        unit_price: unit,
-        total_price: intify(qty * unit),
-        type: "room",
-      });
+  // Strict dynamic resolution only — pricing rules must match service_fields.field_key
+  serviceFields.forEach((f) => {
+    const qty = readField(f.field_key);
+    if (!qty || qty <= 0) return;
+    const rule = ruleFor(f.field_key);
+    const unit = intify(rule?.unit_price ?? 0);
+    items.push({
+      name: f.label,
+      quantity: qty,
+      unit_price: unit,
+      total_price: intify(qty * unit),
+      type: "room",
     });
-  } else {
-    // Legacy fallback when no service_fields are configured for this service
-    const addRoom = (label: string, qty: number, category: string) => {
-      if (!qty || qty <= 0) return;
-      const unit = intify(ruleFor(category)?.unit_price ?? 0);
-      items.push({
-        name: label,
-        quantity: qty,
-        unit_price: unit,
-        total_price: intify(qty * unit),
-        type: "room",
-      });
-    };
-
-    addRoom("Bedrooms", intify(request.bedrooms), "Bedroom");
-    const fullB = intify(request.full_bathrooms);
-    const halfB = intify(request.half_bathrooms);
-    if (fullB > 0 || halfB > 0) {
-      addRoom("Full Bathrooms", fullB, "FullBath");
-      addRoom("Half Bathrooms", halfB, "HalfBath");
-    } else {
-      addRoom("Bathrooms", intify(request.bathrooms), "Bathroom");
-    }
-    addRoom("Kitchens", intify(request.kitchen_count), "Kitchen");
-    addRoom("Living Rooms", intify(request.living_rooms), "LivingRoom");
-    addRoom("Office Rooms", intify(request.office_rooms), "OfficeRoom");
-  }
+  });
 
   // Add-ons
   const addons = Array.isArray(request.selected_addons) ? request.selected_addons : [];
