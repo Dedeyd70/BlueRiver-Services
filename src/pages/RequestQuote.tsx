@@ -112,12 +112,14 @@ const RequestQuote = () => {
         square_footage: form.square_footage || null,
         bedrooms: form.bedrooms ? parseInt(form.bedrooms) : null,
         bathrooms: form.bathrooms ? parseInt(form.bathrooms) : null,
+        kitchen_count: form.kitchen_count ? parseInt(form.kitchen_count) : null,
         frequency: form.frequency || null,
+        condition_level: form.condition_level || null,
         has_pets: form.has_pets,
         entry_codes: form.entry_codes.trim() || null,
         selected_addons: selectedAddons.map((title) => ({ title })),
         status: "requested",
-      }).select("id").maybeSingle();
+      } as any).select("id").maybeSingle();
 
       if (error) {
         toast({ title: "Quote submission failed.", description: "Please try again later.", variant: "destructive" });
