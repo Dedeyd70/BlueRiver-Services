@@ -19,6 +19,9 @@ export interface QuoteDraft {
   tax_rate?: number | null;
   notes?: string | null;
   validity_days?: number | null;
+  condition_multiplier?: number | null;
+  manual_adjustment?: number | null;
+  breakdown?: any;
 }
 
 interface BrandingMap {
