@@ -1,0 +1,1 @@
+ALTER TABLE public.quote_requests ALTER COLUMN status SET DEFAULT 'requested';
