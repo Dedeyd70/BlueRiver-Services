@@ -28,10 +28,23 @@ const RequestQuote = () => {
     name: "", email: "", phone: "", address: "", service: searchParams.get("service") || "",
     description: "", preferred_contact: "email",
     property_type: "", square_footage: "", bedrooms: "", bathrooms: "", kitchen_count: "",
+    full_bathrooms: "", half_bathrooms: "", living_rooms: "", office_rooms: "",
+    floor_type: "", property_size: "",
     frequency: "", condition_level: "", has_pets: false, entry_codes: "",
+    has_cabinets: false, is_empty_property: false,
   });
 
   const { mainServices, addons } = useServices();
+
+  // Determine which dynamic field group to render based on service title
+  const serviceLower = form.service.toLowerCase();
+  const serviceGroup: "residential" | "deep" | "commercial" | "move" | "recurring" | "generic" =
+    serviceLower.includes("deep") ? "deep"
+    : serviceLower.includes("commercial") || serviceLower.includes("office") ? "commercial"
+    : serviceLower.includes("move") ? "move"
+    : (serviceLower.includes("recurring") || serviceLower.includes("weekly") || serviceLower.includes("monthly")) ? "recurring"
+    : (serviceLower.includes("residential") || serviceLower.includes("regular") || serviceLower.includes("standard")) ? "residential"
+    : form.service ? "generic" : "generic";
 
 
   const toggleAddon = (title: string) => {
