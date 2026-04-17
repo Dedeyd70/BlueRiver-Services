@@ -39,6 +39,16 @@ export interface QuoteRequestLike {
   office_rooms?: number | null;
   condition_level?: string | null;
   selected_addons?: any;
+  custom_fields?: Record<string, any> | null;
+}
+
+export interface ServiceField {
+  id: string;
+  service_type_id: string;
+  field_key: string;
+  label: string;
+  input_type?: string;
+  display_order?: number;
 }
 
 const intify = (n: any): number => {
