@@ -585,6 +585,7 @@ export type Database = {
           condition_level: string | null
           consent_given: boolean
           created_at: string
+          custom_fields: Json
           description: string
           email: string
           entry_codes: string | null
@@ -619,6 +620,7 @@ export type Database = {
           condition_level?: string | null
           consent_given?: boolean
           created_at?: string
+          custom_fields?: Json
           description: string
           email: string
           entry_codes?: string | null
@@ -653,6 +655,7 @@ export type Database = {
           condition_level?: string | null
           consent_given?: boolean
           created_at?: string
+          custom_fields?: Json
           description?: string
           email?: string
           entry_codes?: string | null
@@ -679,6 +682,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      service_fields: {
+        Row: {
+          created_at: string
+          display_order: number
+          field_key: string
+          id: string
+          input_type: string
+          label: string
+          options: Json
+          required: boolean
+          service_type_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          field_key: string
+          id?: string
+          input_type?: string
+          label: string
+          options?: Json
+          required?: boolean
+          service_type_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          field_key?: string
+          id?: string
+          input_type?: string
+          label?: string
+          options?: Json
+          required?: boolean
+          service_type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_fields_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_pricing_rules: {
         Row: {
