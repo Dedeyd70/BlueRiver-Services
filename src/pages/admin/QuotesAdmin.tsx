@@ -322,12 +322,30 @@ const QuotesAdmin = () => {
   };
 
   // Live preview totals for prepare dialog
-  const previewSubtotal =
-    Number(draftForm.base_price || 0) +
-    draftForm.addons.reduce((s, a) => s + (Number(a.price) || 0), 0) -
-    Number(draftForm.discount || 0);
+  const previewBase = Number(draftForm.base_price || 0);
+  const previewMult = Number(draftForm.condition_multiplier || 1);
+  const previewAdjustedBase = previewBase * previewMult;
+  const previewAddons = draftForm.addons.reduce((s, a) => s + (Number(a.price) || 0), 0);
+  const previewManual = Number(draftForm.manual_adjustment || 0);
+  const previewDiscount = Number(draftForm.discount || 0);
+  const previewSubtotal = previewAdjustedBase + previewAddons + previewManual - previewDiscount;
   const previewTax = previewSubtotal * (Number(draftForm.tax_rate || 0) / 100);
   const previewTotal = previewSubtotal + previewTax;
+
+  const buildBreakdown = () => ({
+    base: previewBase,
+    condition_multiplier: previewMult,
+    adjusted_base: previewAdjustedBase,
+    addons: draftForm.addons.map((a) => ({ title: a.title, price: Number(a.price) || 0 })),
+    addons_total: previewAddons,
+    manual_adjustment: previewManual,
+    discount: previewDiscount,
+    subtotal: previewSubtotal,
+    tax_rate: Number(draftForm.tax_rate || 0),
+    tax_amount: previewTax,
+    total: previewTotal,
+    computed_at: new Date().toISOString(),
+  });
 
   return (
     <TooltipProvider>
