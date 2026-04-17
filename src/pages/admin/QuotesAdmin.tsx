@@ -189,7 +189,7 @@ const QuotesAdmin = () => {
   });
 
   const saveDraft = useMutation({
-    mutationFn: async ({ quoteId, payload, isUpdate }: { quoteId: string; payload: DraftForm; isUpdate: boolean }) => {
+    mutationFn: async ({ quoteId, payload, isUpdate, breakdown }: { quoteId: string; payload: DraftForm; isUpdate: boolean; breakdown: any }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const row = {
         quote_id: quoteId,
@@ -201,6 +201,9 @@ const QuotesAdmin = () => {
         tax_rate: Number(payload.tax_rate) || 0,
         notes: payload.notes || null,
         validity_days: Number(payload.validity_days) || 7,
+        condition_multiplier: Number(payload.condition_multiplier) || 1,
+        manual_adjustment: Number(payload.manual_adjustment) || 0,
+        breakdown,
         prepared_by: user?.id ?? null,
       };
       const { error } = await (supabase as any)
