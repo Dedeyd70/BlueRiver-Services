@@ -286,6 +286,8 @@ const QuotesAdmin = () => {
         tax_rate: Number(existing.tax_rate) || 0,
         notes: existing.notes ?? "",
         validity_days: Number(existing.validity_days) || 7,
+        condition_multiplier: Number(existing.condition_multiplier) || 1,
+        manual_adjustment: Number(existing.manual_adjustment) || 0,
       });
     } else {
       // Prefill hints from submission
@@ -297,6 +299,7 @@ const QuotesAdmin = () => {
         scope: q.description ?? "",
         addons: submittedAddons.map((a: any) => ({ title: a.title || "Add-on", price: Number(a.price) || 0 })),
         tax_rate: defaultTax,
+        condition_multiplier: conditionMultiplierFor((q as any).condition_level),
       });
     }
     setPrepareTarget(q);
