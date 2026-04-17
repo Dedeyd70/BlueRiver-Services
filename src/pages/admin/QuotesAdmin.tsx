@@ -803,6 +803,36 @@ const QuotesAdmin = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">
+                  Condition multiplier
+                  {prepareTarget && (prepareTarget as any).condition_level && (
+                    <span className="text-muted-foreground font-normal ml-1">
+                      (suggested {conditionMultiplierFor((prepareTarget as any).condition_level)} for {(prepareTarget as any).condition_level})
+                    </span>
+                  )}
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={draftForm.condition_multiplier}
+                  onChange={(e) => setDraftForm({ ...draftForm, condition_multiplier: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Manual adjustment ($)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={draftForm.manual_adjustment}
+                  onChange={(e) => setDraftForm({ ...draftForm, manual_adjustment: Number(e.target.value) })}
+                  placeholder="+/- override"
+                />
+              </div>
+            </div>
+
+
             {/* Add-ons */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
