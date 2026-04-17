@@ -899,9 +899,22 @@ const QuotesAdmin = () => {
               />
             </div>
 
-            {/* Live preview */}
+            {/* Live breakdown */}
             <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>${previewSubtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span>${previewBase.toFixed(2)}</span></div>
+              {previewMult !== 1 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">× Condition ({previewMult})</span><span>${previewAdjustedBase.toFixed(2)}</span></div>
+              )}
+              {previewAddons > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">+ Add-ons</span><span>${previewAddons.toFixed(2)}</span></div>
+              )}
+              {previewManual !== 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">{previewManual >= 0 ? "+" : "−"} Manual adjustment</span><span>{previewManual < 0 ? "-" : ""}${Math.abs(previewManual).toFixed(2)}</span></div>
+              )}
+              {previewDiscount > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">− Discount</span><span>-${previewDiscount.toFixed(2)}</span></div>
+              )}
+              <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Subtotal</span><span>${previewSubtotal.toFixed(2)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Tax ({draftForm.tax_rate || 0}%)</span><span>${previewTax.toFixed(2)}</span></div>
               <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>Total</span><span>${previewTotal.toFixed(2)}</span></div>
             </div>
