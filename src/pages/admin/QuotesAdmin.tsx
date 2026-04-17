@@ -37,6 +37,8 @@ interface DraftForm {
   tax_rate: number;
   notes: string;
   validity_days: number;
+  condition_multiplier: number;
+  manual_adjustment: number;
 }
 
 const emptyDraft: DraftForm = {
@@ -48,6 +50,17 @@ const emptyDraft: DraftForm = {
   tax_rate: 0,
   notes: "",
   validity_days: 7,
+  condition_multiplier: 1,
+  manual_adjustment: 0,
+};
+
+const conditionMultiplierFor = (level?: string | null): number => {
+  switch ((level || "").toLowerCase()) {
+    case "light": return 0.9;
+    case "heavy": return 1.3;
+    case "standard": return 1.0;
+    default: return 1.0;
+  }
 };
 
 const QuotesAdmin = () => {
@@ -176,7 +189,7 @@ const QuotesAdmin = () => {
   });
 
   const saveDraft = useMutation({
-    mutationFn: async ({ quoteId, payload, isUpdate }: { quoteId: string; payload: DraftForm; isUpdate: boolean }) => {
+    mutationFn: async ({ quoteId, payload, isUpdate, breakdown }: { quoteId: string; payload: DraftForm; isUpdate: boolean; breakdown: any }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const row = {
         quote_id: quoteId,
@@ -188,6 +201,9 @@ const QuotesAdmin = () => {
         tax_rate: Number(payload.tax_rate) || 0,
         notes: payload.notes || null,
         validity_days: Number(payload.validity_days) || 7,
+        condition_multiplier: Number(payload.condition_multiplier) || 1,
+        manual_adjustment: Number(payload.manual_adjustment) || 0,
+        breakdown,
         prepared_by: user?.id ?? null,
       };
       const { error } = await (supabase as any)
@@ -270,6 +286,8 @@ const QuotesAdmin = () => {
         tax_rate: Number(existing.tax_rate) || 0,
         notes: existing.notes ?? "",
         validity_days: Number(existing.validity_days) || 7,
+        condition_multiplier: Number(existing.condition_multiplier) || 1,
+        manual_adjustment: Number(existing.manual_adjustment) || 0,
       });
     } else {
       // Prefill hints from submission
@@ -281,6 +299,7 @@ const QuotesAdmin = () => {
         scope: q.description ?? "",
         addons: submittedAddons.map((a: any) => ({ title: a.title || "Add-on", price: Number(a.price) || 0 })),
         tax_rate: defaultTax,
+        condition_multiplier: conditionMultiplierFor((q as any).condition_level),
       });
     }
     setPrepareTarget(q);
@@ -303,12 +322,30 @@ const QuotesAdmin = () => {
   };
 
   // Live preview totals for prepare dialog
-  const previewSubtotal =
-    Number(draftForm.base_price || 0) +
-    draftForm.addons.reduce((s, a) => s + (Number(a.price) || 0), 0) -
-    Number(draftForm.discount || 0);
+  const previewBase = Number(draftForm.base_price || 0);
+  const previewMult = Number(draftForm.condition_multiplier || 1);
+  const previewAdjustedBase = previewBase * previewMult;
+  const previewAddons = draftForm.addons.reduce((s, a) => s + (Number(a.price) || 0), 0);
+  const previewManual = Number(draftForm.manual_adjustment || 0);
+  const previewDiscount = Number(draftForm.discount || 0);
+  const previewSubtotal = previewAdjustedBase + previewAddons + previewManual - previewDiscount;
   const previewTax = previewSubtotal * (Number(draftForm.tax_rate || 0) / 100);
   const previewTotal = previewSubtotal + previewTax;
+
+  const buildBreakdown = () => ({
+    base: previewBase,
+    condition_multiplier: previewMult,
+    adjusted_base: previewAdjustedBase,
+    addons: draftForm.addons.map((a) => ({ title: a.title, price: Number(a.price) || 0 })),
+    addons_total: previewAddons,
+    manual_adjustment: previewManual,
+    discount: previewDiscount,
+    subtotal: previewSubtotal,
+    tax_rate: Number(draftForm.tax_rate || 0),
+    tax_amount: previewTax,
+    total: previewTotal,
+    computed_at: new Date().toISOString(),
+  });
 
   return (
     <TooltipProvider>
@@ -664,6 +701,48 @@ const QuotesAdmin = () => {
             <DialogTitle>{draftMap[prepareTarget?.id] ? "Edit Quote" : "Prepare Quote"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {/* Property Summary (read-only) */}
+            {prepareTarget && (
+              <div className="border border-border rounded-lg p-3 bg-muted/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-foreground">Property Summary</h4>
+                  {(prepareTarget as any).condition_level && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
+                      {(prepareTarget as any).condition_level}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1.5 text-xs">
+                  <div><span className="text-muted-foreground">Service:</span> <span className="font-medium">{prepareTarget.service_type || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Property:</span> <span className="font-medium">{prepareTarget.property_type || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Sq ft:</span> <span className="font-medium">{prepareTarget.square_footage || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Frequency:</span> <span className="font-medium">{prepareTarget.frequency || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Bedrooms:</span> <span className="font-medium">{prepareTarget.bedrooms ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Bathrooms:</span> <span className="font-medium">{prepareTarget.bathrooms ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Kitchens:</span> <span className="font-medium">{(prepareTarget as any).kitchen_count ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Pets:</span> <span className="font-medium">{prepareTarget.has_pets ? "Yes" : "No"}</span></div>
+                </div>
+                {prepareTarget.entry_codes && (
+                  <div className="text-xs"><span className="text-muted-foreground">Entry codes:</span> <span className="font-medium">{prepareTarget.entry_codes}</span></div>
+                )}
+                {Array.isArray(prepareTarget.selected_addons) && prepareTarget.selected_addons.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {prepareTarget.selected_addons.map((a: any, i: number) => (
+                      <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium">
+                        {a.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {prepareTarget.description && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">View customer description</summary>
+                    <p className="mt-1 text-foreground whitespace-pre-wrap">{prepareTarget.description}</p>
+                  </details>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium">Service type</label>
@@ -723,6 +802,36 @@ const QuotesAdmin = () => {
                 />
               </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium">
+                  Condition multiplier
+                  {prepareTarget && (prepareTarget as any).condition_level && (
+                    <span className="text-muted-foreground font-normal ml-1">
+                      (suggested {conditionMultiplierFor((prepareTarget as any).condition_level)} for {(prepareTarget as any).condition_level})
+                    </span>
+                  )}
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={draftForm.condition_multiplier}
+                  onChange={(e) => setDraftForm({ ...draftForm, condition_multiplier: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Manual adjustment ($)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={draftForm.manual_adjustment}
+                  onChange={(e) => setDraftForm({ ...draftForm, manual_adjustment: Number(e.target.value) })}
+                  placeholder="+/- override"
+                />
+              </div>
+            </div>
+
 
             {/* Add-ons */}
             <div className="space-y-2">
@@ -790,9 +899,22 @@ const QuotesAdmin = () => {
               />
             </div>
 
-            {/* Live preview */}
+            {/* Live breakdown */}
             <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>${previewSubtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Base</span><span>${previewBase.toFixed(2)}</span></div>
+              {previewMult !== 1 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">× Condition ({previewMult})</span><span>${previewAdjustedBase.toFixed(2)}</span></div>
+              )}
+              {previewAddons > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">+ Add-ons</span><span>${previewAddons.toFixed(2)}</span></div>
+              )}
+              {previewManual !== 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">{previewManual >= 0 ? "+" : "−"} Manual adjustment</span><span>{previewManual < 0 ? "-" : ""}${Math.abs(previewManual).toFixed(2)}</span></div>
+              )}
+              {previewDiscount > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">− Discount</span><span>-${previewDiscount.toFixed(2)}</span></div>
+              )}
+              <div className="flex justify-between border-t border-border pt-1 mt-1"><span className="text-muted-foreground">Subtotal</span><span>${previewSubtotal.toFixed(2)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Tax ({draftForm.tax_rate || 0}%)</span><span>${previewTax.toFixed(2)}</span></div>
               <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>Total</span><span>${previewTotal.toFixed(2)}</span></div>
             </div>
@@ -801,7 +923,7 @@ const QuotesAdmin = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPrepareTarget(null)}>Cancel</Button>
             <Button
-              onClick={() => prepareTarget && saveDraft.mutate({ quoteId: prepareTarget.id, payload: draftForm, isUpdate: !!draftMap[prepareTarget.id] })}
+              onClick={() => prepareTarget && saveDraft.mutate({ quoteId: prepareTarget.id, payload: draftForm, isUpdate: !!draftMap[prepareTarget.id], breakdown: buildBreakdown() })}
               disabled={saveDraft.isPending}
             >
               {saveDraft.isPending ? "Saving..." : "Save Quote"}
