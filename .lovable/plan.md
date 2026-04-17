@@ -1,159 +1,94 @@
 
 
-# Quote → Booking → Invoice Workflow Refactor
+# Two-Layer Quote Model: Customer Form + Admin Builder
 
-Restructures the business logic, status flows, and admin actions across Quotes, Bookings, Invoices, and Submissions. UI layout is preserved — only buttons, statuses, and behaviours change.
-
----
-
-## 1. Database Migrations (schema only)
-
-**`bookings`** — add column:
-- `quote_id uuid` (nullable) — links a booking back to its source quote.
-
-**`invoices`** — add columns:
-- `invoice_number text unique` — auto-generated `INV-YYYY-NNNN` via DB sequence + trigger.
-- `tax_amount numeric default 0`, `tax_rate numeric default 0`.
-- `subtotal numeric default 0`.
-
-**`site_settings`** — seed two new keys (insert tool, not migration):
-- `auto_approve_bookings` → `"false"`.
-- `tax_rate` → `"0"`.
-
-**`quote_requests`** — add column:
-- `close_reason text` (nullable) — populated when a quote is closed.
-
-No new tables. `quote_notes` already exists and serves as the activity log. No status enum is added (kept as `text` for flexibility), but **client code is the authoritative status gatekeeper**.
+Preserves all existing fields and UI. Only **adds** the missing pieces and **extends** the admin Prepare-Quote dialog with structured pricing inputs.
 
 ---
 
-## 2. Status Mapping (data backfill via insert tool)
+## 1. Database — additive only
 
-| Entity | Old statuses | New canonical statuses |
-|---|---|---|
-| Quotes | pending, reviewed, responded, converted, closed | **requested**, **in_progress**, **converted**, **closed** |
-| Bookings | pending, confirmed, completed, cancelled | unchanged: **pending**, **confirmed**, **completed**, **cancelled** |
-| Invoices | unpaid, partial, paid | unchanged |
+**`quote_requests`** — add columns (none removed):
+- `kitchen_count integer` (nullable) — kitchen yes/no or count
+- `condition_level text` (nullable) — `'light' | 'standard' | 'heavy'`
 
-Backfill: `pending → requested`, `reviewed → in_progress`, `responded → in_progress`. `converted` and `closed` stay.
+**`quote_drafts`** — add columns (none removed):
+- `condition_multiplier numeric default 1` — applied to base price
+- `manual_adjustment numeric default 0` — admin override
+- `breakdown jsonb default '{}'` — snapshot of room/condition/addons used to compute total (audit trail)
 
----
-
-## 3. `src/pages/admin/QuotesAdmin.tsx`
-
-- Replace `statusColors` map with the 4 canonical statuses.
-- **Remove** the row of `["pending","reviewed","responded","closed"]` toggle buttons (lines 270–282). Status is no longer toggled directly.
-- Action buttons become:
-  - **Mark In Progress** — visible only when status = `requested`. Sets status to `in_progress`.
-  - **Convert to Booking** — visible only when status = `in_progress` AND at least one activity-log note exists. Disabled with tooltip otherwise.
-  - **Close Quote** — opens dialog asking for reason → writes `close_reason` and sets status to `closed`.
-  - **Generate Quote PDF** — renders the template (see §4) and downloads.
-- Conversion dialog: existing date/time picker stays, but on submit it now **also writes `quote_id` onto the new booking** and respects `auto_approve_bookings` setting (status = `confirmed` if on, `pending` if off — instead of hard-coded `"confirmed"` on line 100).
-- Activity log: every status change (Mark In Progress, Convert, Close) automatically inserts a `quote_notes` entry like *"Status changed to In Progress by admin"* so the log is the single source of truth.
-- Archive tab continues to show `converted` + `closed`.
+No existing column is renamed or dropped. No status changes.
 
 ---
 
-## 4. Quote PDF Template (`src/lib/quotePdf.ts` — new)
+## 2. Customer form — `src/pages/RequestQuote.tsx`
 
-Single function `generateQuotePdf(quote, branding, settings, addons)` using existing `jsPDF`. Renders:
+**Keep everything currently there.** Add only the two missing fields:
 
-```text
-[Logo from branding_settings]    BlueRiver Services LLC
-                                 [tagline] · [phone] · [email]
-─────────────────────────────────────────────────────────────
-QUOTE  #Q-2025-NNNN                       Issued: <date>
-                                          Valid until: <date+7d>
+- **Kitchen** — number input (0–10) labelled "Kitchens" placed next to Bedrooms/Bathrooms grid.
+- **Condition Level** — select with options `Light`, `Standard`, `Heavy`, placed near Frequency.
 
-Bill to:                          Service location:
-<name>                            <address>
-<email>
+**Confirm absent (already true):** no price display, no totals, no calculator. The form remains pure data collection.
 
-Service Details
-  • <service_type>
-  • <description>
-
-Pricing
-  Base                                       $X.XX
-  Add-on: <title>                            $X.XX
-  Supplies fee                               $X.XX
-  ─────────────────────────────────────────────
-  Total                                      $X.XX
-
-Availability
-  Scheduling will be confirmed upon acceptance.
-
-To proceed, please reply to this message or confirm
-your booking with us.
-
-This quote is valid for 7 days.
-
-Thank you for choosing BlueRiver Services.
-```
-
-Called from a "Download Quote PDF" button on each active quote card.
+Submit payload extended with `kitchen_count` and `condition_level`. All other fields (property_type, sq ft, bedrooms, bathrooms, frequency, pets, entry codes, addons, description, attachment) stay exactly as-is.
 
 ---
 
-## 5. `src/pages/admin/BookingsAdmin.tsx`
+## 3. Admin Quote Builder — `src/pages/admin/QuotesAdmin.tsx`
 
-- **Remove** the "Pending" button (lines ~257–259) — pending is a state, never an action.
-- Action buttons become:
-  - **Confirm** — visible only when status = `pending`. Sets `confirmed`.
-  - **Mark Completed** — visible when status = `confirmed`. Sets `completed` AND triggers automatic invoice creation (see §6). Existing inline jsPDF generation moves into the invoice flow so it's no longer fired here directly.
-  - **Cancel** — opens reason dialog (already exists), sets `cancelled` + `cancellation_reason`.
-- Auto-approve respect: when a booking is **created** (public form + quote conversion), default status reads `site_settings.auto_approve_bookings`. Public booking insert path is in `src/pages/BookService.tsx` — small change there to read the setting and use `confirmed` or `pending`.
-- Archived tab unchanged (completed + cancelled).
+The existing **Prepare Quote** dialog gets a new read-only "Property Summary" panel above the pricing inputs and an extended pricing section.
 
----
+### New "Property Summary" panel (read-only)
+Renders from the original `quote_requests` row:
+- Service type · Property type · Sq ft
+- Bedrooms · Bathrooms · **Kitchens** · Pets
+- **Condition level** (badge: Light/Standard/Heavy)
+- Frequency · Entry codes
+- Customer-selected add-ons (chips)
+- Description (collapsed, expandable)
 
-## 6. `src/pages/admin/InvoicesAdmin.tsx` and auto-invoice flow
+This panel is purely informational — admin sees the full intake at a glance.
 
-- **Remove** the "Pre-fill from Quote" select (lines 273–289) and the `quote_id` field on the form. Invoices are now bookings-only.
-- **Remove** the "New Invoice" manual creation button — invoices are created automatically when a booking is marked Completed. (Manual override via "+ New" stays as an admin-only escape hatch but the form drops the quote selector.)
-- Auto-creation logic lives in a new helper `src/lib/createInvoiceFromBooking.ts`:
-  - Generates `invoice_number` via sequence (`INV-YYYY-NNNN`).
-  - Copies customer details, services + addons from booking.
-  - Computes `subtotal`, `tax_amount = subtotal * tax_rate`, `total_amount = subtotal + tax_amount`.
-  - Sets `payment_status = "unpaid"`, `booking_id = b.id`.
-- PDF generator updated to include invoice number + tax line.
-- Existing payment recording flow unchanged.
+### Extended pricing inputs (additive to current draft form)
+Existing fields remain: base price, addons list, discount, tax_rate, notes, validity_days. **Add:**
 
----
+- **Condition multiplier** — auto-suggested from `condition_level` (Light = 0.9, Standard = 1.0, Heavy = 1.3) but editable.
+- **Manual adjustment** — signed numeric override (+/−) applied after multiplier.
+- **Live breakdown card** showing:
+  ```
+  Base                       $X
+  × Condition (1.3 Heavy)    $Y
+  + Add-ons                  $Z
+  + Manual adjustment        $A
+  − Discount                 $D
+  Subtotal                   $S
+  Tax (n%)                   $T
+  ─────────────────────────
+  Total                      $TOTAL
+  ```
 
-## 7. `src/pages/admin/Submissions.tsx` — view-only
+On Save, the computed `breakdown` JSON is stored alongside the draft so the PDF and any later audit reflect the exact composition.
 
-- **Remove** the delete button + AlertDialog (lines 149–162, 220–222, 74–90).
-- **Remove** all mutation imports.
-- Keep tabs, status filter, and read-only display. Add a small "Open in Bookings/Quotes/Messages" link on each row that navigates to the corresponding admin page.
-
----
-
-## 8. `src/components/admin/AvailabilitySettings.tsx` (or new `GeneralSettings`)
-
-Add an "Auto-Approve Bookings" toggle backed by `site_settings.auto_approve_bookings`, plus a Tax Rate input backed by `site_settings.tax_rate`. Reuses existing layout pattern.
-
----
-
-## 9. Notifications
-
-Already wired via `notifyAdmins` in submission paths. No structural change — just make sure quote conversion and booking completion fire a notification (`type: "quote_converted"`, `type: "booking_completed"`).
+### PDF generation — `src/lib/quotePdf.ts`
+Pricing section extended to render the same breakdown shown in the dialog (base, condition multiplier line, addons, manual adjustment, discount, subtotal, tax, total). No template restructuring — only the Pricing block gains rows.
 
 ---
 
-## 10. Files Touched (Summary)
+## 4. Consistency rule
 
-| File | Type of change |
+Because the customer form already uses one shared schema (`quote_requests`) regardless of selected service, no service-specific branching is introduced. The two new fields apply uniformly to every service type. Admin builder reads the same fields for every quote.
+
+---
+
+## 5. Files Touched
+
+| File | Change |
 |---|---|
-| **New migration** | `bookings.quote_id`, `invoices.invoice_number/tax/subtotal`, `quote_requests.close_reason` + invoice number sequence |
-| `src/pages/admin/QuotesAdmin.tsx` | Refactor actions + new status flow + PDF button |
-| `src/lib/quotePdf.ts` | NEW — quote template generator |
-| `src/pages/admin/BookingsAdmin.tsx` | Remove "Pending" button, auto-invoice on Completed |
-| `src/lib/createInvoiceFromBooking.ts` | NEW — shared auto-invoice helper |
-| `src/pages/admin/InvoicesAdmin.tsx` | Remove quote-prefill, add invoice number/tax to PDF |
-| `src/pages/admin/Submissions.tsx` | Strip mutations, view-only |
-| `src/components/admin/GeneralSettings.tsx` | Add Auto-Approve toggle + Tax Rate |
-| `src/pages/BookService.tsx` | Respect auto-approve setting on public submission |
+| **New migration** | Add `kitchen_count`, `condition_level` to `quote_requests`; add `condition_multiplier`, `manual_adjustment`, `breakdown` to `quote_drafts` |
+| `src/pages/RequestQuote.tsx` | Add Kitchen number + Condition Level select; include in insert payload |
+| `src/pages/admin/QuotesAdmin.tsx` | Add Property Summary panel + condition multiplier + manual adjustment inputs + live breakdown in Prepare Quote dialog |
+| `src/lib/quotePdf.ts` | Render condition multiplier and manual adjustment rows in pricing block |
+| `src/integrations/supabase/types.ts` | Auto-regenerated to reflect new columns |
 
-UI structure, page routes, and visual design are unchanged. Only actions, statuses, and business rules are refactored.
+No UI redesign, no removed fields, no schema renames, no service-specific forms.
 
