@@ -451,6 +451,62 @@ export type Database = {
         }
         Relationships: []
       }
+      quote_drafts: {
+        Row: {
+          addons: Json
+          base_price: number
+          discount: number
+          id: string
+          notes: string | null
+          prepared_at: string
+          prepared_by: string | null
+          quote_id: string
+          scope: string | null
+          service_type: string | null
+          tax_rate: number
+          updated_at: string
+          validity_days: number
+        }
+        Insert: {
+          addons?: Json
+          base_price?: number
+          discount?: number
+          id?: string
+          notes?: string | null
+          prepared_at?: string
+          prepared_by?: string | null
+          quote_id: string
+          scope?: string | null
+          service_type?: string | null
+          tax_rate?: number
+          updated_at?: string
+          validity_days?: number
+        }
+        Update: {
+          addons?: Json
+          base_price?: number
+          discount?: number
+          id?: string
+          notes?: string | null
+          prepared_at?: string
+          prepared_by?: string | null
+          quote_id?: string
+          scope?: string | null
+          service_type?: string | null
+          tax_rate?: number
+          updated_at?: string
+          validity_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_drafts_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: true
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quote_notes: {
         Row: {
           created_at: string
