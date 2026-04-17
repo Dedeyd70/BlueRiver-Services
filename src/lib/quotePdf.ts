@@ -22,15 +22,11 @@ export interface QuoteDraft {
   condition_multiplier?: number | null;
   manual_adjustment?: number | null;
   breakdown?: any;
+  line_items?: any;
 }
 
-interface BrandingMap {
-  [key: string]: string;
-}
-
-interface SettingsMap {
-  [key: string]: string;
-}
+interface BrandingMap { [key: string]: string }
+interface SettingsMap { [key: string]: string }
 
 const parsePrice = (p: any): number => {
   if (p == null) return 0;
@@ -121,78 +117,120 @@ export const generateQuotePdf = (
   }
   y += 5;
 
-  // Pricing
-  doc.setFont("helvetica", "bold");
-  doc.text("Pricing", margin, y);
-  y += 6;
-  doc.setFont("helvetica", "normal");
-
-  const base = Number(draft.base_price ?? 0);
-  const addons = Array.isArray(draft.addons) ? draft.addons : [];
-  const discount = Number(draft.discount ?? 0);
+  const lineItems = Array.isArray(draft.line_items) ? draft.line_items : [];
   const taxRate = Number(draft.tax_rate ?? 0);
-  const conditionMult = Number(draft.condition_multiplier ?? 1);
-  const manualAdj = Number(draft.manual_adjustment ?? 0);
 
-  doc.text("Base", margin + 2, y);
-  doc.text(`$${base.toFixed(2)}`, pageW - margin, y, { align: "right" });
-  y += 5;
+  if (lineItems.length > 0) {
+    // Itemized table
+    doc.setFont("helvetica", "bold");
+    doc.text("Itemized Breakdown", margin, y);
+    y += 6;
 
-  const adjustedBase = base * conditionMult;
-  if (conditionMult !== 1) {
-    doc.text(`× Condition multiplier (${conditionMult})`, margin + 2, y);
-    doc.text(`$${adjustedBase.toFixed(2)}`, pageW - margin, y, { align: "right" });
+    // Column headers
+    const colItem = margin;
+    const colQty = pageW - margin - 80;
+    const colUnit = pageW - margin - 45;
+    const colTotal = pageW - margin;
+
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text("Item", colItem, y);
+    doc.text("Qty", colQty, y, { align: "right" });
+    doc.text("Unit", colUnit, y, { align: "right" });
+    doc.text("Total", colTotal, y, { align: "right" });
+    y += 2;
+    doc.setDrawColor(220);
+    doc.line(margin, y, pageW - margin, y);
+    y += 4;
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+
+    let subtotal = 0;
+    lineItems.forEach((it: any) => {
+      const qty = Number(it.quantity) || 0;
+      const unit = Number(it.unit_price) || 0;
+      const total = Number(it.total_price) || qty * unit;
+      subtotal += total;
+      const name = String(it.name || "Item");
+      const nameLines = doc.splitTextToSize(name, colQty - colItem - 4);
+      doc.text(nameLines[0], colItem, y);
+      doc.text(String(qty), colQty, y, { align: "right" });
+      doc.text(`$${unit.toFixed(2)}`, colUnit, y, { align: "right" });
+      doc.text(`$${total.toFixed(2)}`, colTotal, y, { align: "right" });
+      y += 5;
+      for (let i = 1; i < nameLines.length; i++) {
+        doc.text(nameLines[i], colItem, y);
+        y += 5;
+      }
+    });
+
+    doc.setDrawColor(200);
+    doc.line(margin, y, pageW - margin, y);
     y += 5;
+    doc.text("Subtotal", margin + 2, y);
+    doc.text(`$${subtotal.toFixed(2)}`, colTotal, y, { align: "right" });
+    y += 5;
+
+    const taxAmount = subtotal * (taxRate / 100);
+    if (taxRate > 0) {
+      doc.text(`Tax (${taxRate}%)`, margin + 2, y);
+      doc.text(`$${taxAmount.toFixed(2)}`, colTotal, y, { align: "right" });
+      y += 5;
+    }
+
+    const total = subtotal + taxAmount;
+    doc.line(margin, y, pageW - margin, y);
+    y += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text("Total", margin + 2, y);
+    doc.text(`$${total.toFixed(2)}`, colTotal, y, { align: "right" });
+    y += 10;
+  } else {
+    // Legacy fallback
+    doc.setFont("helvetica", "bold");
+    doc.text("Pricing", margin, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    const base = Number(draft.base_price ?? 0);
+    const addons = Array.isArray(draft.addons) ? draft.addons : [];
+    const discount = Number(draft.discount ?? 0);
+    doc.text("Base", margin + 2, y);
+    doc.text(`$${base.toFixed(2)}`, pageW - margin, y, { align: "right" });
+    y += 5;
+    let subtotal = base;
+    addons.forEach((a: any) => {
+      const price = parsePrice(a.price);
+      subtotal += price;
+      doc.text(`Add-on: ${a.title || "Item"}`, margin + 2, y);
+      doc.text(`$${price.toFixed(2)}`, pageW - margin, y, { align: "right" });
+      y += 5;
+    });
+    if (discount > 0) {
+      subtotal -= discount;
+      doc.text("Discount", margin + 2, y);
+      doc.text(`-$${discount.toFixed(2)}`, pageW - margin, y, { align: "right" });
+      y += 5;
+    }
+    doc.line(margin, y, pageW - margin, y);
+    y += 5;
+    doc.text("Subtotal", margin + 2, y);
+    doc.text(`$${subtotal.toFixed(2)}`, pageW - margin, y, { align: "right" });
+    y += 5;
+    const taxAmount = subtotal * (taxRate / 100);
+    if (taxRate > 0) {
+      doc.text(`Tax (${taxRate}%)`, margin + 2, y);
+      doc.text(`$${taxAmount.toFixed(2)}`, pageW - margin, y, { align: "right" });
+      y += 5;
+    }
+    const total = subtotal + taxAmount;
+    doc.line(margin, y, pageW - margin, y);
+    y += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text("Total", margin + 2, y);
+    doc.text(`$${total.toFixed(2)}`, pageW - margin, y, { align: "right" });
+    y += 10;
   }
-
-  let subtotal = adjustedBase;
-  addons.forEach((a: any) => {
-    const price = parsePrice(a.price);
-    subtotal += price;
-    doc.text(`Add-on: ${a.title || "Item"}`, margin + 2, y);
-    doc.text(`$${price.toFixed(2)}`, pageW - margin, y, { align: "right" });
-    y += 5;
-  });
-
-  if (manualAdj !== 0) {
-    subtotal += manualAdj;
-    const label = manualAdj >= 0 ? "Manual adjustment" : "Manual adjustment";
-    doc.text(label, margin + 2, y);
-    const sign = manualAdj >= 0 ? "" : "-";
-    doc.text(`${sign}$${Math.abs(manualAdj).toFixed(2)}`, pageW - margin, y, { align: "right" });
-    y += 5;
-  }
-
-  if (discount > 0) {
-    subtotal -= discount;
-    doc.text("Discount", margin + 2, y);
-    doc.text(`-$${discount.toFixed(2)}`, pageW - margin, y, { align: "right" });
-    y += 5;
-  }
-
-  doc.setDrawColor(220);
-  doc.line(margin, y, pageW - margin, y);
-  y += 5;
-
-  doc.text("Subtotal", margin + 2, y);
-  doc.text(`$${subtotal.toFixed(2)}`, pageW - margin, y, { align: "right" });
-  y += 5;
-
-  const taxAmount = subtotal * (taxRate / 100);
-  if (taxRate > 0) {
-    doc.text(`Tax (${taxRate}%)`, margin + 2, y);
-    doc.text(`$${taxAmount.toFixed(2)}`, pageW - margin, y, { align: "right" });
-    y += 5;
-  }
-
-  const total = subtotal + taxAmount;
-  doc.setDrawColor(200);
-  doc.line(margin, y, pageW - margin, y);
-  y += 5;
-  doc.setFont("helvetica", "bold");
-  doc.text("Total", margin + 2, y);
-  doc.text(`$${total.toFixed(2)}`, pageW - margin, y, { align: "right" });
-  y += 10;
 
   // Notes
   if (draft.notes) {
