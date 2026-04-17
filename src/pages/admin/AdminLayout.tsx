@@ -82,24 +82,26 @@ const SidebarContent = ({ location, signOut, role, onNavClick }: { location: Ret
 };
 
 const AdminLayout = () => {
-  const { user, isAdmin, role, loading, signOut } = useAuth();
+  const { user, role, loading, roleLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // Redirect to login only when auth is fully resolved and there is no user
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) {
+    if (!loading && !user) {
       navigate("/admin/login");
     }
-  }, [user, isAdmin, loading, navigate]);
+  }, [user, loading, navigate]);
 
+  // Path access check only runs once role is known
   useEffect(() => {
-    if (!loading && user && isAdmin && role) {
+    if (!loading && user && role) {
       if (!canAccessPath(role, location.pathname)) {
         navigate("/admin");
       }
     }
-  }, [loading, user, isAdmin, role, location.pathname, navigate]);
+  }, [loading, user, role, location.pathname, navigate]);
 
   useEffect(() => setSheetOpen(false), [location]);
 
@@ -111,7 +113,16 @@ const AdminLayout = () => {
     );
   }
 
-  if (!user || !isAdmin || !role) return null;
+  if (!user) return null;
+
+  // User is authenticated but role is still resolving — show shell with subtle loading state
+  if (!role || roleLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/50">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-muted/50">
