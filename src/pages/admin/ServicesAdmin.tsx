@@ -58,11 +58,23 @@ const ServicesAdmin = () => {
       } else {
         const { error } = await supabase.from("services").insert(payload);
         if (error) throw error;
+        // Auto-create matching service_type for main services so it appears in Pricing Settings.
+        if (form.service_category === "main") {
+          await (supabase as any)
+            .from("service_types")
+            .upsert({ name: form.title, base_price: 0 }, { onConflict: "name" });
+        }
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-services"] });
-      toast({ title: editId ? "Service updated" : "Service created" });
+      qc.invalidateQueries({ queryKey: ["admin-service-types"] });
+      toast({
+        title: editId ? "Service updated" : "Service created",
+        description: !editId && form.service_category === "main"
+          ? "Configure pricing in Settings → Pricing."
+          : undefined,
+      });
       setDialogOpen(false);
       setEditId(null);
       setForm(defaultForm);
