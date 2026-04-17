@@ -234,19 +234,23 @@ const BookingsAdmin = () => {
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => handlePending(b)}>
-                  Pending
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
-                  Completed
-                </Button>
+                {b.status === "pending" && (
+                  <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
+                    Confirm
+                  </Button>
+                )}
+                {b.status === "confirmed" && (
+                  <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
+                    Mark Completed
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
                   className="text-destructive border-destructive/30 hover:bg-destructive/10"
                   onClick={() => setCancelTarget(b)}
                 >
-                  Cancelled
+                  Cancel
                 </Button>
               </div>
             )}
