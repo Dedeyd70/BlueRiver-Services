@@ -4,10 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-
-const ROOM_CATEGORIES = ["Bedroom", "Bathroom", "FullBath", "HalfBath", "Kitchen", "LivingRoom", "OfficeRoom"];
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Plus, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const intInput = (v: string) => Math.max(0, Math.round(Number(v) || 0));
+const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 
 const PricingSettings = () => {
   const { toast } = useToast();
@@ -17,6 +19,15 @@ const PricingSettings = () => {
     queryKey: ["admin-service-types"],
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("service_types").select("*").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: fields } = useQuery({
+    queryKey: ["admin-service-fields"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("service_fields").select("*").order("display_order");
       if (error) throw error;
       return data ?? [];
     },
@@ -95,7 +106,7 @@ const PricingSettings = () => {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-rules"] });
-      toast({ title: "Category rules saved" });
+      toast({ title: "Pricing saved" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -116,21 +127,60 @@ const PricingSettings = () => {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const ensureRule = useMutation({
-    mutationFn: async ({ service_type_id, category }: { service_type_id: string; category: string }) => {
-      const { error } = await (supabase as any)
-        .from("service_pricing_rules")
-        .insert({ service_type_id, category, unit_price: 0 });
-      if (error) throw error;
+  // Add field + matching pricing rule
+  const addField = useMutation({
+    mutationFn: async (payload: { service_type_id: string; field_key: string; label: string; input_type: string; required: boolean; options: string[] }) => {
+      const { error: fErr } = await (supabase as any).from("service_fields").insert({
+        service_type_id: payload.service_type_id,
+        field_key: payload.field_key,
+        label: payload.label,
+        input_type: payload.input_type,
+        required: payload.required,
+        options: payload.options,
+        display_order: 100,
+      });
+      if (fErr) throw fErr;
+      // Auto-create pricing rule with same key so admin can immediately price it
+      if (payload.input_type === "number") {
+        await (supabase as any)
+          .from("service_pricing_rules")
+          .insert({ service_type_id: payload.service_type_id, category: payload.field_key, unit_price: 0 });
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-pricing-rules"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-service-fields"] });
+      qc.invalidateQueries({ queryKey: ["admin-pricing-rules"] });
+      toast({ title: "Field added" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const rulesByService: Record<string, Record<string, any>> = {};
-  (rules ?? []).forEach((r: any) => {
-    rulesByService[r.service_type_id] = rulesByService[r.service_type_id] || {};
-    rulesByService[r.service_type_id][r.category] = r;
+  const deleteField = useMutation({
+    mutationFn: async ({ id, service_type_id, field_key }: { id: string; service_type_id: string; field_key: string }) => {
+      await (supabase as any).from("service_fields").delete().eq("id", id);
+      // Also remove matching pricing rule (best-effort)
+      await (supabase as any)
+        .from("service_pricing_rules")
+        .delete()
+        .eq("service_type_id", service_type_id)
+        .eq("category", field_key);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-service-fields"] });
+      qc.invalidateQueries({ queryKey: ["admin-pricing-rules"] });
+      toast({ title: "Field removed" });
+    },
   });
+
+  // Group helpers
+  const fieldsByService: Record<string, any[]> = {};
+  (fields ?? []).forEach((f: any) => {
+    fieldsByService[f.service_type_id] = fieldsByService[f.service_type_id] || [];
+    fieldsByService[f.service_type_id].push(f);
+  });
+
+  const ruleFor = (service_type_id: string, field_key: string) =>
+    (rules ?? []).find((r: any) => r.service_type_id === service_type_id && r.category === field_key);
 
   return (
     <div className="space-y-8">
@@ -161,59 +211,36 @@ const PricingSettings = () => {
             </div>
           ))}
           {(serviceTypes ?? []).length === 0 && (
-            <p className="p-4 text-sm text-muted-foreground italic">No service types yet.</p>
+            <p className="p-4 text-sm text-muted-foreground italic">
+              No service types yet. Create a service in the Services page first.
+            </p>
           )}
         </div>
       </section>
 
-      {/* Category rules */}
+      {/* Dynamic fields + pricing per service */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">Category Pricing Rules</h2>
+          <h2 className="font-display text-lg font-semibold">Service Fields & Pricing</h2>
           <Button size="sm" onClick={() => saveRules.mutate()} disabled={saveRules.isPending}>
-            {saveRules.isPending ? "Saving..." : "Save Rules"}
+            {saveRules.isPending ? "Saving..." : "Save Pricing"}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">Per-room rates per service. Integer dollars only.</p>
+        <p className="text-xs text-muted-foreground">
+          Define the fields each service exposes on the customer quote form. Number fields can carry a per-unit price.
+        </p>
         <div className="space-y-4">
           {(serviceTypes ?? []).map((s: any) => (
-            <div key={s.id} className="border border-border rounded-lg p-3">
-              <div className="font-medium text-sm mb-2">{s.name}</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {ROOM_CATEGORIES.map((cat) => {
-                  const rule = rulesByService[s.id]?.[cat];
-                  if (!rule) {
-                    return (
-                      <Button
-                        key={cat}
-                        size="sm"
-                        variant="outline"
-                        onClick={() => ensureRule.mutate({ service_type_id: s.id, category: cat })}
-                        className="justify-between"
-                      >
-                        + {cat}
-                      </Button>
-                    );
-                  }
-                  return (
-                    <div key={cat} className="flex items-center justify-between gap-2 bg-muted/30 rounded-md px-2 py-1.5">
-                      <span className="text-sm">{cat}</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground text-xs">$</span>
-                        <Input
-                          type="number"
-                          step="1"
-                          min="0"
-                          value={ruleEdits[rule.id] ?? 0}
-                          onChange={(e) => setRuleEdits({ ...ruleEdits, [rule.id]: intInput(e.target.value) })}
-                          className="w-20 h-8"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <ServiceFieldEditor
+              key={s.id}
+              service={s}
+              fields={fieldsByService[s.id] ?? []}
+              ruleFor={ruleFor}
+              ruleEdits={ruleEdits}
+              setRuleEdits={setRuleEdits}
+              onAddField={(payload) => addField.mutate({ service_type_id: s.id, ...payload })}
+              onDeleteField={(id, field_key) => deleteField.mutate({ id, service_type_id: s.id, field_key })}
+            />
           ))}
         </div>
       </section>
@@ -246,6 +273,125 @@ const PricingSettings = () => {
           ))}
         </div>
       </section>
+    </div>
+  );
+};
+
+interface FieldEditorProps {
+  service: any;
+  fields: any[];
+  ruleFor: (sid: string, key: string) => any;
+  ruleEdits: Record<string, number>;
+  setRuleEdits: (m: Record<string, number>) => void;
+  onAddField: (p: { field_key: string; label: string; input_type: string; required: boolean; options: string[] }) => void;
+  onDeleteField: (id: string, field_key: string) => void;
+}
+
+const ServiceFieldEditor = ({ service, fields, ruleFor, ruleEdits, setRuleEdits, onAddField, onDeleteField }: FieldEditorProps) => {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [inputType, setInputType] = useState("number");
+  const [required, setRequired] = useState(false);
+  const [optionsText, setOptionsText] = useState("");
+
+  const submit = () => {
+    if (!label.trim()) return;
+    const field_key = slugify(label);
+    if (!field_key) return;
+    const options = inputType === "select"
+      ? optionsText.split("\n").map((s) => s.trim()).filter(Boolean)
+      : [];
+    onAddField({ field_key, label: label.trim(), input_type: inputType, required, options });
+    setLabel(""); setOptionsText(""); setRequired(false); setInputType("number"); setOpen(false);
+  };
+
+  return (
+    <div className="border border-border rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-medium text-sm">{service.name}</div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline"><Plus className="w-3.5 h-3.5 mr-1" />Add Field</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Add field to {service.name}</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Label</label>
+                <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Office Rooms" />
+                {label && <p className="text-xs text-muted-foreground mt-1">Key: <code>{slugify(label) || "—"}</code></p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Input type</label>
+                <select
+                  value={inputType}
+                  onChange={(e) => setInputType(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="number">Number (priced)</option>
+                  <option value="select">Select</option>
+                  <option value="toggle">Toggle</option>
+                </select>
+              </div>
+              {inputType === "select" && (
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Options (one per line)</label>
+                  <textarea
+                    value={optionsText}
+                    onChange={(e) => setOptionsText(e.target.value)}
+                    rows={4}
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Switch checked={required} onCheckedChange={setRequired} />
+                <span className="text-sm">Required</span>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={submit} disabled={!label.trim()}>Add Field</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+      {fields.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic py-2">No fields yet. Add one to expose it on the quote form.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {fields.map((f: any) => {
+            const rule = ruleFor(service.id, f.field_key);
+            return (
+              <div key={f.id} className="flex items-center justify-between gap-2 bg-muted/30 rounded-md px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{f.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {f.field_key} · {f.input_type}{f.required ? " · required" : ""}
+                  </div>
+                </div>
+                {f.input_type === "number" && rule ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-muted-foreground text-xs">$</span>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={ruleEdits[rule.id] ?? 0}
+                      onChange={(e) => setRuleEdits({ ...ruleEdits, [rule.id]: intInput(e.target.value) })}
+                      className="w-20 h-8"
+                    />
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">no price</span>
+                )}
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onDeleteField(f.id, f.field_key)}>
+                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
