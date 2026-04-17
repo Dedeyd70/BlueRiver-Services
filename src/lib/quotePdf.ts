@@ -7,10 +7,18 @@ interface QuoteData {
   email: string;
   phone?: string | null;
   address?: string | null;
-  service_type?: string | null;
-  description?: string | null;
-  selected_addons?: any;
   created_at: string;
+}
+
+export interface QuoteDraft {
+  service_type?: string | null;
+  scope?: string | null;
+  base_price?: number | null;
+  addons?: any;
+  discount?: number | null;
+  tax_rate?: number | null;
+  notes?: string | null;
+  validity_days?: number | null;
 }
 
 interface BrandingMap {
@@ -30,7 +38,8 @@ const parsePrice = (p: any): number => {
 export const generateQuotePdf = (
   quote: QuoteData,
   branding: BrandingMap,
-  settings: SettingsMap
+  settings: SettingsMap,
+  draft: QuoteDraft
 ) => {
   const doc = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
@@ -55,15 +64,15 @@ export const generateQuotePdf = (
   }
   doc.setTextColor(0);
 
-  // Divider
   doc.setDrawColor(200);
   doc.line(margin, y, pageW - margin, y);
   y += 10;
 
   // Quote header
+  const validityDays = draft.validity_days ?? 7;
   const quoteNum = `Q-${format(new Date(quote.created_at), "yyyy")}-${quote.id.slice(0, 4).toUpperCase()}`;
-  const issued = format(new Date(quote.created_at), "MMM d, yyyy");
-  const validUntil = format(addDays(new Date(quote.created_at), 7), "MMM d, yyyy");
+  const issued = format(new Date(), "MMM d, yyyy");
+  const validUntil = format(addDays(new Date(), validityDays), "MMM d, yyyy");
 
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
@@ -96,12 +105,12 @@ export const generateQuotePdf = (
   doc.text("Service Details", margin, y);
   y += 6;
   doc.setFont("helvetica", "normal");
-  if (quote.service_type) {
-    doc.text(`• ${quote.service_type}`, margin + 2, y);
+  if (draft.service_type) {
+    doc.text(`• ${draft.service_type}`, margin + 2, y);
     y += 5;
   }
-  if (quote.description) {
-    const lines = doc.splitTextToSize(quote.description, pageW - margin * 2 - 4);
+  if (draft.scope) {
+    const lines = doc.splitTextToSize(draft.scope, pageW - margin * 2 - 4);
     lines.forEach((line: string) => {
       doc.text(line, margin + 2, y);
       y += 5;
@@ -115,28 +124,68 @@ export const generateQuotePdf = (
   y += 6;
   doc.setFont("helvetica", "normal");
 
-  const addons = Array.isArray(quote.selected_addons) ? quote.selected_addons : [];
-  let subtotal = 0;
+  const base = Number(draft.base_price ?? 0);
+  const addons = Array.isArray(draft.addons) ? draft.addons : [];
+  const discount = Number(draft.discount ?? 0);
+  const taxRate = Number(draft.tax_rate ?? 0);
 
   doc.text("Base", margin + 2, y);
-  doc.text("$0.00", pageW - margin, y, { align: "right" });
+  doc.text(`$${base.toFixed(2)}`, pageW - margin, y, { align: "right" });
   y += 5;
 
+  let subtotal = base;
   addons.forEach((a: any) => {
     const price = parsePrice(a.price);
     subtotal += price;
-    doc.text(`Add-on: ${a.title}`, margin + 2, y);
+    doc.text(`Add-on: ${a.title || "Item"}`, margin + 2, y);
     doc.text(`$${price.toFixed(2)}`, pageW - margin, y, { align: "right" });
     y += 5;
   });
 
+  if (discount > 0) {
+    subtotal -= discount;
+    doc.text("Discount", margin + 2, y);
+    doc.text(`-$${discount.toFixed(2)}`, pageW - margin, y, { align: "right" });
+    y += 5;
+  }
+
+  doc.setDrawColor(220);
+  doc.line(margin, y, pageW - margin, y);
+  y += 5;
+
+  doc.text("Subtotal", margin + 2, y);
+  doc.text(`$${subtotal.toFixed(2)}`, pageW - margin, y, { align: "right" });
+  y += 5;
+
+  const taxAmount = subtotal * (taxRate / 100);
+  if (taxRate > 0) {
+    doc.text(`Tax (${taxRate}%)`, margin + 2, y);
+    doc.text(`$${taxAmount.toFixed(2)}`, pageW - margin, y, { align: "right" });
+    y += 5;
+  }
+
+  const total = subtotal + taxAmount;
   doc.setDrawColor(200);
   doc.line(margin, y, pageW - margin, y);
   y += 5;
   doc.setFont("helvetica", "bold");
   doc.text("Total", margin + 2, y);
-  doc.text(`$${subtotal.toFixed(2)}`, pageW - margin, y, { align: "right" });
+  doc.text(`$${total.toFixed(2)}`, pageW - margin, y, { align: "right" });
   y += 10;
+
+  // Notes
+  if (draft.notes) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Notes", margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    const lines = doc.splitTextToSize(draft.notes, pageW - margin * 2);
+    lines.forEach((line: string) => {
+      doc.text(line, margin, y);
+      y += 5;
+    });
+    y += 5;
+  }
 
   // Availability
   doc.setFont("helvetica", "bold");
@@ -160,10 +209,9 @@ export const generateQuotePdf = (
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(120);
-  doc.text("This quote is valid for 7 days.", margin, y);
+  doc.text(`This quote is valid for ${validityDays} days.`, margin, y);
   y += 10;
 
-  // Footer
   doc.setTextColor(0);
   doc.setFont("helvetica", "bold");
   doc.text("Thank you for choosing BlueRiver Services.", margin, y);
