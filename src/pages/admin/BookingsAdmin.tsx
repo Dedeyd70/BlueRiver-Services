@@ -8,7 +8,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import jsPDF from "jspdf";
+import { useAuth } from "@/hooks/useAuth";
+import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
+import { notifyAdmins } from "@/lib/notifications";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -19,6 +21,7 @@ const statusColors: Record<string, string> = {
 
 const BookingsAdmin = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
@@ -34,7 +37,6 @@ const BookingsAdmin = () => {
     },
   });
 
-  // If statusFilter is 'pending', show only pending. Otherwise, show both pending and confirmed.
   const activeBookings = (bookings ?? []).filter((b) => {
     if (statusFilter === "pending") {
       return b.status === "pending";
@@ -64,29 +66,36 @@ const BookingsAdmin = () => {
     },
   });
 
-  const handlePending = (b: any) => {
-    updateStatus.mutate({ id: b.id, status: "pending" });
-    toast({ title: "Status set to Pending." });
+  const handleConfirm = (b: any) => {
+    updateStatus.mutate({ id: b.id, status: "confirmed" });
+    toast({ title: "Booking confirmed." });
   };
 
-  const handleCompleted = (b: any) => {
-    updateStatus.mutate({ id: b.id, status: "completed" });
+  const handleCompleted = async (b: any) => {
+    try {
+      // Update status first
+      const { error: updErr } = await supabase
+        .from("bookings")
+        .update({ status: "completed" })
+        .eq("id", b.id);
+      if (updErr) throw updErr;
 
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("Invoice", 20, 25);
-    doc.setFontSize(11);
-    doc.text(`Customer: ${b.name}`, 20, 40);
-    doc.text(`Email: ${b.email}`, 20, 48);
-    doc.text(`Service: ${b.service_type || "N/A"}`, 20, 56);
-    doc.text(`Date: ${format(new Date(b.booking_date), "MMM d, yyyy")}`, 20, 64);
-    doc.text(`Time: ${b.time_slot}`, 20, 72);
-    doc.text(`Total: $${Number((b as any).total_price || 0).toFixed(2)}`, 20, 80);
-    doc.text(`Status: Completed`, 20, 88);
-    doc.text(`Generated: ${format(new Date(), "MMM d, yyyy")}`, 20, 96);
-    doc.save(`invoice-${b.name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+      // Auto-create invoice
+      const invoice = await createInvoiceFromBooking(b, user?.id);
+      await notifyAdmins(
+        "booking_completed",
+        `Booking for ${b.name} completed. Invoice ${invoice?.invoice_number ?? ""} generated.`,
+        invoice?.id,
+        "invoice"
+      );
 
-    toast({ title: "Marked as completed. Invoice PDF generated." });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      toast({ title: `Marked completed. Invoice ${invoice?.invoice_number ?? ""} created.` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   };
 
   const handleCancelConfirm = () => {
@@ -225,19 +234,23 @@ const BookingsAdmin = () => {
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => handlePending(b)}>
-                  Pending
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
-                  Completed
-                </Button>
+                {b.status === "pending" && (
+                  <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
+                    Confirm
+                  </Button>
+                )}
+                {b.status === "confirmed" && (
+                  <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
+                    Mark Completed
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
                   className="text-destructive border-destructive/30 hover:bg-destructive/10"
                   onClick={() => setCancelTarget(b)}
                 >
-                  Cancelled
+                  Cancel
                 </Button>
               </div>
             )}

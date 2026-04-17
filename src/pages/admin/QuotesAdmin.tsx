@@ -4,19 +4,24 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { ExternalLink, ArrowRightLeft, MessageSquare, Send } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ExternalLink, ArrowRightLeft, MessageSquare, Send, Download, PlayCircle, XCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { generateQuotePdf } from "@/lib/quotePdf";
+import { notifyAdmins } from "@/lib/notifications";
 
 const statusColors: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  reviewed: "bg-primary/10 text-primary",
-  responded: "bg-green-100 text-green-800",
+  requested: "bg-amber-100 text-amber-800",
+  in_progress: "bg-blue-100 text-blue-800",
   converted: "bg-green-100 text-green-800",
   closed: "bg-muted text-muted-foreground",
 };
+
+const statusLabel = (s: string) => s.replace("_", " ");
 
 const QuotesAdmin = () => {
   const { toast } = useToast();
@@ -29,6 +34,8 @@ const QuotesAdmin = () => {
   const [timeSlot, setTimeSlot] = useState("");
   const [expandedNotes, setExpandedNotes] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
+  const [closeTarget, setCloseTarget] = useState<any>(null);
+  const [closeReason, setCloseReason] = useState("");
 
   const { data: quotes, isLoading } = useQuery({
     queryKey: ["admin-quotes"],
@@ -42,8 +49,28 @@ const QuotesAdmin = () => {
     },
   });
 
+  const { data: branding } = useQuery({
+    queryKey: ["branding-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("branding_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+
+  const { data: settings } = useQuery({
+    queryKey: ["site-settings-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+
   const activeQuotes = (quotes ?? []).filter((q) => {
-    if (statusFilter === "pending") return q.status === "pending";
+    if (statusFilter === "requested") return q.status === "requested";
     return q.status !== "converted" && q.status !== "closed";
   });
 
@@ -60,9 +87,7 @@ const QuotesAdmin = () => {
 
   const addNote = useMutation({
     mutationFn: async ({ quoteId, note }: { quoteId: string; note: string }) => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from("quote_notes").insert({ quote_id: quoteId, note, created_by: user?.id });
       if (error) throw error;
     },
@@ -73,21 +98,54 @@ const QuotesAdmin = () => {
     },
   });
 
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("quote_requests").update({ status }).eq("id", id);
+  const logActivity = async (quoteId: string, message: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("quote_notes").insert({ quote_id: quoteId, note: message, created_by: user?.id });
+  };
+
+  const markInProgress = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("quote_requests").update({ status: "in_progress" }).eq("id", id);
       if (error) throw error;
+      await logActivity(id, "Status changed to In Progress");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
-      toast({ title: "Quote request updated" });
+      qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+      toast({ title: "Quote marked In Progress" });
+    },
+  });
+
+  const closeQuote = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { error } = await supabase
+        .from("quote_requests")
+        .update({ status: "closed", close_reason: reason } as any)
+        .eq("id", id);
+      if (error) throw error;
+      await logActivity(id, `Quote closed. Reason: ${reason}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-quotes"] });
+      qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+      setCloseTarget(null);
+      setCloseReason("");
+      toast({ title: "Quote closed and archived" });
     },
   });
 
   const convertToBooking = useMutation({
     mutationFn: async () => {
       if (!selectedQuote || !bookingDate || !timeSlot) throw new Error("Please select date and time");
-      const { error: bookingError } = await supabase.from("bookings").insert({
+
+      // Read auto-approve setting
+      const { data: settingsRows } = await supabase
+        .from("site_settings")
+        .select("setting_key, setting_value")
+        .eq("setting_key", "auto_approve_bookings");
+      const autoApprove = settingsRows?.[0]?.setting_value === "true";
+
+      const { data: insertedBooking, error: bookingError } = await supabase.from("bookings").insert({
         name: selectedQuote.name,
         email: selectedQuote.email,
         phone: selectedQuote.phone,
@@ -97,19 +155,25 @@ const QuotesAdmin = () => {
         time_slot: timeSlot,
         notes: selectedQuote.description,
         consent_given: selectedQuote.consent_given,
-        status: "confirmed",
+        status: autoApprove ? "confirmed" : "pending",
         selected_addons: selectedQuote.selected_addons || [],
-      });
+        quote_id: selectedQuote.id,
+      } as any).select("id").single();
       if (bookingError) throw bookingError;
+
       const { error: quoteError } = await supabase
         .from("quote_requests")
         .update({ status: "converted" })
         .eq("id", selectedQuote.id);
       if (quoteError) throw quoteError;
+
+      await logActivity(selectedQuote.id, `Converted to booking on ${bookingDate} at ${timeSlot}`);
+      await notifyAdmins("quote_converted", `Quote from ${selectedQuote.name} converted to booking`, insertedBooking?.id, "booking");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
       toast({ title: "Quote converted to booking!" });
       setConvertDialogOpen(false);
       setSelectedQuote(null);
@@ -123,6 +187,12 @@ const QuotesAdmin = () => {
     setSelectedQuote(q);
     setConvertDialogOpen(true);
   };
+
+  const handleDownloadPdf = (q: any) => {
+    if (!branding || !settings) return;
+    generateQuotePdf(q, branding, settings);
+  };
+
   const getNotesForQuote = (quoteId: string) => (allNotes ?? []).filter((n) => n.quote_id === quoteId);
   const parseAddons = (addons: any): { title: string }[] => {
     if (!addons || !Array.isArray(addons)) return [];
@@ -130,6 +200,7 @@ const QuotesAdmin = () => {
   };
 
   return (
+    <TooltipProvider>
     <div className="p-6">
       <h1 className="text-2xl font-display font-bold text-foreground mb-6">Quote Requests</h1>
 
@@ -149,10 +220,10 @@ const QuotesAdmin = () => {
                   const notes = getNotesForQuote(q.id);
                   const isExpanded = expandedNotes === q.id;
                   const addons = parseAddons((q as any).selected_addons);
+                  const canConvert = q.status === "in_progress" && notes.length > 0;
 
                   return (
                     <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
-                      {/* Header Info */}
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <h3 className="font-medium text-foreground">{q.name}</h3>
@@ -161,13 +232,12 @@ const QuotesAdmin = () => {
                           </p>
                         </div>
                         <span
-                          className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}
+                          className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${statusColors[q.status] || "bg-muted text-muted-foreground"}`}
                         >
-                          {q.status}
+                          {statusLabel(q.status)}
                         </span>
                       </div>
 
-                      {/* The 3-Column Detail Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Service:</span>
@@ -183,7 +253,6 @@ const QuotesAdmin = () => {
                         </div>
                       </div>
 
-                      {/* The Sky-Blue Add-ons */}
                       {addons.length > 0 && (
                         <div className="text-sm">
                           <span className="text-foreground font-medium">Requested Add-Ons:</span>
@@ -220,7 +289,7 @@ const QuotesAdmin = () => {
                         </a>
                       )}
 
-                      {/* Activity Log Section */}
+                      {/* Activity Log */}
                       <div className="border-t border-border pt-3">
                         <button
                           onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
@@ -252,6 +321,7 @@ const QuotesAdmin = () => {
                                 variant="outline"
                                 onClick={() => addNote.mutate({ quoteId: q.id, note: newNote })}
                                 className="h-8"
+                                disabled={!newNote.trim()}
                               >
                                 <Send className="w-3 h-3" />
                               </Button>
@@ -261,29 +331,53 @@ const QuotesAdmin = () => {
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="flex flex-wrap gap-2">
-                        {q.status !== "converted" && (
-                          <Button variant="default" size="sm" onClick={() => openConvert(q)} className="gap-1">
-                            <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {q.status === "requested" && (
+                          <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q.id)} className="gap-1">
+                            <PlayCircle className="w-3 h-3" /> Mark In Progress
                           </Button>
                         )}
-                        {["pending", "reviewed", "responded", "closed"]
-                          .filter((s) => s !== q.status && q.status !== "converted")
-                          .map((s) => (
-                            <Button
-                              key={s}
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateStatus.mutate({ id: q.id, status: s })}
-                              className="capitalize"
-                            >
-                              {s}
-                            </Button>
-                          ))}
+
+                        {q.status === "in_progress" && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => openConvert(q)}
+                                  className="gap-1"
+                                  disabled={!canConvert}
+                                >
+                                  <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {!canConvert && (
+                              <TooltipContent>Add at least one activity log note before converting.</TooltipContent>
+                            )}
+                          </Tooltip>
+                        )}
+
+                        <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(q)} className="gap-1">
+                          <Download className="w-3 h-3" /> Quote PDF
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCloseTarget(q)}
+                          className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                        >
+                          <XCircle className="w-3 h-3" /> Close
+                        </Button>
                       </div>
                     </div>
                   );
                 })}
+                {activeQuotes.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-8 text-center italic">No active quote requests.</p>
+                )}
               </div>
             </TabsContent>
 
@@ -293,12 +387,9 @@ const QuotesAdmin = () => {
                   const addons = parseAddons(q.selected_addons);
                   const notes = getNotesForQuote(q.id);
                   const isExpanded = expandedNotes === q.id;
-                  // Logic to determine if the record is "locked"
-                  const isLocked = q.status === "closed" || q.status === "converted";
 
                   return (
                     <div key={q.id} className="bg-card border border-border rounded-xl p-6 space-y-4 relative">
-                      {/* Header */}
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="font-medium text-xl text-foreground">{q.name}</h3>
@@ -307,25 +398,20 @@ const QuotesAdmin = () => {
                           </p>
                         </div>
                         <span
-                          className={`px-3 py-1 rounded-full text-sm border ${
+                          className={`px-3 py-1 rounded-full text-sm border capitalize ${
                             q.status === "closed"
                               ? "bg-red-50 text-red-500 border-red-100"
                               : "bg-green-50 text-green-600 border-green-100"
                           }`}
                         >
-                          {q.status}
+                          {statusLabel(q.status)}
                         </span>
                       </div>
 
-                      {/* 4-Column Info Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-2">
                         <div>
                           <p className="text-muted-foreground mb-1">Date:</p>
                           <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground mb-1">Time:</p>
-                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "HH:mm")}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground mb-1">Service:</p>
@@ -339,7 +425,6 @@ const QuotesAdmin = () => {
                         </div>
                       </div>
 
-                      {/* Add-Ons */}
                       {addons.length > 0 && (
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-foreground">Add-Ons:</p>
@@ -363,7 +448,13 @@ const QuotesAdmin = () => {
                         <p className="text-muted-foreground">
                           <span className="text-foreground font-medium">Notes:</span> {q.description}
                         </p>
+                        {(q as any).close_reason && (
+                          <p className="text-destructive">
+                            <span className="font-medium">Close reason:</span> {(q as any).close_reason}
+                          </p>
+                        )}
                       </div>
+
                       <div className="border-t border-border pt-3">
                         <button
                           onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
@@ -383,39 +474,28 @@ const QuotesAdmin = () => {
                                 </p>
                               </div>
                             ))}
-
-                            {/* We hide the Input and Button here because the record is finalized */}
                           </div>
                         )}
                       </div>
 
-                      {/* Action Row: Only show if NOT locked */}
-                      {!isLocked ? (
-                        <div className="flex gap-3 pt-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => updateStatus.mutate({ id: q.id, status: "pending" })}
-                            className="rounded-lg px-6 py-2 h-auto text-sm font-medium border-border/60 hover:bg-muted"
-                          >
-                            Restore to Pending
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="pt-2">
-                          <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-                            This record is finalized and cannot be modified.
-                          </p>
-                        </div>
-                      )}
+                      <div className="pt-2">
+                        <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                          This record is finalized and cannot be modified.
+                        </p>
+                      </div>
                     </div>
                   );
                 })}
+                {archivedQuotes.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-8 text-center italic">No archived quotes.</p>
+                )}
               </div>
             </TabsContent>
           </>
         )}
       </Tabs>
 
+      {/* Convert dialog */}
       <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -424,12 +504,8 @@ const QuotesAdmin = () => {
           {selectedQuote && (
             <div className="space-y-4 pt-4">
               <div className="bg-muted p-3 rounded text-xs space-y-1">
-                <p>
-                  <strong>Client:</strong> {selectedQuote.name}
-                </p>
-                <p>
-                  <strong>Email:</strong> {selectedQuote.email}
-                </p>
+                <p><strong>Client:</strong> {selectedQuote.name}</p>
+                <p><strong>Email:</strong> {selectedQuote.email}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -452,7 +528,36 @@ const QuotesAdmin = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Close-reason dialog */}
+      <Dialog open={!!closeTarget} onOpenChange={() => setCloseTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Close Quote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="text-sm font-medium">Reason for closing</label>
+            <Textarea
+              placeholder="e.g. Client chose another provider, out of service area..."
+              value={closeReason}
+              onChange={(e) => setCloseReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseTarget(null)}>Back</Button>
+            <Button
+              variant="destructive"
+              onClick={() => closeTarget && closeQuote.mutate({ id: closeTarget.id, reason: closeReason || "No reason provided" })}
+              disabled={closeQuote.isPending}
+            >
+              Close Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   );
 };
 
