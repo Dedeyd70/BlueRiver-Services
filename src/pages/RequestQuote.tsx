@@ -27,8 +27,8 @@ const RequestQuote = () => {
   const [form, setForm] = useState({
     name: "", email: "", phone: "", address: "", service: searchParams.get("service") || "",
     description: "", preferred_contact: "email",
-    property_type: "", square_footage: "", bedrooms: "", bathrooms: "",
-    frequency: "", has_pets: false, entry_codes: "",
+    property_type: "", square_footage: "", bedrooms: "", bathrooms: "", kitchen_count: "",
+    frequency: "", condition_level: "", has_pets: false, entry_codes: "",
   });
 
   const { mainServices, addons } = useServices();
