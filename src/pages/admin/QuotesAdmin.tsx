@@ -215,8 +215,7 @@ const QuotesAdmin = () => {
         tax_rate: Number(payload.tax_rate) || 0,
         notes: payload.notes || null,
         validity_days: Number(payload.validity_days) || 7,
-        condition_multiplier: Number(payload.condition_multiplier) || 1,
-        manual_adjustment: Number(payload.manual_adjustment) || 0,
+        line_items: payload.line_items as any,
         breakdown,
         prepared_by: user?.id ?? null,
       };
