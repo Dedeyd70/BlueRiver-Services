@@ -923,7 +923,7 @@ const QuotesAdmin = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPrepareTarget(null)}>Cancel</Button>
             <Button
-              onClick={() => prepareTarget && saveDraft.mutate({ quoteId: prepareTarget.id, payload: draftForm, isUpdate: !!draftMap[prepareTarget.id] })}
+              onClick={() => prepareTarget && saveDraft.mutate({ quoteId: prepareTarget.id, payload: draftForm, isUpdate: !!draftMap[prepareTarget.id], breakdown: buildBreakdown() })}
               disabled={saveDraft.isPending}
             >
               {saveDraft.isPending ? "Saving..." : "Save Quote"}
