@@ -37,6 +37,8 @@ interface DraftForm {
   tax_rate: number;
   notes: string;
   validity_days: number;
+  condition_multiplier: number;
+  manual_adjustment: number;
 }
 
 const emptyDraft: DraftForm = {
@@ -48,6 +50,17 @@ const emptyDraft: DraftForm = {
   tax_rate: 0,
   notes: "",
   validity_days: 7,
+  condition_multiplier: 1,
+  manual_adjustment: 0,
+};
+
+const conditionMultiplierFor = (level?: string | null): number => {
+  switch ((level || "").toLowerCase()) {
+    case "light": return 0.9;
+    case "heavy": return 1.3;
+    case "standard": return 1.0;
+    default: return 1.0;
+  }
 };
 
 const QuotesAdmin = () => {
