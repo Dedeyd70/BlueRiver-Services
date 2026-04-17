@@ -455,8 +455,11 @@ export type Database = {
         Row: {
           addons: Json
           base_price: number
+          breakdown: Json
+          condition_multiplier: number
           discount: number
           id: string
+          manual_adjustment: number
           notes: string | null
           prepared_at: string
           prepared_by: string | null
@@ -470,8 +473,11 @@ export type Database = {
         Insert: {
           addons?: Json
           base_price?: number
+          breakdown?: Json
+          condition_multiplier?: number
           discount?: number
           id?: string
+          manual_adjustment?: number
           notes?: string | null
           prepared_at?: string
           prepared_by?: string | null
@@ -485,8 +491,11 @@ export type Database = {
         Update: {
           addons?: Json
           base_price?: number
+          breakdown?: Json
+          condition_multiplier?: number
           discount?: number
           id?: string
+          manual_adjustment?: number
           notes?: string | null
           prepared_at?: string
           prepared_by?: string | null
@@ -546,6 +555,7 @@ export type Database = {
           bathrooms: number | null
           bedrooms: number | null
           close_reason: string | null
+          condition_level: string | null
           consent_given: boolean
           created_at: string
           description: string
@@ -554,6 +564,7 @@ export type Database = {
           frequency: string | null
           has_pets: boolean | null
           id: string
+          kitchen_count: number | null
           name: string
           phone: string | null
           preferred_contact: string | null
@@ -570,6 +581,7 @@ export type Database = {
           bathrooms?: number | null
           bedrooms?: number | null
           close_reason?: string | null
+          condition_level?: string | null
           consent_given?: boolean
           created_at?: string
           description: string
@@ -578,6 +590,7 @@ export type Database = {
           frequency?: string | null
           has_pets?: boolean | null
           id?: string
+          kitchen_count?: number | null
           name: string
           phone?: string | null
           preferred_contact?: string | null
@@ -594,6 +607,7 @@ export type Database = {
           bathrooms?: number | null
           bedrooms?: number | null
           close_reason?: string | null
+          condition_level?: string | null
           consent_given?: boolean
           created_at?: string
           description?: string
@@ -602,6 +616,7 @@ export type Database = {
           frequency?: string | null
           has_pets?: boolean | null
           id?: string
+          kitchen_count?: number | null
           name?: string
           phone?: string | null
           preferred_contact?: string | null

@@ -19,6 +19,9 @@ export interface QuoteDraft {
   tax_rate?: number | null;
   notes?: string | null;
   validity_days?: number | null;
+  condition_multiplier?: number | null;
+  manual_adjustment?: number | null;
+  breakdown?: any;
 }
 
 interface BrandingMap {
@@ -128,12 +131,21 @@ export const generateQuotePdf = (
   const addons = Array.isArray(draft.addons) ? draft.addons : [];
   const discount = Number(draft.discount ?? 0);
   const taxRate = Number(draft.tax_rate ?? 0);
+  const conditionMult = Number(draft.condition_multiplier ?? 1);
+  const manualAdj = Number(draft.manual_adjustment ?? 0);
 
   doc.text("Base", margin + 2, y);
   doc.text(`$${base.toFixed(2)}`, pageW - margin, y, { align: "right" });
   y += 5;
 
-  let subtotal = base;
+  const adjustedBase = base * conditionMult;
+  if (conditionMult !== 1) {
+    doc.text(`× Condition multiplier (${conditionMult})`, margin + 2, y);
+    doc.text(`$${adjustedBase.toFixed(2)}`, pageW - margin, y, { align: "right" });
+    y += 5;
+  }
+
+  let subtotal = adjustedBase;
   addons.forEach((a: any) => {
     const price = parsePrice(a.price);
     subtotal += price;
@@ -141,6 +153,15 @@ export const generateQuotePdf = (
     doc.text(`$${price.toFixed(2)}`, pageW - margin, y, { align: "right" });
     y += 5;
   });
+
+  if (manualAdj !== 0) {
+    subtotal += manualAdj;
+    const label = manualAdj >= 0 ? "Manual adjustment" : "Manual adjustment";
+    doc.text(label, margin + 2, y);
+    const sign = manualAdj >= 0 ? "" : "-";
+    doc.text(`${sign}$${Math.abs(manualAdj).toFixed(2)}`, pageW - margin, y, { align: "right" });
+    y += 5;
+  }
 
   if (discount > 0) {
     subtotal -= discount;
