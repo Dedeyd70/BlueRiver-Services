@@ -701,6 +701,48 @@ const QuotesAdmin = () => {
             <DialogTitle>{draftMap[prepareTarget?.id] ? "Edit Quote" : "Prepare Quote"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {/* Property Summary (read-only) */}
+            {prepareTarget && (
+              <div className="border border-border rounded-lg p-3 bg-muted/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-foreground">Property Summary</h4>
+                  {(prepareTarget as any).condition_level && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
+                      {(prepareTarget as any).condition_level}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1.5 text-xs">
+                  <div><span className="text-muted-foreground">Service:</span> <span className="font-medium">{prepareTarget.service_type || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Property:</span> <span className="font-medium">{prepareTarget.property_type || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Sq ft:</span> <span className="font-medium">{prepareTarget.square_footage || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Frequency:</span> <span className="font-medium">{prepareTarget.frequency || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Bedrooms:</span> <span className="font-medium">{prepareTarget.bedrooms ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Bathrooms:</span> <span className="font-medium">{prepareTarget.bathrooms ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Kitchens:</span> <span className="font-medium">{(prepareTarget as any).kitchen_count ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Pets:</span> <span className="font-medium">{prepareTarget.has_pets ? "Yes" : "No"}</span></div>
+                </div>
+                {prepareTarget.entry_codes && (
+                  <div className="text-xs"><span className="text-muted-foreground">Entry codes:</span> <span className="font-medium">{prepareTarget.entry_codes}</span></div>
+                )}
+                {Array.isArray(prepareTarget.selected_addons) && prepareTarget.selected_addons.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {prepareTarget.selected_addons.map((a: any, i: number) => (
+                      <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium">
+                        {a.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {prepareTarget.description && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">View customer description</summary>
+                    <p className="mt-1 text-foreground whitespace-pre-wrap">{prepareTarget.description}</p>
+                  </details>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium">Service type</label>
