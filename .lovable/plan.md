@@ -1,72 +1,64 @@
 
 
-# Dynamic Service Fields — DB-Driven Form + Pricing
+## What exists vs what I will change
 
-## What already exists (preserve, don't rebuild)
-- `service_types` table with base_price ✅
-- `service_pricing_rules` table with category + unit_price ✅
-- `condition_settings` table with integer surcharges ✅
-- `quote_drafts.line_items` JSONB ✅
-- Itemized Prepare-Quote table in `QuotesAdmin.tsx` ✅
-- `pricingEngine.ts` computing line items ✅
-- Quote PDF rendering line items ✅
-- Customer form with dynamic groups in `RequestQuote.tsx` ✅
-- Admin "Pricing Settings" tab ✅
+### Already working (won't touch)
+- `service_fields` table with `field_key`, `label`, `input_type`, `required`, `display_order` ✅
+- `service_pricing_rules` with `service_type_id` + `category` (= field_key) + `unit_price` ✅
+- Per-service field CRUD + auto-creation of matching pricing rule for `number` fields ✅
+- `condition_settings` surcharge system (separate, applied after subtotal) ✅
+- Pricing engine, Prepare Quote dialog, PDF, customer form ✅
 
-## What's missing (the gap)
-- `ROOM_CATEGORIES` array is **hardcoded** in `PricingSettings.tsx` — categories should be admin-defined per service
-- Customer form groups (`residential`/`deep`/`commercial`/`move`/`recurring`) are **hardcoded by name-matching** — should be driven by DB
-- No `service_fields` table linking field definitions to a service
+### The gaps causing the user's complaints
+1. **All services show all fields stacked** — current UI lists every service in a single scroll, no way to focus on one. User wants a dropdown.
+2. **"no price" placeholder** appears for non-number fields (select/toggle), and for number fields whose pricing rule didn't get created (legacy data before auto-create existed).
+3. **No way to attach a price to existing fields without a rule** — if a rule is missing, the row just shows "no price" with no action.
+4. **Edit field metadata** (label / required / input_type) not currently possible — only add + delete.
 
-## The change — additive only
+---
 
-### 1. New table: `service_fields`
-```
-id uuid pk
-service_type_id uuid → service_types(id) on delete cascade
-field_key text         -- e.g. "bedrooms", "office_rooms"
-label text             -- "Bedrooms"
-input_type text        -- 'number' | 'select' | 'toggle'
-options jsonb default '[]'  -- for select inputs
-required boolean default false
-display_order integer default 0
-unique(service_type_id, field_key)
-```
-RLS: admin manage / public read (matches existing pattern).
+## Targeted changes (UI-only inside `PricingSettings.tsx`)
 
-Seed from current hardcoded categories so nothing breaks for existing services (Bedrooms, Bathrooms, FullBath, HalfBath, Kitchen, LivingRoom, OfficeRoom — number inputs).
+### 1. Add Service Selector at top of "Service Fields & Pricing" section
+Replace the "render every service card stacked" loop with:
+- A `<Select>` dropdown labeled **"Select Service Type"** populated from `service_types`
+- Auto-select the first service on mount
+- Render only the selected service's `ServiceFieldEditor` below it
 
-### 2. Admin "Configure Service" — extend `PricingSettings.tsx`
-- Replace hardcoded `ROOM_CATEGORIES` with `service_fields` rows fetched per service
-- Each service card gains: list of fields (label + input_type + price input), "+ Add Field" dialog (key, label, input_type, required), delete button per row
-- `service_pricing_rules.category` continues to map to `field_key` (already aligned — no schema change to that table)
-- New service flow: `ServicesAdmin.tsx` Create → after insert into `services`, also insert matching `service_types` row, then toast "Configure pricing in Settings → Pricing"
+### 2. Auto-heal missing pricing rules
+When the selected service loads its fields:
+- For every `number` field that has **no matching `service_pricing_rules` row**, silently insert one with `unit_price: 0` (one-time per render, idempotent via the existing unique pattern)
+- Result: every number field always has an editable `$` input — no more "no price" for number fields
 
-### 3. Dynamic customer form — refactor `RequestQuote.tsx`
-- Fetch `service_fields` for selected service via React Query
-- Replace hardcoded `serviceGroup` switch with single generic renderer that maps each field to the right control (`number` → Input, `select` → select with options, `toggle` → Checkbox)
-- Keep all existing common fields (name/email/phone/address/property/sq ft/condition/addons/description/upload) untouched
-- Submit payload: existing typed columns kept for known keys (bedrooms, bathrooms, etc.); unknown custom keys stored in a new `custom_fields jsonb` column on `quote_requests` (additive, nullable)
+### 3. Replace "no price" text for non-number fields
+Instead of italic "no price", show a small muted badge:
+- `select` / `toggle` fields → `"not priced"` badge (these legitimately don't carry per-unit price; they affect form UI only)
+- This is honest labeling, not a placeholder
 
-### 4. Pricing engine — `pricingEngine.ts`
-- Already category-driven via `service_pricing_rules.category === field_key` — only change: read field values dynamically from `quote_requests.custom_fields` (fallback) **plus** existing typed columns. No formula change.
+### 4. Add inline "Edit field" capability
+Add a pencil icon next to each field row that opens the same dialog used for "Add Field" pre-filled with current values. Submitting updates `service_fields` row (label, input_type, required, options). `field_key` stays immutable to preserve the link to `service_pricing_rules.category`.
 
-### 5. Prepare Quote dialog — `QuotesAdmin.tsx`
-- No UI change. Itemized table already renders whatever line items the engine produces, so adding new field types automatically flows through.
+### 5. Empty-state guidance
+When a service has zero fields → show a friendly empty state with a single "Add your first field" button (already implicit, just polish the copy).
 
-### 6. Quote PDF
-- No change. Already renders `line_items` array generically.
+---
 
-## Files Touched
+## What stays exactly as-is
+- Base Prices section — untouched
+- Condition Surcharges section — untouched
+- Customer quote form — untouched
+- Prepare Quote dialog / itemized table — untouched
+- PDF, invoices, bookings, notifications — untouched
+- DB schema — no migrations needed
+- Pricing engine logic — unchanged
+
+---
+
+## Files touched (one file)
 
 | File | Change |
 |---|---|
-| **New migration** | Create `service_fields` table + RLS; add `custom_fields jsonb` to `quote_requests`; seed default fields for existing service_types |
-| `src/components/admin/PricingSettings.tsx` | Replace `ROOM_CATEGORIES` constant with DB-driven fields; add field CRUD UI per service |
-| `src/pages/admin/ServicesAdmin.tsx` | On create, also upsert `service_types` row; success toast links to Pricing tab |
-| `src/pages/RequestQuote.tsx` | Replace hardcoded group switch with `<DynamicFields service_type_id=... />` renderer; keep all common fields |
-| `src/lib/pricingEngine.ts` | Read custom_fields jsonb in addition to typed columns |
-| `src/integrations/supabase/types.ts` | Auto-regenerated |
+| `src/components/admin/PricingSettings.tsx` | Add service selector, auto-heal missing pricing rules for number fields, swap "no price" copy, add edit-field dialog |
 
-No removed tables, no removed UI, no breaking changes. Existing quotes/bookings/PDFs continue working.
+No new tables. No data migration. No removed UI. No touched flows outside the Pricing tab.
 
