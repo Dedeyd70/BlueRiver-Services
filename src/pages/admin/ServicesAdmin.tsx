@@ -84,11 +84,20 @@ const ServicesAdmin = () => {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+      // Look up the service first so we can also clean its matching service_types row
+      const svc = (services ?? []).find((s) => s.id === id) as any;
       const { error } = await supabase.from("services").delete().eq("id", id);
       if (error) throw error;
+      // For main services, also delete the linked service_types row.
+      // FK ON DELETE CASCADE will auto-remove related service_fields & service_pricing_rules.
+      if (svc && svc.service_category === "main" && svc.title) {
+        await (supabase as any).from("service_types").delete().ilike("name", svc.title);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-services"] });
+      qc.invalidateQueries({ queryKey: ["admin-service-types"] });
+      qc.invalidateQueries({ queryKey: ["public-services"] });
       toast({ title: "Service deleted" });
     },
   });

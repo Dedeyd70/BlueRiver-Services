@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { generateQuotePdf } from "@/lib/quotePdf";
 import { notifyAdmins } from "@/lib/notifications";
 import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
+import DynamicQuoteSummary from "@/components/admin/DynamicQuoteSummary";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -732,38 +733,19 @@ const QuotesAdmin = () => {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1.5 text-xs">
                   <div><span className="text-muted-foreground">Service:</span> <span className="font-medium">{prepareTarget.service_type || "—"}</span></div>
-                  <div><span className="text-muted-foreground">Property:</span> <span className="font-medium">{prepareTarget.property_type || "—"}</span></div>
-                  <div><span className="text-muted-foreground">Sq ft:</span> <span className="font-medium">{prepareTarget.square_footage || "—"}</span></div>
-                  <div><span className="text-muted-foreground">Frequency:</span> <span className="font-medium">{prepareTarget.frequency || "—"}</span></div>
-                  <div><span className="text-muted-foreground">Bedrooms:</span> <span className="font-medium">{prepareTarget.bedrooms ?? "—"}</span></div>
-                  <div>
-                    <span className="text-muted-foreground">Bathrooms:</span>{" "}
-                    <span className="font-medium">
-                      {((prepareTarget as any).full_bathrooms != null || (prepareTarget as any).half_bathrooms != null)
-                        ? `Full: ${(prepareTarget as any).full_bathrooms ?? 0} · Half: ${(prepareTarget as any).half_bathrooms ?? 0}`
-                        : (prepareTarget.bathrooms ?? "—")}
-                    </span>
-                  </div>
-                  <div><span className="text-muted-foreground">Kitchens:</span> <span className="font-medium">{(prepareTarget as any).kitchen_count ?? "—"}</span></div>
-                  <div><span className="text-muted-foreground">Pets:</span> <span className="font-medium">{prepareTarget.has_pets ? "Yes" : "No"}</span></div>
-                  {(prepareTarget as any).living_rooms != null && (
-                    <div><span className="text-muted-foreground">Living rooms:</span> <span className="font-medium">{(prepareTarget as any).living_rooms}</span></div>
+                  {prepareTarget.property_type && (
+                    <div><span className="text-muted-foreground">Property:</span> <span className="font-medium">{prepareTarget.property_type}</span></div>
                   )}
-                  {(prepareTarget as any).office_rooms != null && (
-                    <div><span className="text-muted-foreground">Office rooms:</span> <span className="font-medium">{(prepareTarget as any).office_rooms}</span></div>
+                  {prepareTarget.square_footage && (
+                    <div><span className="text-muted-foreground">Sq ft:</span> <span className="font-medium">{prepareTarget.square_footage}</span></div>
                   )}
-                  {(prepareTarget as any).floor_type && (
-                    <div><span className="text-muted-foreground">Floor:</span> <span className="font-medium capitalize">{(prepareTarget as any).floor_type}</span></div>
+                  {prepareTarget.frequency && (
+                    <div><span className="text-muted-foreground">Frequency:</span> <span className="font-medium">{prepareTarget.frequency}</span></div>
                   )}
-                  {(prepareTarget as any).property_size && (
-                    <div><span className="text-muted-foreground">Size:</span> <span className="font-medium capitalize">{(prepareTarget as any).property_size}</span></div>
+                  {prepareTarget.has_pets != null && (
+                    <div><span className="text-muted-foreground">Pets:</span> <span className="font-medium">{prepareTarget.has_pets ? "Yes" : "No"}</span></div>
                   )}
-                  {(prepareTarget as any).has_cabinets != null && (
-                    <div><span className="text-muted-foreground">Cabinets:</span> <span className="font-medium">{(prepareTarget as any).has_cabinets ? "Yes" : "No"}</span></div>
-                  )}
-                  {(prepareTarget as any).is_empty_property != null && (
-                    <div><span className="text-muted-foreground">Empty:</span> <span className="font-medium">{(prepareTarget as any).is_empty_property ? "Yes" : "No"}</span></div>
-                  )}
+                  <DynamicQuoteSummary serviceTypeName={prepareTarget.service_type} request={prepareTarget} />
                 </div>
                 {prepareTarget.entry_codes && (
                   <div className="text-xs"><span className="text-muted-foreground">Entry codes:</span> <span className="font-medium">{prepareTarget.entry_codes}</span></div>
