@@ -1,12 +1,10 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Trash2 } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ExternalLink } from "lucide-react";
 
 type TabType = "all" | "bookings" | "quotes" | "contact";
 
@@ -28,21 +26,22 @@ const statusColors: Record<string, string> = {
   completed: "bg-primary/10 text-primary",
   cancelled: "bg-destructive/10 text-destructive",
   requested: "bg-amber-100 text-amber-800",
-  "in progress": "bg-blue-100 text-blue-800",
+  in_progress: "bg-blue-100 text-blue-800",
   converted: "bg-green-100 text-green-800",
   closed: "bg-muted text-muted-foreground",
-  reviewed: "bg-primary/10 text-primary",
-  responded: "bg-green-100 text-green-800",
   contacted: "bg-green-100 text-green-800",
   read: "bg-blue-100 text-blue-800",
 };
 
+const linkForType = (type: UnifiedEntry["type"]) => {
+  if (type === "Booking") return "/admin/bookings";
+  if (type === "Quote") return "/admin/quotes";
+  return "/admin/messages";
+};
+
 const Submissions = () => {
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const [tab, setTab] = useState<TabType>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [deleteTarget, setDeleteTarget] = useState<UnifiedEntry | null>(null);
 
   const { data: bookings } = useQuery({
     queryKey: ["admin-bookings-sub"],
@@ -69,24 +68,6 @@ const Submissions = () => {
       if (error) throw error;
       return data;
     },
-  });
-
-  const deleteEntry = useMutation({
-    mutationFn: async (entry: UnifiedEntry) => {
-      const table = entry.type === "Booking" ? "bookings" : entry.type === "Quote" ? "quote_requests" : "contact_submissions";
-      const { error } = await supabase.from(table).delete().eq("id", entry.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
-      qc.invalidateQueries({ queryKey: ["admin-quotes-sub"] });
-      qc.invalidateQueries({ queryKey: ["admin-submissions"] });
-      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
-      qc.invalidateQueries({ queryKey: ["admin-quotes"] });
-      toast({ title: "Submission deleted" });
-      setDeleteTarget(null);
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const entries: UnifiedEntry[] = [
@@ -144,22 +125,10 @@ const Submissions = () => {
 
   return (
     <div>
-      <h1 className="text-2xl font-display font-bold text-foreground mb-4">Submissions</h1>
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Submission</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to delete this submission? This action cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteTarget && deleteEntry.mutate(deleteTarget)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <h1 className="text-2xl font-display font-bold text-foreground mb-1">Submissions</h1>
+      <p className="text-sm text-muted-foreground mb-4">
+        View-only inbox. Take actions in the dedicated Bookings, Quotes, or Messages pages.
+      </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {tabs.map((t) => (
@@ -192,7 +161,7 @@ const Submissions = () => {
               statusFilter === s ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
             }`}
           >
-            {s}
+            {s.replace("_", " ")}
           </button>
         ))}
       </div>
@@ -215,11 +184,14 @@ const Submissions = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[e.status] || "bg-muted text-muted-foreground"}`}>
-                    {e.status}
+                    {e.status.replace("_", " ")}
                   </span>
-                  <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => setDeleteTarget(e)}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
+                  <Link
+                    to={linkForType(e.type)}
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    Open <ExternalLink className="w-3 h-3" />
+                  </Link>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
