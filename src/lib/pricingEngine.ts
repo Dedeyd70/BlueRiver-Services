@@ -39,6 +39,16 @@ export interface QuoteRequestLike {
   office_rooms?: number | null;
   condition_level?: string | null;
   selected_addons?: any;
+  custom_fields?: Record<string, any> | null;
+}
+
+export interface ServiceField {
+  id: string;
+  service_type_id: string;
+  field_key: string;
+  label: string;
+  input_type?: string;
+  display_order?: number;
 }
 
 const intify = (n: any): number => {
@@ -64,7 +74,8 @@ export function computeQuote(
   serviceTypes: ServiceType[],
   rules: PricingRule[],
   conditions: ConditionSetting[],
-  taxRate: number = 0
+  taxRate: number = 0,
+  fields: ServiceField[] = []
 ): ComputeResult {
   const items: LineItem[] = [];
 
@@ -97,33 +108,64 @@ export function computeQuote(
       ? rules.find((r) => r.service_type_id === matchedService.id && r.category === cat)
       : undefined;
 
-  const addRoom = (label: string, qty: number, category: string) => {
-    if (!qty || qty <= 0) return;
-    const unit = intify(ruleFor(category)?.unit_price ?? 0);
-    items.push({
-      name: label,
-      quantity: qty,
-      unit_price: unit,
-      total_price: intify(qty * unit),
-      type: "room",
-    });
+  // Read a field value from typed columns first, then custom_fields jsonb
+  const readField = (key: string): number => {
+    const r = request as any;
+    const direct = r[key];
+    if (direct !== undefined && direct !== null && direct !== "") return intify(direct);
+    const custom = request.custom_fields ?? {};
+    return intify(custom[key]);
   };
 
-  addRoom("Bedrooms", intify(request.bedrooms), "Bedroom");
+  // Dynamic fields path: if service_fields are provided for this service, render line items from them
+  const serviceFields = matchedService
+    ? fields
+        .filter((f) => f.service_type_id === matchedService.id)
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+    : [];
 
-  // Bathrooms: prefer split if provided
-  const fullB = intify(request.full_bathrooms);
-  const halfB = intify(request.half_bathrooms);
-  if (fullB > 0 || halfB > 0) {
-    addRoom("Full Bathrooms", fullB, "FullBath");
-    addRoom("Half Bathrooms", halfB, "HalfBath");
+  if (serviceFields.length > 0) {
+    serviceFields.forEach((f) => {
+      const qty = readField(f.field_key);
+      if (!qty || qty <= 0) return;
+      // Pricing rule key matches field_key (DB-driven). Fallback: match by label-derived legacy keys.
+      const rule = ruleFor(f.field_key);
+      const unit = intify(rule?.unit_price ?? 0);
+      items.push({
+        name: f.label,
+        quantity: qty,
+        unit_price: unit,
+        total_price: intify(qty * unit),
+        type: "room",
+      });
+    });
   } else {
-    addRoom("Bathrooms", intify(request.bathrooms), "Bathroom");
-  }
+    // Legacy fallback when no service_fields are configured for this service
+    const addRoom = (label: string, qty: number, category: string) => {
+      if (!qty || qty <= 0) return;
+      const unit = intify(ruleFor(category)?.unit_price ?? 0);
+      items.push({
+        name: label,
+        quantity: qty,
+        unit_price: unit,
+        total_price: intify(qty * unit),
+        type: "room",
+      });
+    };
 
-  addRoom("Kitchens", intify(request.kitchen_count), "Kitchen");
-  addRoom("Living Rooms", intify(request.living_rooms), "LivingRoom");
-  addRoom("Office Rooms", intify(request.office_rooms), "OfficeRoom");
+    addRoom("Bedrooms", intify(request.bedrooms), "Bedroom");
+    const fullB = intify(request.full_bathrooms);
+    const halfB = intify(request.half_bathrooms);
+    if (fullB > 0 || halfB > 0) {
+      addRoom("Full Bathrooms", fullB, "FullBath");
+      addRoom("Half Bathrooms", halfB, "HalfBath");
+    } else {
+      addRoom("Bathrooms", intify(request.bathrooms), "Bathroom");
+    }
+    addRoom("Kitchens", intify(request.kitchen_count), "Kitchen");
+    addRoom("Living Rooms", intify(request.living_rooms), "LivingRoom");
+    addRoom("Office Rooms", intify(request.office_rooms), "OfficeRoom");
+  }
 
   // Add-ons
   const addons = Array.isArray(request.selected_addons) ? request.selected_addons : [];
