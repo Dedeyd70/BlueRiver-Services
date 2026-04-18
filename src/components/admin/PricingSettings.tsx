@@ -35,7 +35,7 @@ const PricingSettings = () => {
   const { data: fields } = useQuery({
     queryKey: ["admin-service-fields"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("service_fields").select("*"); /**.order("display_order")*/
+      const { data, error } = await (supabase as any).from("service_fields").select("*").order("display_order");
       if (error) throw error;
       return data ?? [];
     },
