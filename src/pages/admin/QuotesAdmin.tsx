@@ -209,6 +209,7 @@ const QuotesAdmin = () => {
       const row = {
         quote_id: quoteId,
         service_type: payload.service_type || null,
+        service_type_id: (prepareTarget as any)?.service_type_id ?? null,
         scope: payload.scope || null,
         base_price: Number(payload.base_price) || 0,
         addons: payload.addons.map((a) => ({ title: a.title, price: Number(a.price) || 0 })),
@@ -251,6 +252,7 @@ const QuotesAdmin = () => {
         phone: selectedQuote.phone,
         address: selectedQuote.address || "",
         service_type: selectedQuote.service_type,
+        service_type_id: selectedQuote.service_type_id ?? null,
         booking_date: bookingDate,
         time_slot: timeSlot,
         notes: selectedQuote.description,
@@ -745,7 +747,7 @@ const QuotesAdmin = () => {
                   {prepareTarget.has_pets != null && (
                     <div><span className="text-muted-foreground">Pets:</span> <span className="font-medium">{prepareTarget.has_pets ? "Yes" : "No"}</span></div>
                   )}
-                  <DynamicQuoteSummary serviceTypeName={prepareTarget.service_type} request={prepareTarget} />
+                  <DynamicQuoteSummary serviceTypeId={prepareTarget.service_type_id} serviceTypeName={prepareTarget.service_type} request={prepareTarget} />
                 </div>
                 {prepareTarget.entry_codes && (
                   <div className="text-xs"><span className="text-muted-foreground">Entry codes:</span> <span className="font-medium">{prepareTarget.entry_codes}</span></div>
