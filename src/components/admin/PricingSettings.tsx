@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const intInput = (v: string) => Math.max(0, Math.round(Number(v) || 0));
-const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+const slugify = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 
 const PricingSettings = () => {
   const { toast } = useToast();
@@ -30,7 +35,7 @@ const PricingSettings = () => {
   const { data: fields } = useQuery({
     queryKey: ["admin-service-fields"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("service_fields").select("*").order("display_order");
+      const { data, error } = await (supabase as any).from("service_fields").select("*"); /**.order("display_order")*/
       if (error) throw error;
       return data ?? [];
     },
@@ -90,12 +95,12 @@ const PricingSettings = () => {
   useEffect(() => {
     if (!fields || !rules || !selectedServiceId) return;
     const numberFieldsForService = fields.filter(
-      (f: any) => f.service_type_id === selectedServiceId && f.input_type === "number"
+      (f: any) => f.service_type_id === selectedServiceId && f.input_type === "number",
     );
     const missing = numberFieldsForService.filter(
       (f: any) =>
         !rules.find((r: any) => r.service_type_id === selectedServiceId && r.category === f.field_key) &&
-        !healingRef.current.has(`${selectedServiceId}:${f.field_key}`)
+        !healingRef.current.has(`${selectedServiceId}:${f.field_key}`),
     );
     if (missing.length === 0) return;
     missing.forEach((f: any) => healingRef.current.add(`${selectedServiceId}:${f.field_key}`));
@@ -113,7 +118,10 @@ const PricingSettings = () => {
   const saveBase = useMutation({
     mutationFn: async () => {
       const updates = Object.entries(stEdits).map(([id, base_price]) =>
-        (supabase as any).from("service_types").update({ base_price: intInput(String(base_price)) }).eq("id", id)
+        (supabase as any)
+          .from("service_types")
+          .update({ base_price: intInput(String(base_price)) })
+          .eq("id", id),
       );
       const results = await Promise.all(updates);
       const err = results.find((r: any) => r.error);
@@ -129,7 +137,10 @@ const PricingSettings = () => {
   const saveRules = useMutation({
     mutationFn: async () => {
       const updates = Object.entries(ruleEdits).map(([id, unit_price]) =>
-        (supabase as any).from("service_pricing_rules").update({ unit_price: intInput(String(unit_price)) }).eq("id", id)
+        (supabase as any)
+          .from("service_pricing_rules")
+          .update({ unit_price: intInput(String(unit_price)) })
+          .eq("id", id),
       );
       const results = await Promise.all(updates);
       const err = results.find((r: any) => r.error);
@@ -145,7 +156,10 @@ const PricingSettings = () => {
   const saveConditions = useMutation({
     mutationFn: async () => {
       const updates = Object.entries(condEdits).map(([id, amt]) =>
-        (supabase as any).from("condition_settings").update({ surcharge_amount: intInput(String(amt)) }).eq("id", id)
+        (supabase as any)
+          .from("condition_settings")
+          .update({ surcharge_amount: intInput(String(amt)) })
+          .eq("id", id),
       );
       const results = await Promise.all(updates);
       const err = results.find((r: any) => r.error);
@@ -159,7 +173,14 @@ const PricingSettings = () => {
   });
 
   const addField = useMutation({
-    mutationFn: async (payload: { service_type_id: string; field_key: string; label: string; input_type: string; required: boolean; options: string[] }) => {
+    mutationFn: async (payload: {
+      service_type_id: string;
+      field_key: string;
+      label: string;
+      input_type: string;
+      required: boolean;
+      options: string[];
+    }) => {
       const { error: fErr } = await (supabase as any).from("service_fields").insert({
         service_type_id: payload.service_type_id,
         field_key: payload.field_key,
@@ -185,7 +206,13 @@ const PricingSettings = () => {
   });
 
   const updateField = useMutation({
-    mutationFn: async (payload: { id: string; label: string; input_type: string; required: boolean; options: string[] }) => {
+    mutationFn: async (payload: {
+      id: string;
+      label: string;
+      input_type: string;
+      required: boolean;
+      options: string[];
+    }) => {
       const { error } = await (supabase as any)
         .from("service_fields")
         .update({
@@ -205,7 +232,15 @@ const PricingSettings = () => {
   });
 
   const deleteField = useMutation({
-    mutationFn: async ({ id, service_type_id, field_key }: { id: string; service_type_id: string; field_key: string }) => {
+    mutationFn: async ({
+      id,
+      service_type_id,
+      field_key,
+    }: {
+      id: string;
+      service_type_id: string;
+      field_key: string;
+    }) => {
       await (supabase as any).from("service_fields").delete().eq("id", id);
       await (supabase as any)
         .from("service_pricing_rules")
@@ -236,7 +271,9 @@ const PricingSettings = () => {
             {saveBase.isPending ? "Saving..." : "Save Base Prices"}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">Integer dollars only. Used as the starting line item for every quote.</p>
+        <p className="text-xs text-muted-foreground">
+          Integer dollars only. Used as the starting line item for every quote.
+        </p>
         <div className="border border-border rounded-lg divide-y divide-border">
           {(serviceTypes ?? []).map((s: any) => (
             <div key={s.id} className="flex items-center justify-between gap-3 p-3">
@@ -271,7 +308,8 @@ const PricingSettings = () => {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Select a service to manage its fields and per-unit prices. Number fields carry a price; select/toggle fields control form UI only.
+          Select a service to manage its fields and per-unit prices. Number fields carry a price; select/toggle fields
+          control form UI only.
         </p>
 
         <div className="space-y-2">
@@ -282,7 +320,9 @@ const PricingSettings = () => {
             </SelectTrigger>
             <SelectContent>
               {(serviceTypes ?? []).map((s: any) => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -297,7 +337,9 @@ const PricingSettings = () => {
             setRuleEdits={setRuleEdits}
             onAddField={(payload) => addField.mutate({ service_type_id: selectedService.id, ...payload })}
             onUpdateField={(id, payload) => updateField.mutate({ id, ...payload })}
-            onDeleteField={(id, field_key) => deleteField.mutate({ id, service_type_id: selectedService.id, field_key })}
+            onDeleteField={(id, field_key) =>
+              deleteField.mutate({ id, service_type_id: selectedService.id, field_key })
+            }
           />
         ) : (
           <p className="text-sm text-muted-foreground italic p-4 border border-border rounded-lg">
@@ -314,7 +356,9 @@ const PricingSettings = () => {
             {saveConditions.isPending ? "Saving..." : "Save Surcharges"}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">Fixed integer surcharge per condition level. Applied after subtotal — separate from field pricing.</p>
+        <p className="text-xs text-muted-foreground">
+          Fixed integer surcharge per condition level. Applied after subtotal — separate from field pricing.
+        </p>
         <div className="border border-border rounded-lg divide-y divide-border">
           {(conditions ?? []).map((c: any) => (
             <div key={c.id} className="flex items-center justify-between gap-3 p-3">
@@ -364,9 +408,13 @@ const FieldDialog = ({ open, onOpenChange, title, initial, onSubmit, showKeyHint
 
   const submit = () => {
     if (!label.trim()) return;
-    const options = inputType === "select"
-      ? optionsText.split("\n").map((s) => s.trim()).filter(Boolean)
-      : [];
+    const options =
+      inputType === "select"
+        ? optionsText
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
     onSubmit({ label: label.trim(), input_type: inputType, required, options });
     onOpenChange(false);
   };
@@ -374,16 +422,22 @@ const FieldDialog = ({ open, onOpenChange, title, initial, onSubmit, showKeyHint
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3">
           <div>
             <label className="text-sm font-medium mb-1 block">Label</label>
             <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Office Rooms" />
             {showKeyHint && label && (
-              <p className="text-xs text-muted-foreground mt-1">Key: <code>{slugify(label) || "—"}</code></p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Key: <code>{slugify(label) || "—"}</code>
+              </p>
             )}
             {!showKeyHint && initial?.field_key && (
-              <p className="text-xs text-muted-foreground mt-1">Key: <code>{initial.field_key}</code> (immutable)</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Key: <code>{initial.field_key}</code> (immutable)
+              </p>
             )}
           </div>
           <div>
@@ -415,7 +469,9 @@ const FieldDialog = ({ open, onOpenChange, title, initial, onSubmit, showKeyHint
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={submit} disabled={!label.trim()}>Save</Button>
+          <Button onClick={submit} disabled={!label.trim()}>
+            Save
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -428,12 +484,27 @@ interface FieldEditorProps {
   ruleFor: (sid: string, key: string) => any;
   ruleEdits: Record<string, number>;
   setRuleEdits: (m: Record<string, number>) => void;
-  onAddField: (p: { field_key: string; label: string; input_type: string; required: boolean; options: string[] }) => void;
+  onAddField: (p: {
+    field_key: string;
+    label: string;
+    input_type: string;
+    required: boolean;
+    options: string[];
+  }) => void;
   onUpdateField: (id: string, p: { label: string; input_type: string; required: boolean; options: string[] }) => void;
   onDeleteField: (id: string, field_key: string) => void;
 }
 
-const ServiceFieldEditor = ({ service, fields, ruleFor, ruleEdits, setRuleEdits, onAddField, onUpdateField, onDeleteField }: FieldEditorProps) => {
+const ServiceFieldEditor = ({
+  service,
+  fields,
+  ruleFor,
+  ruleEdits,
+  setRuleEdits,
+  onAddField,
+  onUpdateField,
+  onDeleteField,
+}: FieldEditorProps) => {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
 
@@ -442,7 +513,8 @@ const ServiceFieldEditor = ({ service, fields, ruleFor, ruleEdits, setRuleEdits,
       <div className="flex items-center justify-between mb-3">
         <div className="font-medium text-sm">{service.name}</div>
         <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
-          <Plus className="w-3.5 h-3.5 mr-1" />Add Field
+          <Plus className="w-3.5 h-3.5 mr-1" />
+          Add Field
         </Button>
       </div>
 
@@ -462,13 +534,17 @@ const ServiceFieldEditor = ({ service, fields, ruleFor, ruleEdits, setRuleEdits,
         open={!!editing}
         onOpenChange={(v) => !v && setEditing(null)}
         title={`Edit field`}
-        initial={editing ? {
-          label: editing.label,
-          input_type: editing.input_type,
-          required: editing.required,
-          options: Array.isArray(editing.options) ? editing.options : [],
-          field_key: editing.field_key,
-        } : undefined}
+        initial={
+          editing
+            ? {
+                label: editing.label,
+                input_type: editing.input_type,
+                required: editing.required,
+                options: Array.isArray(editing.options) ? editing.options : [],
+                field_key: editing.field_key,
+              }
+            : undefined
+        }
         onSubmit={(p) => {
           if (editing) onUpdateField(editing.id, p);
           setEditing(null);
@@ -479,7 +555,8 @@ const ServiceFieldEditor = ({ service, fields, ruleFor, ruleEdits, setRuleEdits,
         <div className="text-center py-8 space-y-3">
           <p className="text-sm text-muted-foreground">No fields configured for this service yet.</p>
           <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" />Add your first field
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Add your first field
           </Button>
         </div>
       ) : (
@@ -491,7 +568,8 @@ const ServiceFieldEditor = ({ service, fields, ruleFor, ruleEdits, setRuleEdits,
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{f.label}</div>
                   <div className="text-xs text-muted-foreground">
-                    {f.field_key} · {f.input_type}{f.required ? " · required" : ""}
+                    {f.field_key} · {f.input_type}
+                    {f.required ? " · required" : ""}
                   </div>
                 </div>
                 {f.input_type === "number" && rule ? (
@@ -507,14 +585,23 @@ const ServiceFieldEditor = ({ service, fields, ruleFor, ruleEdits, setRuleEdits,
                     />
                   </div>
                 ) : f.input_type === "number" ? (
-                  <Badge variant="outline" className="text-xs">syncing…</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    syncing…
+                  </Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-xs">not priced</Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    not priced
+                  </Badge>
                 )}
                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditing(f)}>
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onDeleteField(f.id, f.field_key)}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                  onClick={() => onDeleteField(f.id, f.field_key)}
+                >
                   <Trash2 className="w-3.5 h-3.5 text-destructive" />
                 </Button>
               </div>
