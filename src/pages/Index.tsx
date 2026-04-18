@@ -129,7 +129,7 @@ const IndexPage = () => {
           {isLoading ? (
             /* Skeleton state while fetching from DB */
 
-            <div className="w-full aspect-video bg-gray-800 animate-pulse" />
+            <div className="w-full h-full bg-gray-800 animate-pulse" />
           ) : (
             <img
               src={mainSrc}
