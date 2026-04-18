@@ -29,6 +29,7 @@ export interface ConditionSetting {
 }
 
 export interface QuoteRequestLike {
+  service_type_id?: string | null;
   service_type?: string | null;
   bedrooms?: number | null;
   bathrooms?: number | null;
@@ -79,9 +80,15 @@ export function computeQuote(
 ): ComputeResult {
   const items: LineItem[] = [];
 
-  const matchedService = serviceTypes.find(
-    (s) => s.name.toLowerCase() === (request.service_type || "").toLowerCase()
-  );
+  // Primary: resolve by service_type_id (ID-based relationship)
+  // Legacy fallback: resolve by name match (only for historical rows without service_type_id)
+  const matchedService =
+    (request.service_type_id
+      ? serviceTypes.find((s) => s.id === request.service_type_id)
+      : undefined) ||
+    serviceTypes.find(
+      (s) => s.name.toLowerCase() === (request.service_type || "").toLowerCase()
+    );
 
   // Base
   if (matchedService) {
