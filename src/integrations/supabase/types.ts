@@ -81,6 +81,7 @@ export type Database = {
           quote_id: string | null
           selected_addons: Json | null
           service_type: string | null
+          service_type_id: string | null
           square_footage: string | null
           status: string
           time_slot: string
@@ -108,6 +109,7 @@ export type Database = {
           quote_id?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          service_type_id?: string | null
           square_footage?: string | null
           status?: string
           time_slot: string
@@ -135,6 +137,7 @@ export type Database = {
           quote_id?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          service_type_id?: string | null
           square_footage?: string | null
           status?: string
           time_slot?: string
@@ -347,6 +350,7 @@ export type Database = {
           payment_method: string | null
           payment_status: string
           quote_id: string | null
+          service_type_id: string | null
           services: Json
           subtotal: number
           tax_amount: number
@@ -369,6 +373,7 @@ export type Database = {
           payment_method?: string | null
           payment_status?: string
           quote_id?: string | null
+          service_type_id?: string | null
           services?: Json
           subtotal?: number
           tax_amount?: number
@@ -391,6 +396,7 @@ export type Database = {
           payment_method?: string | null
           payment_status?: string
           quote_id?: string | null
+          service_type_id?: string | null
           services?: Json
           subtotal?: number
           tax_amount?: number
@@ -491,6 +497,7 @@ export type Database = {
           quote_id: string
           scope: string | null
           service_type: string | null
+          service_type_id: string | null
           tax_rate: number
           updated_at: string
           validity_days: number
@@ -510,6 +517,7 @@ export type Database = {
           quote_id: string
           scope?: string | null
           service_type?: string | null
+          service_type_id?: string | null
           tax_rate?: number
           updated_at?: string
           validity_days?: number
@@ -529,6 +537,7 @@ export type Database = {
           quote_id?: string
           scope?: string | null
           service_type?: string | null
+          service_type_id?: string | null
           tax_rate?: number
           updated_at?: string
           validity_days?: number
@@ -607,6 +616,7 @@ export type Database = {
           property_type: string | null
           selected_addons: Json | null
           service_type: string | null
+          service_type_id: string | null
           square_footage: string | null
           status: string
           updated_at: string
@@ -642,6 +652,7 @@ export type Database = {
           property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          service_type_id?: string | null
           square_footage?: string | null
           status?: string
           updated_at?: string
@@ -677,6 +688,7 @@ export type Database = {
           property_type?: string | null
           selected_addons?: Json | null
           service_type?: string | null
+          service_type_id?: string | null
           square_footage?: string | null
           status?: string
           updated_at?: string

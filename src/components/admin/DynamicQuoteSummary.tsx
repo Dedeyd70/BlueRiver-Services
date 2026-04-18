@@ -2,40 +2,46 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
-  serviceTypeName: string | null | undefined;
+  serviceTypeId?: string | null;
+  serviceTypeName?: string | null;
   request: any;
 }
 
 /**
  * Renders only the fields defined in service_fields for the request's service type.
+ * Primary lookup is by serviceTypeId (ID-based). Falls back to name match for legacy
+ * rows that don't yet have a service_type_id stored.
  * Reads value from typed column on quote_requests if present, otherwise from custom_fields jsonb.
  */
-const DynamicQuoteSummary = ({ serviceTypeName, request }: Props) => {
-  const { data: serviceType } = useQuery({
+const DynamicQuoteSummary = ({ serviceTypeId, serviceTypeName, request }: Props) => {
+  // Legacy fallback: resolve ID by name only when no serviceTypeId is provided
+  const { data: resolvedId } = useQuery({
     queryKey: ["service-type-by-name", serviceTypeName?.toLowerCase()],
     queryFn: async () => {
       if (!serviceTypeName) return null;
       const { data } = await (supabase as any)
         .from("service_types")
-        .select("id, name")
+        .select("id")
         .ilike("name", serviceTypeName)
         .maybeSingle();
-      return data;
+      return data?.id ?? null;
     },
-    enabled: !!serviceTypeName,
+    enabled: !serviceTypeId && !!serviceTypeName,
   });
 
+  const effectiveId = serviceTypeId || resolvedId || null;
+
   const { data: fields } = useQuery({
-    queryKey: ["service-fields-for-summary", serviceType?.id],
+    queryKey: ["service-fields-for-summary", effectiveId],
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("service_fields")
         .select("*")
-        .eq("service_type_id", serviceType!.id)
+        .eq("service_type_id", effectiveId)
         .order("display_order");
       return data ?? [];
     },
-    enabled: !!serviceType?.id,
+    enabled: !!effectiveId,
   });
 
   if (!fields || fields.length === 0) return null;
@@ -48,7 +54,7 @@ const DynamicQuoteSummary = ({ serviceTypeName, request }: Props) => {
     return val !== undefined && val !== null && val !== "" ? val : null;
   };
 
-  const formatValue = (v: any, inputType: string) => {
+  const formatValue = (v: any) => {
     if (v === null) return "—";
     if (typeof v === "boolean") return v ? "Yes" : "No";
     return String(v);
@@ -62,7 +68,7 @@ const DynamicQuoteSummary = ({ serviceTypeName, request }: Props) => {
         return (
           <div key={f.id}>
             <span className="text-muted-foreground">{f.label}:</span>{" "}
-            <span className="font-medium">{formatValue(v, f.input_type)}</span>
+            <span className="font-medium">{formatValue(v)}</span>
           </div>
         );
       })}
