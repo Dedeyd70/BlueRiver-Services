@@ -133,7 +133,7 @@ const IndexPage = () => {
               src={mainSrc}
               alt="Professional cleaning team at work"
               /* FIX 1: Changed h-auto to h-full and added object-cover */
-              className={`w-full h-full object-cover object-[70%] md:object-right transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
+              className={`w-full h-full object-cover object-[70%] md:object-top transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               onLoad={() => setHeroLoaded(true)}
             />
           )}
