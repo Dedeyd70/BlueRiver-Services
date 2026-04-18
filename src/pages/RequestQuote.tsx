@@ -33,7 +33,9 @@ const RequestQuote = () => {
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [form, setForm] = useState({
-    name: "", email: "", phone: "", address: "", service: searchParams.get("service") || "",
+    name: "", email: "", phone: "", address: "",
+    service: searchParams.get("service") || "",
+    service_type_id: "",
     description: "", preferred_contact: "email",
     property_type: "", square_footage: "",
     has_pets: false, entry_codes: "",
@@ -54,9 +56,12 @@ const RequestQuote = () => {
     },
   });
 
-  const matchedServiceType = (serviceTypes ?? []).find(
-    (s: any) => s.name.toLowerCase() === form.service.toLowerCase()
-  );
+  // Resolve selected service_type_id: prefer explicit id from form, else fallback by name
+  const matchedServiceType =
+    (form.service_type_id
+      ? (serviceTypes ?? []).find((s: any) => s.id === form.service_type_id)
+      : undefined) ||
+    (serviceTypes ?? []).find((s: any) => s.name.toLowerCase() === form.service.toLowerCase());
 
   const { data: serviceFields } = useQuery({
     queryKey: ["public-service-fields", matchedServiceType?.id],
@@ -174,6 +179,7 @@ const RequestQuote = () => {
         phone: form.phone.trim() || null,
         address: form.address.trim() || null,
         service_type: form.service || null,
+        service_type_id: matchedServiceType?.id ?? null,
         description: form.description.trim(),
         preferred_contact: form.preferred_contact,
         attachment_url: attachmentUrl || null,
@@ -272,12 +278,20 @@ const RequestQuote = () => {
                 {/* Service Type — drives the form */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Service Type *</label>
-                  <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <select
+                    value={form.service_type_id || ""}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const st = (serviceTypes ?? []).find((s: any) => s.id === id);
+                      const name = st?.name ?? "";
+                      setForm((prev) => ({ ...prev, service_type_id: id, service: name }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
                     <option value="">Select a service</option>
-                    {mainServices.map((s) => (
-                      <option key={s.title} value={s.title}>{s.title}</option>
+                    {(serviceTypes ?? []).map((st: any) => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
                     ))}
-                    <option value="Other">Other</option>
                   </select>
                   {!form.service && (
                     <p className="text-xs text-muted-foreground mt-1.5">Choose a service to see relevant details.</p>
