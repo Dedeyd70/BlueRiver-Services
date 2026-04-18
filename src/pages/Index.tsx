@@ -134,7 +134,7 @@ const IndexPage = () => {
             <img
               src={mainSrc}
               alt="Professional cleaning team at work"
-              className=className={`w-full h-full object-cover transition-opacity duration-700 object-center md:object-right ${
+              className={`w-full h-full object-cover transition-opacity duration-700 object-center md:object-right ${
                 heroLoaded ? "opacity-100" : "opacity-0"
               }`}
               onLoad={() => setHeroLoaded(true)}
