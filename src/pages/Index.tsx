@@ -133,12 +133,12 @@ const IndexPage = () => {
               src={mainSrc}
               alt="Professional cleaning team at work"
               /* FIX 1: Changed h-auto to h-full and added object-cover */
-              className={`w-full h-full object-cover object-center md:object-right transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
+              className={`w-full h-full object-cover object-[70%] md:object-right transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               onLoad={() => setHeroLoaded(true)}
             />
           )}
           {/* FIX 2: Added a background overlay specifically to the image container */}
-          <div className="absolute inset-0 bg-black/40 z-10" />
+          {/*<div className="absolute inset-0 bg-black/40 z-10" />*/}
         </div>
 
         {/* The gradients and text stay relative/z-10 to sit on top */}
