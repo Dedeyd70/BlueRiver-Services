@@ -136,7 +136,7 @@ const IndexPage = () => {
               alt="Professional cleaning team at work"
               className=className={`w-full h-full object-cover transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"} 
               object-center md:object-right`}
-              /**onLoad={() => setHeroLoaded(true)}*/
+              onLoad={() => setHeroLoaded(true)}
             />
           )}
         </div>
