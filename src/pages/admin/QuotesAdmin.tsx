@@ -127,6 +127,14 @@ const QuotesAdmin = () => {
     },
   });
 
+  const { data: pricingFields } = useQuery({
+    queryKey: ["pricing-service-fields"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("service_fields").select("*");
+      return (data ?? []) as any[];
+    },
+  });
+
   const { data: conditionSettings } = useQuery({
     queryKey: ["condition-settings"],
     queryFn: async () => {
@@ -297,7 +305,7 @@ const QuotesAdmin = () => {
     if (existing) {
       const existingItems: LineItem[] = Array.isArray(existing.line_items) && existing.line_items.length > 0
         ? existing.line_items
-        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax).lineItems;
+        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax, pricingFields ?? []).lineItems;
       setDraftForm({
         service_type: existing.service_type ?? "",
         scope: existing.scope ?? "",
@@ -311,7 +319,7 @@ const QuotesAdmin = () => {
       });
     } else {
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
-      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax);
+      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? []);
       const baseItem = computed.lineItems.find((i) => i.type === "base");
       setDraftForm({
         ...emptyDraft,
