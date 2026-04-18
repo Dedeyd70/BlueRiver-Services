@@ -18,6 +18,7 @@ const statusColors: Record<string, string> = {
 };
 
 interface InvoiceForm {
+  service_type_id: string;
   customer_name: string;
   customer_email: string;
   services: { title: string; price: number }[];
@@ -30,6 +31,7 @@ interface InvoiceForm {
 }
 
 const emptyForm: InvoiceForm = {
+  service_type_id: "",
   customer_name: "",
   customer_email: "",
   services: [],
@@ -100,11 +102,25 @@ const InvoicesAdmin = () => {
     },
   });
 
+  const { data: serviceTypes } = useQuery({
+    queryKey: ["service-types-for-invoice"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("service_types")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const createInvoice = useMutation({
     mutationFn: async () => {
+      if (!form.service_type_id) throw new Error("Service type is required");
       const taxAmount = +(form.subtotal * (form.tax_rate / 100)).toFixed(2);
       const totalAmount = +(form.subtotal + taxAmount).toFixed(2);
       const { error } = await supabase.from("invoices").insert({
+        service_type_id: form.service_type_id,
         customer_name: form.customer_name,
         customer_email: form.customer_email,
         services: form.services as any,
@@ -192,6 +208,19 @@ const InvoicesAdmin = () => {
               <p className="text-xs text-muted-foreground">
                 Invoices are normally generated automatically when a booking is marked Completed. Use this only for manual adjustments.
               </p>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Service Type *</label>
+                <select
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={form.service_type_id}
+                  onChange={(e) => setForm({ ...form, service_type_id: e.target.value })}
+                >
+                  <option value="">Select a service…</option>
+                  {serviceTypes?.map((st) => (
+                    <option key={st.id} value={st.id}>{st.name}</option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Customer Name *</label>
@@ -227,7 +256,7 @@ const InvoicesAdmin = () => {
               <Button
                 className="w-full"
                 onClick={() => createInvoice.mutate()}
-                disabled={!form.customer_name || !form.customer_email || createInvoice.isPending}
+                disabled={!form.service_type_id || !form.customer_name || !form.customer_email || createInvoice.isPending}
               >
                 Create Invoice
               </Button>
