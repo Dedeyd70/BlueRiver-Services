@@ -1,69 +1,53 @@
 
 
-# Stabilize service_type_id — Final Pre-FK Cleanup
+# Final Cleanup — Test Data + Manual Invoice Hardening
 
 ## Scope
-Close the last 3 gaps so every new + historical record carries `service_type_id`. No FK enforcement yet.
+3 changes. No FK constraints yet.
 
-## Changes (1 code file + 1 data migration)
-
-### 1. `src/lib/createInvoiceFromBooking.ts` — write `service_type_id`
-- Add `service_type_id: booking.service_type_id ?? null` to the `invoices.insert({...})` payload (line 55-69).
-- No other logic changes. Booking flow already guarantees `booking.service_type_id` is populated for all new bookings (verified: 29/29 rows have it).
-
-### 2. Data migration — backfill existing rows
-
-**Backfill invoices from bookings (14 rows):**
+## 1. Delete test invoices (data migration)
 ```sql
-UPDATE public.invoices i
-SET service_type_id = b.service_type_id
-FROM public.bookings b
-WHERE i.service_type_id IS NULL
-  AND i.booking_id IS NOT NULL
-  AND b.id = i.booking_id
-  AND b.service_type_id IS NOT NULL;
+DELETE FROM public.invoices WHERE service_type_id IS NULL;
 ```
+Removes the 4 legacy NULL invoices (manual entries, no `booking_id`, confirmed test data).
 
-**Backfill the 1 stray quote_requests row** (case-insensitive name match; leaves NULL if no match):
-```sql
-UPDATE public.quote_requests qr
-SET service_type_id = st.id
-FROM public.service_types st
-WHERE qr.service_type_id IS NULL
-  AND qr.service_type IS NOT NULL
-  AND lower(qr.service_type) = lower(st.name);
-```
+## 2. Harden `src/pages/admin/InvoicesAdmin.tsx`
 
-**Index for invoices** (the previous migration already added indexes for the other 3 tables — confirm/add):
-```sql
-CREATE INDEX IF NOT EXISTS idx_invoices_service_type_id ON public.invoices(service_type_id);
-```
+**Form state**: add `service_type_id: string` to `InvoiceForm` (required).
 
-## Post-migration expected state
+**New required selector** in the Manual Invoice dialog (top of form, before customer fields):
+- Fetch `service_types` via `useQuery(["service-types-for-invoice"])` ordered by name
+- `<select>` with `value={form.service_type_id}` — options use `service_type.id` as value, `service_type.name` as label
+- Empty default option: "Select a service…"
 
-| Table | service_type_id NULL allowed? | Coverage after run |
-|---|---|---|
-| `quote_requests` | yes (legacy) | 20-21/21 |
-| `quote_drafts` | no in practice | 4/4 |
-| `bookings` | no in practice | 29/29 |
-| `invoices` | no in practice | 14/14 |
+**Submit button**: disable when `!form.service_type_id`.
+
+**Mutation `createInvoice`**:
+- Add guard at top of `mutationFn`: `if (!form.service_type_id) throw new Error("Service type is required")`
+- Include `service_type_id: form.service_type_id` in the `.insert({...})` payload
+- Look up matching `service_type.name` and also store as `service_type` snapshot if column added later (skip — invoices table has no `service_type` text column, only `service_type_id`)
+
+## 3. Verification (post-run)
+- `SELECT count(*) FROM invoices WHERE service_type_id IS NULL` → expect **0**
+- New manual invoice cannot be submitted without selecting a service
+- Auto-generated invoices (from booking completion) continue to set `service_type_id` from `booking.service_type_id`
 
 ## What stays untouched
-- No FK constraints added (per instructions).
-- Pricing engine, summary, booking, quote workflows — no logic change.
-- Name-fallback branches in `pricingEngine.ts` / `DynamicQuoteSummary.tsx` / `RequestQuote.tsx` stay as backstops for any future legacy NULL row.
-- UI — no changes.
-- `service_type` (name snapshot) columns kept on all 4 tables.
+- No FK constraints
+- Pricing engine, booking flow, quote flow — no logic change
+- `createInvoiceFromBooking.ts` — already correct from prior step
+- UI styling/layout — only adds one required `<select>` to existing dialog
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| `src/lib/createInvoiceFromBooking.ts` | Include `service_type_id` from booking in insert payload |
-| New migration | Backfill `invoices.service_type_id` from bookings + 1 stray quote_request + invoices index |
+| New migration | `DELETE FROM invoices WHERE service_type_id IS NULL` |
+| `src/pages/admin/InvoicesAdmin.tsx` | Add required service selector, validation, include `service_type_id` in insert |
 
-## Verification after run
-- `SELECT count(*) FROM invoices WHERE service_type_id IS NULL` → expect 0
-- `SELECT count(*) FROM quote_requests WHERE service_type_id IS NULL` → expect 0 or 1 (only if the stray row's name doesn't match any service_type)
-- New booking → completed → invoice generated → `service_type_id` populated automatically
+## Post-task state
+- `invoices.service_type_id`: 100% populated (10/10 remaining rows)
+- All 4 history tables fully ID-covered
+- Manual invoice path enforces ID at form + mutation level
+- System ready for nullable FK enforcement in next step
 
