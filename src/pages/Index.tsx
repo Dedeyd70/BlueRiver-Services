@@ -123,24 +123,29 @@ const IndexPage = () => {
       />
 
       {/* Hero Section */}
-
-      <section className="relative w-full flex flex-col md:block bg-gray-900 overflow-hidden">
+      <section className="relative w-auto flex flex-col md:block bg-gray-900 overflow-hidden">
         <div className="absolute inset-0 z-0">
           {isLoading ? (
             /* Skeleton state while fetching from DB */
-
             <div className="w-full h-full bg-gray-800 animate-pulse" />
           ) : (
             <img
               src={mainSrc}
               alt="Professional cleaning team at work"
-              className={`w-full h-auto transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
+              /* FIX 1: Changed h-auto to h-full and added object-cover */
+              className={`w-full h-full object-cover object-center md:object-right transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               onLoad={() => setHeroLoaded(true)}
             />
           )}
+          {/* FIX 2: Added a background overlay specifically to the image container */}
+          <div className="absolute inset-0 bg-black/40 z-10" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
-        <div className="container relative z-10 py-32">
+
+        {/* The gradients and text stay relative/z-10 to sit on top */}
+        <div className="absolute inset-0 z-10 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+
+        {/* FIX 3: Added px-4 or px-6 to ensure text doesn't hit the screen edges on mobile */}
+        <div className="container relative z-20 py-32 px-6">
           <div className="max-w-2xl">
             <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-extrabold text-primary-foreground leading-tight mb-6">
@@ -164,6 +169,8 @@ const IndexPage = () => {
             </motion.div>
           </div>
         </div>
+
+        {/* Decorative blurs stay at the bottom */}
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-primary-foreground/5 rounded-full blur-3xl" />
         <div className="absolute top-20 -left-20 w-72 h-72 bg-accent/20 rounded-full blur-3xl animate-float" />
       </section>
