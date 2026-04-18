@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_invoices_service_type_id ON public.invoices(service_type_id);
