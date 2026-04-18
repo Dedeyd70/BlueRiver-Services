@@ -124,7 +124,7 @@ const IndexPage = () => {
 
       {/* Hero Section */}
 
-      <section className="relative w-full bg-gray-900 overflow-hidden">
+      <section className="relative w-full min-h-[100vh] md:min-h-[90vh] bg-gray-900 overflow-hidden">
         <div className="absolute inset-0 z-0">
           {isLoading ? (
             /* Skeleton state while fetching from DB */
