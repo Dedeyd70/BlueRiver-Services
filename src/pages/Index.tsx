@@ -124,19 +124,17 @@ const IndexPage = () => {
 
       {/* Hero Section */}
 
-      <section className="relative min-h-[50vh] md:min-h-screen flex items-center bg-gray-900 overflow-hidden">
-        <div className="absolute inset-0">
+      <section className="relative w-full bg-gray-900 overflow-hidden">
+        <div className="w-full">
           {isLoading ? (
             /* Skeleton state while fetching from DB */
 
-            <div className="w-full h-full bg-gray-800 animate-pulse" />
+            <div className="w-full aspect-video bg-gray-800 animate-pulse" />
           ) : (
             <img
               src={mainSrc}
               alt="Professional cleaning team at work"
-              className={`w-full h-full object-cover transition-opacity duration-700 object-center md:object-right ${
-                heroLoaded ? "opacity-100" : "opacity-0"
-              }`}
+              className={`w-full h-auto transition-opacity duration-700 ${heroLoaded ? "opacity-100" : "opacity-0"}`}
               onLoad={() => setHeroLoaded(true)}
             />
           )}
