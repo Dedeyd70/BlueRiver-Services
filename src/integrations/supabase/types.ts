@@ -152,6 +152,13 @@ export type Database = {
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bookings_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
         ]
       }
       branding_settings: {
@@ -419,6 +426,13 @@ export type Database = {
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "invoices_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notifications: {
@@ -548,6 +562,13 @@ export type Database = {
             columns: ["quote_id"]
             isOneToOne: true
             referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_drafts_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
             referencedColumns: ["id"]
           },
         ]
@@ -693,7 +714,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quote_requests_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_fields: {
         Row: {
