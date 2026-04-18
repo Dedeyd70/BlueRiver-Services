@@ -64,6 +64,7 @@ export const createInvoiceFromBooking = async (booking: any, createdBy?: string 
       total_amount: totalAmount,
       booking_id: booking.id,
       quote_id: booking.quote_id ?? null,
+      service_type_id: booking.service_type_id ?? null,
       payment_status: "unpaid",
       created_by: createdBy ?? null,
     } as any)
