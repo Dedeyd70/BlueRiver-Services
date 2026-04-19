@@ -40,6 +40,7 @@ import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
 import PermissionsAdmin from "./pages/admin/PermissionsAdmin";
 import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
+import SiteContentAdmin from "./pages/admin/SiteContentAdmin";
 import LocalBusinessSchema from "./components/LocalBusinessSchema";
 
 const queryClient = new QueryClient({
@@ -82,6 +83,7 @@ const App = () => (
               <Route path="legal" element={<LegalAdmin />} />
               <Route path="branding" element={<BrandingAdmin />} />
               <Route path="homepage-images" element={<HomepageImagesAdmin />} />
+              <Route path="site-content" element={<SiteContentAdmin />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="permissions" element={<PermissionsAdmin />} />
               <Route path="invoices" element={<InvoicesAdmin />} />
