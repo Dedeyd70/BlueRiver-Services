@@ -239,6 +239,21 @@ const UserManagement = () => {
                     variant="ghost"
                     size="icon"
                     className="w-8 h-8"
+                    title="Manage permissions"
+                    onClick={() => setPermsTarget({
+                      user_id: u.user_id,
+                      full_name: u.full_name,
+                      email: u.email,
+                      role: u.role,
+                      permissions: (u as any).permissions ?? {},
+                    })}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-8 h-8"
                     onClick={() => setDeleteConfirm(u.user_id)}
                     disabled={isLastAdmin || isSelf}
                   >
@@ -250,6 +265,44 @@ const UserManagement = () => {
           })}
         </div>
       )}
+
+      <Dialog open={!!permsTarget} onOpenChange={(o) => !o && setPermsTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Permissions for {permsTarget?.full_name || permsTarget?.email || "User"}</DialogTitle>
+          </DialogHeader>
+          {permsTarget?.role === "admin" ? (
+            <p className="text-sm text-muted-foreground">Super Admins automatically have all permissions.</p>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {!registry?.length ? (
+                <p className="text-sm text-muted-foreground">No permissions defined yet. Add some on the Permissions page.</p>
+              ) : (
+                registry.map((p) => (
+                  <div key={p.id} className="flex items-start justify-between gap-3 py-2 border-b border-border last:border-0">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{p.label}</p>
+                      <p className="text-xs font-mono text-muted-foreground">{p.key}</p>
+                      {p.description && <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>}
+                    </div>
+                    <Switch
+                      checked={!!permsState[p.key]}
+                      onCheckedChange={(v) => setPermsState((s) => ({ ...s, [p.key]: v }))}
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {permsTarget?.role !== "admin" && !!registry?.length && (
+            <DialogFooter>
+              <Button onClick={() => savePerms.mutate()} disabled={savePerms.isPending}>
+                {savePerms.isPending ? "Saving..." : "Save Permissions"}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
