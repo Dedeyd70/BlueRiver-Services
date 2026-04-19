@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import GeneralSettings from "@/components/admin/GeneralSettings";
+import BusinessInfoSettings from "@/components/admin/BusinessInfoSettings";
+import BusinessRulesSettings from "@/components/admin/BusinessRulesSettings";
 import AvailabilitySettings from "@/components/admin/AvailabilitySettings";
 import PaymentSettings from "@/components/admin/PaymentSettings";
 import PricingSettings from "@/components/admin/PricingSettings";
@@ -8,13 +9,17 @@ import { useHasPermission } from "@/hooks/usePermissions";
 
 const SettingsAdmin = () => {
   const canManageSettings = useHasPermission("can_manage_settings");
+  const canManageBusinessRules = useHasPermission("can_manage_business_rules");
+  const canEditAvailability = useHasPermission("can_edit_availability");
+  const canManagePayment = useHasPermission("can_manage_payment");
   const canEditPricing = useHasPermission("can_edit_pricing");
   const canManageSocials = useHasPermission("can_manage_socials");
 
   const tabs = [
-    { value: "general", label: "General", allowed: canManageSettings, content: <GeneralSettings /> },
-    { value: "availability", label: "Availability", allowed: canManageSettings, content: <AvailabilitySettings /> },
-    { value: "payment", label: "Payment", allowed: canManageSettings, content: <PaymentSettings /> },
+    { value: "business-info", label: "Business Info", allowed: canManageSettings, content: <BusinessInfoSettings /> },
+    { value: "business-rules", label: "Business Rules", allowed: canManageBusinessRules, content: <BusinessRulesSettings /> },
+    { value: "availability", label: "Availability", allowed: canEditAvailability, content: <AvailabilitySettings /> },
+    { value: "payment", label: "Payment", allowed: canManagePayment, content: <PaymentSettings /> },
     { value: "pricing", label: "Pricing", allowed: canEditPricing, content: <PricingSettings /> },
     { value: "socials", label: "Social Media", allowed: canManageSocials, content: <SocialLinksSettings /> },
   ].filter((t) => t.allowed);

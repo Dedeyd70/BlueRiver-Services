@@ -42,12 +42,13 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   { label: "Testimonials", path: "/admin/testimonials", roles: ["admin", "manager"], group: "website", permission: "can_manage_testimonials" },
   { label: "Homepage Images", path: "/admin/homepage-images", roles: ["admin"], group: "website" },
   { label: "Branding", path: "/admin/branding", roles: ["admin"], group: "website" },
+  { label: "Site Content", path: "/admin/site-content", roles: ["admin"], group: "website", permission: "can_manage_site_content" },
   { label: "Privacy Policy", path: "/admin/privacy-policy", roles: ["admin"], group: "website" },
   { label: "Terms of Service", path: "/admin/terms", roles: ["admin"], group: "website" },
   { label: "Legal Pages", path: "/admin/legal", roles: ["admin"], group: "website" },
 
   // System
-  { label: "Settings", path: "/admin/settings", roles: ["admin"], group: "system", permission: "can_manage_settings" },
+  { label: "Settings", path: "/admin/settings", roles: ["admin"], group: "system", permission: "__settings__" },
   { label: "Users", path: "/admin/users", roles: ["admin"], group: "system" },
   { label: "Permissions", path: "/admin/permissions", roles: ["admin"], group: "system" },
   { label: "Account", path: "/admin/account", roles: ["admin", "manager", "staff"], group: "system" },
@@ -62,10 +63,22 @@ export const NAV_PERMISSIONS: NavPermission[] = [
 const hasAnyManagementPermission = (permissions: PermissionsMap): boolean =>
   Object.values(permissions || {}).some((v) => v === true);
 
+const SETTINGS_FAMILY_KEYS = [
+  "can_manage_settings",
+  "can_manage_business_rules",
+  "can_edit_availability",
+  "can_manage_payment",
+  "can_edit_pricing",
+  "can_manage_socials",
+];
+
 const isVisible = (item: NavPermission, role: AppRole, permissions: PermissionsMap): boolean => {
   if (role === "admin") return true;
   if (item.permission === "__dashboard__") {
     return item.roles.includes(role) || hasAnyManagementPermission(permissions);
+  }
+  if (item.permission === "__settings__") {
+    return SETTINGS_FAMILY_KEYS.some((k) => permissions?.[k] === true);
   }
   if (item.permission) return permissions?.[item.permission] === true;
   return item.roles.includes(role);
