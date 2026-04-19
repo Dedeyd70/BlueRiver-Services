@@ -68,6 +68,7 @@ export type Database = {
           cancellation_reason: string | null
           consent_given: boolean
           created_at: string
+          custom_fields: Json
           email: string
           entry_codes: string | null
           frequency: string | null
@@ -96,6 +97,7 @@ export type Database = {
           cancellation_reason?: string | null
           consent_given?: boolean
           created_at?: string
+          custom_fields?: Json
           email: string
           entry_codes?: string | null
           frequency?: string | null
@@ -124,6 +126,7 @@ export type Database = {
           cancellation_reason?: string | null
           consent_given?: boolean
           created_at?: string
+          custom_fields?: Json
           email?: string
           entry_codes?: string | null
           frequency?: string | null
