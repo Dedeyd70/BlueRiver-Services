@@ -128,6 +128,23 @@ const UserManagement = () => {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const savePerms = useMutation({
+    mutationFn: async () => {
+      if (!permsTarget) return;
+      const { error } = await supabase
+        .from("user_roles")
+        .update({ permissions: permsState as any })
+        .eq("user_id", permsTarget.user_id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "Permissions updated" });
+      setPermsTarget(null);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
