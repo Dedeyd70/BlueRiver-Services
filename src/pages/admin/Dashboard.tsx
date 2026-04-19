@@ -151,7 +151,7 @@ const Dashboard = () => {
       color: "text-blue-600",
       path: "/admin/submissions",
       description: "Bookings + Quotes + Contacts",
-      gate: true,
+      gate: canMessages,
     },
     { label: "Bookings", value: bookingsCount ?? 0, icon: CalendarDays, color: "text-primary", path: "/admin/bookings", gate: canBookings },
     { label: "Active Bookings", value: pendingBookings ?? 0, icon: Clock, color: "text-amber-500", path: "/admin/bookings?status=active", gate: canBookings },
