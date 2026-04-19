@@ -44,6 +44,7 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   // System
   { label: "Settings", path: "/admin/settings", roles: ["admin"], group: "system" },
   { label: "Users", path: "/admin/users", roles: ["admin"], group: "system" },
+  { label: "Permissions", path: "/admin/permissions", roles: ["admin"], group: "system" },
   { label: "Account", path: "/admin/account", roles: ["admin", "manager", "staff"], group: "system" },
 ];
 
