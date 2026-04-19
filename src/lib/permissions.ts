@@ -25,7 +25,7 @@ export const NAV_GROUPS = [
 
 export const NAV_PERMISSIONS: NavPermission[] = [
   // Main
-  { label: "Dashboard", path: "/admin", roles: ["admin", "manager"], group: "main" },
+  { label: "Dashboard", path: "/admin", roles: ["admin", "manager"], group: "main", permission: "__dashboard__" },
 
   // Operations
   { label: "Bookings", path: "/admin/bookings", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_bookings" },
