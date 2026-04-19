@@ -38,6 +38,7 @@ import InvoicesAdmin from "./pages/admin/InvoicesAdmin";
 import MessagesAdmin from "./pages/admin/MessagesAdmin";
 import BrandingAdmin from "./pages/admin/BrandingAdmin";
 import UserManagement from "./pages/admin/UserManagement";
+import PermissionsAdmin from "./pages/admin/PermissionsAdmin";
 import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
 import LocalBusinessSchema from "./components/LocalBusinessSchema";
 
@@ -82,6 +83,7 @@ const App = () => (
               <Route path="branding" element={<BrandingAdmin />} />
               <Route path="homepage-images" element={<HomepageImagesAdmin />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="permissions" element={<PermissionsAdmin />} />
               <Route path="invoices" element={<InvoicesAdmin />} />
               <Route path="availability" element={<SettingsAdmin />} />
               <Route path="payment" element={<SettingsAdmin />} />
