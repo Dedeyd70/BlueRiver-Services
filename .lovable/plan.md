@@ -1,92 +1,67 @@
 
 
-# Make Nav + Route Guard Permission-Aware (revoke-respecting + live-sync)
+# Fix `delete-admin-user` 400 Bad Request
 
-## Root cause
+## Root cause analysis
 
-Two structural gaps:
+Function logs show only Boot/Shutdown — no exception traces, meaning the 400s are the function's own thrown errors (caught and returned with `status: 400`), not crashes. Three concrete bugs make most legitimate calls fail before `auth.admin.deleteUser` is ever reached:
 
-1. **Nav ignores permissions JSONB.** `src/lib/permissions.ts` filters strictly by role. Revoking `can_manage_gallery` from a manager has no effect because `roles: ["admin","manager"]` is hardcoded. Same bug for Bookings, Quotes, Messages, Submissions, Gallery, Testimonials, Settings.
-2. **Permissions are fetched once.** `useAuth` reads `role` + `permissions` only when `user.id` changes. DB updates don't propagate until re-login.
+1. **Wrong env var name for anon key.** Line 19 reads `SUPABASE_PUBLISHABLE_KEY`. That secret exists, but `createClient` for caller validation requires the project's anon key (`SUPABASE_ANON_KEY` — also present in secrets). With the publishable key the caller client rejects the JWT → `caller` is null → `"Unauthorized"` 400. This is the primary failure mode for every delete attempt.
+2. **Foreign-key cascade gap.** The function deletes the `user_roles` row then calls `auth.admin.deleteUser`. Other tables (`bookings.assigned_to`, `invoices.created_by`, `gallery.uploaded_by`, etc.) likely reference `auth.users(id)` without `ON DELETE CASCADE/SET NULL`, so the auth delete throws `"User is still referenced from table ..."` → caught → 400 with that message. Need to verify and either null those FKs first or rely on cascades.
+3. **Opaque error surface.** All errors return generic 400. Should distinguish 401 (no auth / bad caller), 403 (not admin), 404 (target not found), 409 (last admin / referenced), 400 (validation) so the UI shows the real cause and the network tab is diagnosable.
 
-## Fix — two layers, both additive
+Bonus: client sends `{ user_id }` (matches), but accept `targetUserId` too for robustness.
 
-### 1. Permission key (when present) overrides role — `src/lib/permissions.ts`
+## Plan
 
-Add optional `permission` field. Visibility precedence:
+### 1. `supabase/functions/delete-admin-user/index.ts` — rewrite
 
-```ts
-if (role === "admin") return true;
-if (item.permission) return permissions[item.permission] === true;
-return item.roles.includes(role);
-```
+- Use `SUPABASE_ANON_KEY` (correct var) for `callerClient`.
+- Parse body once, accept `user_id` **or** `targetUserId`.
+- Explicit guard chain with proper status codes:
+  - Missing auth header → **401** `"Missing authorization header"`
+  - `getUser()` fails / null → **401** `"Invalid or expired session"`
+  - Caller role lookup fails → **403** `"Caller has no role assigned"`
+  - Caller role !== `"admin"` → **403** `"Only Super Admin can delete users"`
+  - Missing `user_id` → **400** `"user_id is required"`
+  - Self-delete → **400** `"Cannot delete your own account"`
+  - Last admin guard: count `role='admin'` rows; if target is admin and count ≤ 1 → **409** `"Cannot delete the last Super Admin"`
+  - Target lookup via `adminClient.auth.admin.getUserById(user_id)`; if not found → **404** `"User not found"`
+- Pre-deletion FK cleanup with `adminClient` (SET NULL on tracking columns owned by deleted user):
+  - `bookings.assigned_to = NULL where assigned_to = user_id`
+  - `invoices.created_by = NULL where created_by = user_id` (if column exists)
+  - any other admin-owned audit columns surfaced by the schema check below
+- Delete `user_roles` row (idempotent — no error if missing).
+- Call `adminClient.auth.admin.deleteUser(user_id)`. On error, surface the actual Postgres/auth message: **409** `"Cannot delete: ${error.message}"` so FK violations are visible.
+- Success → **200** `{ success: true, deleted_user_id }`.
+- Wrap everything in try/catch returning **500** with the real message for unexpected throws (so we don't mask bugs as 400s).
 
-Mapping:
+### 2. Schema audit (read-only, before writing the function)
 
-| Nav item | `permission` |
-|---|---|
-| Bookings | `can_manage_bookings` |
-| Quotes | `can_manage_quotes` |
-| Messages | `can_manage_messages` |
-| Submissions | `can_manage_messages` |
-| Gallery | `can_manage_gallery` |
-| Testimonials | `can_manage_testimonials` |
-| Settings | `can_manage_settings` |
-| Services / Branding / Homepage / Legal / Privacy / Terms / Users / Permissions | unchanged (admin-only) |
-| Dashboard / Account | unchanged |
+Run a quick `read_query` against `information_schema.key_column_usage` to enumerate all FKs pointing at `auth.users` so the cleanup step covers every owning column. If any FK is `NO ACTION` and not nullable (rare for audit cols), include a follow-up migration to set it nullable + `ON DELETE SET NULL`.
 
-Update signatures:
-```ts
-type PermissionsMap = Record<string, boolean>;
-getFilteredNavItems(role, permissions)
-getGroupedNavItems(role, permissions)
-canAccessPath(role, path, permissions)
-```
+### 3. Client tweak — `src/pages/admin/UserManagement.tsx`
 
-### 2. Live permission sync — `src/hooks/useAuth.tsx` (surgical merge)
+`removeUser.mutationFn` currently surfaces `res.error.message` then `res.data?.error`. When edge function returns non-2xx, `supabase-js` puts the parsed body on `res.error.context` for FunctionsHttpError. Update the error extraction to:
+- Try `res.data?.error` first (works for 4xx where body is parsed),
+- Fall back to `res.error?.message`,
+- Default to `"Failed to delete user"`.
 
-**Preserve** the existing session-bootstrap `useEffect` (listener-first, then `getSession`), idle-timeout effect, `signIn`, `doSignOut`, and context shape. **Touch only** the role-resolution effect.
+This ensures the toast shows the specific reason ("Cannot delete the last Super Admin", "User is still referenced from table bookings", etc.) instead of a generic 400.
 
-Refactor steps:
+### 4. No migration unless schema audit reveals a non-nullable FK
 
-a. Extract the inline role/permissions read into a stable `refetchRole(userId)` callback wrapped in `useCallback`. It performs the existing `from("user_roles").select("role, permissions").eq("user_id", userId).maybeSingle()` and updates `role` / `isAdmin` / `permissions` exactly as today.
-
-b. Existing role-resolution `useEffect` keeps its `user?.id` dependency but now just calls `refetchRole(user.id)` and manages the `cancelled` + `roleLoading` flags.
-
-c. **Add** a second `useEffect` keyed on `user?.id` that:
-- Subscribes to `postgres_changes` UPDATE on `user_roles` filtered by `user_id=eq.${user.id}`. Channel name `user-role-${user.id}`. On payload, applies the same `role` / `isAdmin` / `permissions` update inline (no extra round-trip needed — payload `new` carries both columns thanks to `REPLICA IDENTITY FULL`).
-- Adds `visibilitychange` + window `focus` listeners that call `refetchRole(user.id)` as a fallback when realtime drops.
-- Cleanup: `supabase.removeChannel(ch)`, remove both listeners.
-
-d. No changes to context value, no new exposed fields.
-
-### 3. Caller — `src/pages/admin/AdminLayout.tsx`
-
-Pull `permissions` from `useAuth()`, pass into `getGroupedNavItems(role, permissions)` and `canAccessPath(role, location.pathname, permissions)`. Sidebar re-renders automatically when `permissions` state updates.
-
-### 4. Migration (additive)
-
-```sql
-DO $$
-BEGIN
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.user_roles;
-  EXCEPTION WHEN duplicate_object THEN NULL; END;
-END $$;
-ALTER TABLE public.user_roles REPLICA IDENTITY FULL;
-```
-
-Required so the realtime subscription receives UPDATE events with full row payloads.
+If audit shows clean SET NULL / nullable columns, no DB change needed. If not, single additive migration: `ALTER TABLE ... ALTER COLUMN ... DROP NOT NULL` + `DROP CONSTRAINT ... ADD CONSTRAINT ... ON DELETE SET NULL`.
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| `src/lib/permissions.ts` | Add optional `permission` field; rewrite 3 helpers with admin → key → role precedence |
-| `src/hooks/useAuth.tsx` | Extract `refetchRole` callback; add realtime subscription + focus/visibility refetch (existing session/idle/signIn logic untouched) |
-| `src/pages/admin/AdminLayout.tsx` | Pass `permissions` into nav helpers and route guard |
-| New migration | Add `user_roles` to `supabase_realtime`; set `REPLICA IDENTITY FULL` |
+| `supabase/functions/delete-admin-user/index.ts` | Fix anon-key var, status-code-correct guard chain, FK cleanup, accept `user_id`/`targetUserId`, surface real errors |
+| `src/pages/admin/UserManagement.tsx` | Improve error extraction in `removeUser.mutationFn` so toast shows specific reason |
+| (conditional) New migration | Only if schema audit finds blocking FKs |
 
 ## Untouched
 
-Session bootstrap, idle timeout, `signIn`, `signOut`, `usePermissions`, `<HasPermission>`, existing RLS, registry, edge functions, settings pages, dashboard.
+`create-admin-user`, `list-admin-users`, `useAuth`, RLS, permissions registry, nav helpers.
 
