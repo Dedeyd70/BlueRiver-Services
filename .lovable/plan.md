@@ -1,78 +1,72 @@
 
 
-# Make Dashboard + Settings Tabs Truly Permission-Aware
+# Dual-Timer Idle Lock + Password Visibility Toggles
 
-## Root cause
+## Approach
 
-**A. Dashboard hidden from Staff with bookings permission.**
-In `src/lib/permissions.ts` line 28 the Dashboard row has **no `permission` key**, so `isVisible()` falls through to the role check. Staff is not in `["admin","manager"]` → hidden in nav AND `canAccessPath("/admin", …)` returns false → `AdminLayout` redirects to `/admin` (the very page they can't access) → loop / blank.
+Two staged timers protect the admin session: **10 min → lock** (blurred overlay, password to resume), **30 min → full sign-out** (back to login). Plus password visibility toggles on Lock Screen and Login.
 
-**B. Manager sees every Settings tab.**
-`src/pages/admin/SettingsAdmin.tsx` only wraps the **Socials** tab in a permission check. General / Availability / Payment / Pricing render unconditionally for any authenticated admin-role user, including Manager.
+## 1. `src/hooks/useAuth.tsx` — dual-timer state machine
 
-## Fix
+- Constants: `LOCK_TIMEOUT_MS = 10 * 60 * 1000`, `SIGNOUT_TIMEOUT_MS = 30 * 60 * 1000`.
+- New state: `isLocked: boolean`.
+- Two refs: `lockTimerRef`, `signoutTimerRef`.
+- `resetTimers()` (replaces `resetTimeout`):
+  - Clears both timers.
+  - Schedules lock timer → `setIsLocked(true)` at 10 min.
+  - Schedules signout timer → `doSignOut()` at 30 min.
+- Idle event listeners reset timers **only when `!isLocked`** (locked screen must not extend the 30-min signout).
+- While locked, the 30-min signout timer keeps running from when the lock fired — guarantees full logout at 30 min total even if user never comes back.
+- New method `unlock(password)`:
+  - `supabase.auth.signInWithPassword({ email: user.email, password })`.
+  - On success → `setIsLocked(false)` + `resetTimers()`.
+  - On failure → return error string; remain locked.
+- Expose `isLocked`, `unlock` via `AuthContext`.
+- Clear both timers on `doSignOut()` and on user becoming null.
 
-### 1. `src/lib/permissions.ts` — Dashboard accessible by permission, not just role
+## 2. New `src/components/admin/SessionLockOverlay.tsx`
 
-Add a helper "user has any management permission" so Dashboard becomes visible the moment a non-admin user is granted any operational permission. Cleaner than inventing `can_view_dashboard` (no DB / registry change needed).
+Full-screen `fixed inset-0 z-[100] backdrop-blur-md bg-background/80 flex items-center justify-center`:
+- Lock icon, heading "Session Locked"
+- Body: "Signed in as **{user.email}**"
+- Password input with **Eye/EyeOff toggle button** (right-aligned inside input wrapper)
+- "Unlock" primary button → `unlock()`, toast on error, clear field
+- "Sign out" ghost button → `signOut()` (lets a different person take over)
+- `Esc` does nothing; no close button — overlay is unbypassable while `isLocked`
 
-```ts
-const hasAnyManagementPermission = (permissions: PermissionsMap) =>
-  Object.values(permissions || {}).some((v) => v === true);
-```
+## 3. `src/pages/admin/AdminLayout.tsx` — mount overlay
 
-Update the Dashboard row to use a sentinel key:
-```ts
-{ label: "Dashboard", path: "/admin", roles: ["admin","manager"], group: "main", permission: "__dashboard__" },
-```
+- Read `isLocked` from `useAuth`.
+- When `isLocked && user`, render `<SessionLockOverlay />` on top of the existing layout (dashboard stays mounted underneath, preserving form/scroll state).
 
-In `isVisible`, intercept the sentinel:
-```ts
-if (role === "admin") return true;
-if (item.permission === "__dashboard__") {
-  return item.roles.includes(role) || hasAnyManagementPermission(permissions);
-}
-if (item.permission) return permissions?.[item.permission] === true;
-return item.roles.includes(role);
-```
+## 4. `src/pages/admin/Login.tsx` — active-session panel + Eye toggle
 
-Result: Manager keeps Dashboard, Staff with any granular permission gains Dashboard, Staff with zero permissions still does not see it.
+- **If `user && isAdmin && !isLocked`** → render panel:
+  - "You are currently signed in as **{user.email}** ({role label})"
+  - Primary: "Continue to Dashboard" → `navigate("/admin")`
+  - Ghost: "Switch Account" → `await signOut()` then show login form
+- **If no user** → existing form, with password input now wrapped to include **Eye/EyeOff toggle button**.
+- **If locked** → still render panel; "Continue to Dashboard" lands on the lock overlay (correct behavior).
+- Remove the silent auto-redirect `useEffect`.
 
-### 2. Add `Account` access fallback for non-admins who lose nav access
+## 5. Reusable password-with-toggle pattern
 
-Ensure `canAccessPath("/admin/account", …)` always returns true for authenticated non-admins so they aren't trapped. Account row already lists all roles, so this works as-is — verify and leave untouched.
+Since both Login and SessionLockOverlay need it, implement inline (Input + absolute-positioned button with `Eye`/`EyeOff` lucide icon, toggling `type` between `password` and `text`). No new shared component to keep diff small — same ~10 lines in two places.
 
-### 3. `src/pages/admin/SettingsAdmin.tsx` — gate each tab individually
+## 6. No backend changes
 
-Replace the static tab list with conditional triggers + content, each gated by its own permission key (admin bypasses via existing `useHasPermission` logic which already returns true for admin):
-
-| Tab | Permission key |
-|---|---|
-| General | `can_manage_settings` |
-| Availability | `can_manage_settings` |
-| Payment | `can_manage_settings` |
-| Pricing | `can_edit_pricing` |
-| Social Media | `can_manage_socials` |
-
-Behavior:
-- Compute `canGeneral`, `canPricing`, `canSocials` etc. via `useHasPermission`.
-- Only render `<TabsTrigger>` + `<TabsContent>` pairs for the granted tabs.
-- Compute `defaultValue` as the first granted tab so the page never opens to a hidden tab. If none granted (shouldn't happen — route is gated upstream), show "No settings available".
-
-Manager (no toggles) → sees nothing extra; with `can_manage_socials` only → sees Social Media only. Admin → sees all tabs.
-
-### 4. No DB changes, no registry changes
-
-`__dashboard__` is a code-side sentinel only; never written to the registry or `user_roles.permissions`. `can_edit_pricing` already exists in the registry. All other keys already exist.
+RLS, edge functions, registry untouched. `signInWithPassword` already exists; reusing it for unlock is safe (it refreshes the session JWT, which is desirable).
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| `src/lib/permissions.ts` | Add `hasAnyManagementPermission` helper; sentinel `__dashboard__` permission on Dashboard row; intercept in `isVisible` |
-| `src/pages/admin/SettingsAdmin.tsx` | Per-tab `useHasPermission` checks; dynamic `defaultValue`; hide ungranted tabs entirely |
+| `src/hooks/useAuth.tsx` | Dual timers (10 min lock / 30 min signout), `isLocked` state, `unlock()` method |
+| `src/components/admin/SessionLockOverlay.tsx` | New: blurred full-screen lock UI with Eye-toggle password + Sign out |
+| `src/pages/admin/AdminLayout.tsx` | Mount `<SessionLockOverlay />` when `isLocked` |
+| `src/pages/admin/Login.tsx` | Active-session panel, Eye/EyeOff toggle on password, remove silent redirect |
 
 ## Untouched
 
-`useAuth`, `usePermissions`, `<HasPermission>`, RLS policies, registry inserts, `AdminLayout`, edge functions, all other admin pages.
+RLS, edge functions, `usePermissions`, `<HasPermission>`, all other admin pages, `signIn`/`signOut` core, permissions registry.
 
