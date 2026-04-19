@@ -29,6 +29,9 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const normalizePermissions = (raw: unknown): PermissionsMap =>
+  raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as PermissionsMap) : {};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -81,7 +84,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Resolve role + permissions separately — does NOT block `loading`.
+  // Stable refetch — used by initial load, focus/visibility, and as fallback.
+  const refetchRole = useCallback(async (userId: string) => {
+    const { data } = await supabase
+      .from("user_roles")
+      .select("role, permissions")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const r = (data?.role as AppRole) ?? null;
+    setRole(r);
+    setIsAdmin(r === "admin" || r === "manager" || r === "staff");
+    setPermissions(normalizePermissions((data as { permissions?: unknown } | null)?.permissions));
+  }, []);
+
+  // Initial role/permissions resolution — does NOT block `loading`.
   useEffect(() => {
     if (!user) {
       setRole(null);
@@ -92,28 +108,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     let cancelled = false;
     setRoleLoading(true);
-    supabase
-      .from("user_roles")
-      .select("role, permissions")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        const r = (data?.role as AppRole) ?? null;
-        setRole(r);
-        setIsAdmin(r === "admin" || r === "manager" || r === "staff");
-        const raw = (data as { permissions?: unknown } | null)?.permissions;
-        setPermissions(
-          raw && typeof raw === "object" && !Array.isArray(raw)
-            ? (raw as PermissionsMap)
-            : {}
-        );
-        setRoleLoading(false);
-      });
+    refetchRole(user.id).finally(() => {
+      if (!cancelled) setRoleLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, refetchRole]);
+
+  // Live permission sync: realtime UPDATE on this user's row + focus/visibility refetch fallback.
+  useEffect(() => {
+    if (!user?.id) return;
+    const uid = user.id;
+
+    const channel = supabase
+      .channel(`user-role-${uid}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "user_roles", filter: `user_id=eq.${uid}` },
+        (payload) => {
+          const row = payload.new as { role?: AppRole; permissions?: unknown } | null;
+          const r = (row?.role as AppRole) ?? null;
+          if (r) {
+            setRole(r);
+            setIsAdmin(r === "admin" || r === "manager" || r === "staff");
+          }
+          setPermissions(normalizePermissions(row?.permissions));
+        }
+      )
+      .subscribe();
+
+    const handleRefetch = () => {
+      if (document.visibilityState === "visible") refetchRole(uid);
+    };
+    const handleFocus = () => refetchRole(uid);
+
+    document.addEventListener("visibilitychange", handleRefetch);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", handleRefetch);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [user?.id, refetchRole]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
