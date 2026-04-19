@@ -1,72 +1,103 @@
 
 
-# Dual-Timer Idle Lock + Password Visibility Toggles
+# Reorganize General Settings into Role-Appropriate Tabs
 
-## Approach
+## What's wrong today
 
-Two staged timers protect the admin session: **10 min → lock** (blurred overlay, password to resume), **30 min → full sign-out** (back to login). Plus password visibility toggles on Lock Screen and Login.
+`src/components/admin/GeneralSettings.tsx` lumps **18 unrelated keys** into one "General" tab gated by a single `can_manage_settings` permission. A staff member granted that permission to (e.g.) edit business hours also gets to rewrite the homepage hero, About page mission, footer tagline, and tax rate. No separation of concerns.
 
-## 1. `src/hooks/useAuth.tsx` — dual-timer state machine
+Current keys in General:
+- **Contact/Hours** (operational): `phone`, `phone_link`, `email`, `service_area`, `call_availability`, `business_hours_mf/sat/sun`
+- **Website Content** (marketing): `footer_tagline`, `hero_headline`, `hero_subheadline`, `about_mission_title`, `about_mission_p1/p2`, `stats_clients/years/satisfaction/rating`
+- **Business Rules** (sensitive): `auto_approve_bookings`, `tax_rate`
 
-- Constants: `LOCK_TIMEOUT_MS = 10 * 60 * 1000`, `SIGNOUT_TIMEOUT_MS = 30 * 60 * 1000`.
-- New state: `isLocked: boolean`.
-- Two refs: `lockTimerRef`, `signoutTimerRef`.
-- `resetTimers()` (replaces `resetTimeout`):
-  - Clears both timers.
-  - Schedules lock timer → `setIsLocked(true)` at 10 min.
-  - Schedules signout timer → `doSignOut()` at 30 min.
-- Idle event listeners reset timers **only when `!isLocked`** (locked screen must not extend the 30-min signout).
-- While locked, the 30-min signout timer keeps running from when the lock fired — guarantees full logout at 30 min total even if user never comes back.
-- New method `unlock(password)`:
-  - `supabase.auth.signInWithPassword({ email: user.email, password })`.
-  - On success → `setIsLocked(false)` + `resetTimers()`.
-  - On failure → return error string; remain locked.
-- Expose `isLocked`, `unlock` via `AuthContext`.
-- Clear both timers on `doSignOut()` and on user becoming null.
+These are three distinct concerns mashed together.
 
-## 2. New `src/components/admin/SessionLockOverlay.tsx`
+## Proposed split
 
-Full-screen `fixed inset-0 z-[100] backdrop-blur-md bg-background/80 flex items-center justify-center`:
-- Lock icon, heading "Session Locked"
-- Body: "Signed in as **{user.email}**"
-- Password input with **Eye/EyeOff toggle button** (right-aligned inside input wrapper)
-- "Unlock" primary button → `unlock()`, toast on error, clear field
-- "Sign out" ghost button → `signOut()` (lets a different person take over)
-- `Esc` does nothing; no close button — overlay is unbypassable while `isLocked`
+Break General into three permission-gated sub-areas. Pricing/Availability/Payment/Socials stay as-is.
 
-## 3. `src/pages/admin/AdminLayout.tsx` — mount overlay
+### A. Settings → "Business Info" tab — `can_manage_settings`
+Operational contact + hours that staff/managers reasonably maintain.
+- `phone`, `phone_link`, `email`, `service_area`, `call_availability`
+- `business_hours_mf`, `business_hours_sat`, `business_hours_sun`
 
-- Read `isLocked` from `useAuth`.
-- When `isLocked && user`, render `<SessionLockOverlay />` on top of the existing layout (dashboard stays mounted underneath, preserving form/scroll state).
+### B. Settings → "Business Rules" tab — `can_manage_business_rules` *(new)*
+Sensitive operational toggles that change how the system behaves.
+- `auto_approve_bookings`
+- `tax_rate`
 
-## 4. `src/pages/admin/Login.tsx` — active-session panel + Eye toggle
+### C. Move to **Website** section (sidebar) → new "Site Content" page — `can_manage_site_content` *(new)*
+Marketing copy that belongs with Branding/Homepage Images/Testimonials.
+- `footer_tagline`
+- `hero_headline`, `hero_subheadline`
+- `about_mission_title`, `about_mission_p1`, `about_mission_p2`
+- `stats_clients`, `stats_years`, `stats_satisfaction`, `stats_rating`
 
-- **If `user && isAdmin && !isLocked`** → render panel:
-  - "You are currently signed in as **{user.email}** ({role label})"
-  - Primary: "Continue to Dashboard" → `navigate("/admin")`
-  - Ghost: "Switch Account" → `await signOut()` then show login form
-- **If no user** → existing form, with password input now wrapped to include **Eye/EyeOff toggle button**.
-- **If locked** → still render panel; "Continue to Dashboard" lands on the lock overlay (correct behavior).
-- Remove the silent auto-redirect `useEffect`.
+This is a **client-side reorganization only**. The `site_settings` table keys are unchanged — every consumer (`useSiteSettings`, `Footer`, `Index`, `About`, `LocalBusinessSchema`) keeps working with zero churn.
 
-## 5. Reusable password-with-toggle pattern
+## Implementation
 
-Since both Login and SessionLockOverlay need it, implement inline (Input + absolute-positioned button with `Eye`/`EyeOff` lucide icon, toggling `type` between `password` and `text`). No new shared component to keep diff small — same ~10 lines in two places.
+### 1. `src/components/admin/GeneralSettings.tsx` → split into two
+- Rename to `BusinessInfoSettings.tsx` containing only the 8 contact/hours keys.
+- New `BusinessRulesSettings.tsx` containing `auto_approve_bookings` + `tax_rate`.
+- Same query/mutate pattern as current; each component owns only its own keys list.
 
-## 6. No backend changes
+### 2. New `src/pages/admin/SiteContentAdmin.tsx`
+- Standalone page (like `BrandingAdmin`, `HomepageImagesAdmin`).
+- Reads/writes the 11 marketing keys above using the same `site_settings` upsert pattern.
+- Gated by `can_manage_site_content` via `AdminLayout`'s existing `canAccessPath` check.
 
-RLS, edge functions, registry untouched. `signInWithPassword` already exists; reusing it for unlock is safe (it refreshes the session JWT, which is desirable).
+### 3. `src/pages/admin/SettingsAdmin.tsx` — update tab list
+Tabs become:
+| Tab | Permission |
+|---|---|
+| Business Info | `can_manage_settings` |
+| Business Rules | `can_manage_business_rules` |
+| Availability | `can_edit_availability` |
+| Payment | `can_manage_payment` |
+| Pricing | `can_edit_pricing` |
+| Social Media | `can_manage_socials` |
+
+### 4. `src/lib/permissions.ts`
+- Add `Site Content` nav row to the **website** group, path `/admin/site-content`, permission `can_manage_site_content`.
+- Extend the `__settings__` sentinel's permission list to include `can_manage_business_rules`.
+
+### 5. `src/App.tsx`
+- Register the new `/admin/site-content` route → `SiteContentAdmin`.
+
+### 6. Migration — register new permission keys
+Idempotent insert into `permission_registry`:
+- `can_manage_business_rules` — "Manage Business Rules" — "Edit booking auto-approval and tax rate"
+- `can_manage_site_content` — "Manage Site Content" — "Edit homepage, about, footer copy and stats"
+
+These then auto-appear in the User Management permissions UI (which reads from the registry).
+
+### 7. Result matrix
+
+| Role/Permission | Sees |
+|---|---|
+| Staff with `can_manage_settings` only | Business Info tab only |
+| Staff with `can_manage_business_rules` only | Business Rules tab only |
+| Staff with `can_manage_site_content` only | "Site Content" sidebar link (no Settings link) |
+| Manager (admin role) | Everything |
+| Super Admin | Everything |
+
+A staff member will no longer see footer/hero/about/stats fields unless explicitly granted `can_manage_site_content`. Tax rate and booking auto-approval are isolated behind their own toggle.
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| `src/hooks/useAuth.tsx` | Dual timers (10 min lock / 30 min signout), `isLocked` state, `unlock()` method |
-| `src/components/admin/SessionLockOverlay.tsx` | New: blurred full-screen lock UI with Eye-toggle password + Sign out |
-| `src/pages/admin/AdminLayout.tsx` | Mount `<SessionLockOverlay />` when `isLocked` |
-| `src/pages/admin/Login.tsx` | Active-session panel, Eye/EyeOff toggle on password, remove silent redirect |
+| `src/components/admin/GeneralSettings.tsx` → renamed `BusinessInfoSettings.tsx` | Keep only 8 contact/hours keys |
+| `src/components/admin/BusinessRulesSettings.tsx` (new) | `auto_approve_bookings` + `tax_rate` |
+| `src/pages/admin/SiteContentAdmin.tsx` (new) | 11 marketing keys, standalone page |
+| `src/pages/admin/SettingsAdmin.tsx` | Replace General tab with Business Info + Business Rules |
+| `src/lib/permissions.ts` | Add Site Content nav row; extend `__settings__` sentinel |
+| `src/App.tsx` | Register `/admin/site-content` route |
+| New migration | Insert `can_manage_business_rules` + `can_manage_site_content` into `permission_registry` |
 
 ## Untouched
 
-RLS, edge functions, `usePermissions`, `<HasPermission>`, all other admin pages, `signIn`/`signOut` core, permissions registry.
+`site_settings` table schema and all keys (no data migration), `useSiteSettings`, `Footer`, `Index`, `About`, `LocalBusinessSchema`, RLS policies, edge functions, all other admin pages, Pricing/Availability/Payment/Socials components.
 
