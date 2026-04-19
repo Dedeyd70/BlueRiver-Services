@@ -206,6 +206,16 @@ const BookService = () => {
       toast({ title: "Please agree to be contacted.", variant: "destructive" });
       return;
     }
+    // Required dynamic fields
+    for (const f of (serviceFields ?? [])) {
+      if (f.required) {
+        const v = dynValues[f.field_key];
+        if (v === undefined || v === null || v === "" || (f.input_type === "number" && Number(v) <= 0)) {
+          toast({ title: `Please fill in: ${f.label}`, variant: "destructive" });
+          return;
+        }
+      }
+    }
     setLoading(true);
 
     // Rate-limit check
