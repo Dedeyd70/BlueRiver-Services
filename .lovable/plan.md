@@ -1,67 +1,78 @@
 
 
-# Fix `delete-admin-user` 400 Bad Request
+# Make Dashboard + Settings Tabs Truly Permission-Aware
 
-## Root cause analysis
+## Root cause
 
-Function logs show only Boot/Shutdown — no exception traces, meaning the 400s are the function's own thrown errors (caught and returned with `status: 400`), not crashes. Three concrete bugs make most legitimate calls fail before `auth.admin.deleteUser` is ever reached:
+**A. Dashboard hidden from Staff with bookings permission.**
+In `src/lib/permissions.ts` line 28 the Dashboard row has **no `permission` key**, so `isVisible()` falls through to the role check. Staff is not in `["admin","manager"]` → hidden in nav AND `canAccessPath("/admin", …)` returns false → `AdminLayout` redirects to `/admin` (the very page they can't access) → loop / blank.
 
-1. **Wrong env var name for anon key.** Line 19 reads `SUPABASE_PUBLISHABLE_KEY`. That secret exists, but `createClient` for caller validation requires the project's anon key (`SUPABASE_ANON_KEY` — also present in secrets). With the publishable key the caller client rejects the JWT → `caller` is null → `"Unauthorized"` 400. This is the primary failure mode for every delete attempt.
-2. **Foreign-key cascade gap.** The function deletes the `user_roles` row then calls `auth.admin.deleteUser`. Other tables (`bookings.assigned_to`, `invoices.created_by`, `gallery.uploaded_by`, etc.) likely reference `auth.users(id)` without `ON DELETE CASCADE/SET NULL`, so the auth delete throws `"User is still referenced from table ..."` → caught → 400 with that message. Need to verify and either null those FKs first or rely on cascades.
-3. **Opaque error surface.** All errors return generic 400. Should distinguish 401 (no auth / bad caller), 403 (not admin), 404 (target not found), 409 (last admin / referenced), 400 (validation) so the UI shows the real cause and the network tab is diagnosable.
+**B. Manager sees every Settings tab.**
+`src/pages/admin/SettingsAdmin.tsx` only wraps the **Socials** tab in a permission check. General / Availability / Payment / Pricing render unconditionally for any authenticated admin-role user, including Manager.
 
-Bonus: client sends `{ user_id }` (matches), but accept `targetUserId` too for robustness.
+## Fix
 
-## Plan
+### 1. `src/lib/permissions.ts` — Dashboard accessible by permission, not just role
 
-### 1. `supabase/functions/delete-admin-user/index.ts` — rewrite
+Add a helper "user has any management permission" so Dashboard becomes visible the moment a non-admin user is granted any operational permission. Cleaner than inventing `can_view_dashboard` (no DB / registry change needed).
 
-- Use `SUPABASE_ANON_KEY` (correct var) for `callerClient`.
-- Parse body once, accept `user_id` **or** `targetUserId`.
-- Explicit guard chain with proper status codes:
-  - Missing auth header → **401** `"Missing authorization header"`
-  - `getUser()` fails / null → **401** `"Invalid or expired session"`
-  - Caller role lookup fails → **403** `"Caller has no role assigned"`
-  - Caller role !== `"admin"` → **403** `"Only Super Admin can delete users"`
-  - Missing `user_id` → **400** `"user_id is required"`
-  - Self-delete → **400** `"Cannot delete your own account"`
-  - Last admin guard: count `role='admin'` rows; if target is admin and count ≤ 1 → **409** `"Cannot delete the last Super Admin"`
-  - Target lookup via `adminClient.auth.admin.getUserById(user_id)`; if not found → **404** `"User not found"`
-- Pre-deletion FK cleanup with `adminClient` (SET NULL on tracking columns owned by deleted user):
-  - `bookings.assigned_to = NULL where assigned_to = user_id`
-  - `invoices.created_by = NULL where created_by = user_id` (if column exists)
-  - any other admin-owned audit columns surfaced by the schema check below
-- Delete `user_roles` row (idempotent — no error if missing).
-- Call `adminClient.auth.admin.deleteUser(user_id)`. On error, surface the actual Postgres/auth message: **409** `"Cannot delete: ${error.message}"` so FK violations are visible.
-- Success → **200** `{ success: true, deleted_user_id }`.
-- Wrap everything in try/catch returning **500** with the real message for unexpected throws (so we don't mask bugs as 400s).
+```ts
+const hasAnyManagementPermission = (permissions: PermissionsMap) =>
+  Object.values(permissions || {}).some((v) => v === true);
+```
 
-### 2. Schema audit (read-only, before writing the function)
+Update the Dashboard row to use a sentinel key:
+```ts
+{ label: "Dashboard", path: "/admin", roles: ["admin","manager"], group: "main", permission: "__dashboard__" },
+```
 
-Run a quick `read_query` against `information_schema.key_column_usage` to enumerate all FKs pointing at `auth.users` so the cleanup step covers every owning column. If any FK is `NO ACTION` and not nullable (rare for audit cols), include a follow-up migration to set it nullable + `ON DELETE SET NULL`.
+In `isVisible`, intercept the sentinel:
+```ts
+if (role === "admin") return true;
+if (item.permission === "__dashboard__") {
+  return item.roles.includes(role) || hasAnyManagementPermission(permissions);
+}
+if (item.permission) return permissions?.[item.permission] === true;
+return item.roles.includes(role);
+```
 
-### 3. Client tweak — `src/pages/admin/UserManagement.tsx`
+Result: Manager keeps Dashboard, Staff with any granular permission gains Dashboard, Staff with zero permissions still does not see it.
 
-`removeUser.mutationFn` currently surfaces `res.error.message` then `res.data?.error`. When edge function returns non-2xx, `supabase-js` puts the parsed body on `res.error.context` for FunctionsHttpError. Update the error extraction to:
-- Try `res.data?.error` first (works for 4xx where body is parsed),
-- Fall back to `res.error?.message`,
-- Default to `"Failed to delete user"`.
+### 2. Add `Account` access fallback for non-admins who lose nav access
 
-This ensures the toast shows the specific reason ("Cannot delete the last Super Admin", "User is still referenced from table bookings", etc.) instead of a generic 400.
+Ensure `canAccessPath("/admin/account", …)` always returns true for authenticated non-admins so they aren't trapped. Account row already lists all roles, so this works as-is — verify and leave untouched.
 
-### 4. No migration unless schema audit reveals a non-nullable FK
+### 3. `src/pages/admin/SettingsAdmin.tsx` — gate each tab individually
 
-If audit shows clean SET NULL / nullable columns, no DB change needed. If not, single additive migration: `ALTER TABLE ... ALTER COLUMN ... DROP NOT NULL` + `DROP CONSTRAINT ... ADD CONSTRAINT ... ON DELETE SET NULL`.
+Replace the static tab list with conditional triggers + content, each gated by its own permission key (admin bypasses via existing `useHasPermission` logic which already returns true for admin):
+
+| Tab | Permission key |
+|---|---|
+| General | `can_manage_settings` |
+| Availability | `can_manage_settings` |
+| Payment | `can_manage_settings` |
+| Pricing | `can_edit_pricing` |
+| Social Media | `can_manage_socials` |
+
+Behavior:
+- Compute `canGeneral`, `canPricing`, `canSocials` etc. via `useHasPermission`.
+- Only render `<TabsTrigger>` + `<TabsContent>` pairs for the granted tabs.
+- Compute `defaultValue` as the first granted tab so the page never opens to a hidden tab. If none granted (shouldn't happen — route is gated upstream), show "No settings available".
+
+Manager (no toggles) → sees nothing extra; with `can_manage_socials` only → sees Social Media only. Admin → sees all tabs.
+
+### 4. No DB changes, no registry changes
+
+`__dashboard__` is a code-side sentinel only; never written to the registry or `user_roles.permissions`. `can_edit_pricing` already exists in the registry. All other keys already exist.
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| `supabase/functions/delete-admin-user/index.ts` | Fix anon-key var, status-code-correct guard chain, FK cleanup, accept `user_id`/`targetUserId`, surface real errors |
-| `src/pages/admin/UserManagement.tsx` | Improve error extraction in `removeUser.mutationFn` so toast shows specific reason |
-| (conditional) New migration | Only if schema audit finds blocking FKs |
+| `src/lib/permissions.ts` | Add `hasAnyManagementPermission` helper; sentinel `__dashboard__` permission on Dashboard row; intercept in `isVisible` |
+| `src/pages/admin/SettingsAdmin.tsx` | Per-tab `useHasPermission` checks; dynamic `defaultValue`; hide ungranted tabs entirely |
 
 ## Untouched
 
-`create-admin-user`, `list-admin-users`, `useAuth`, RLS, permissions registry, nav helpers.
+`useAuth`, `usePermissions`, `<HasPermission>`, RLS policies, registry inserts, `AdminLayout`, edge functions, all other admin pages.
 
