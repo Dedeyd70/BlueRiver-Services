@@ -12,11 +12,14 @@ interface AuthContextType {
   permissions: PermissionsMap;
   loading: boolean;
   roleLoading: boolean;
+  isLocked: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  unlock: (password: string) => Promise<{ error: string | null }>;
 }
 
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+const LOCK_TIMEOUT_MS = 10 * 60 * 1000;
+const SIGNOUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -25,8 +28,10 @@ const AuthContext = createContext<AuthContextType>({
   permissions: {},
   loading: true,
   roleLoading: false,
+  isLocked: false,
   signIn: async () => ({ error: null }),
   signOut: async () => {},
+  unlock: async () => ({ error: null }),
 });
 
 const normalizePermissions = (raw: unknown): PermissionsMap =>
@@ -39,37 +44,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [permissions, setPermissions] = useState<PermissionsMap>({});
   const [loading, setLoading] = useState(true);
   const [roleLoading, setRoleLoading] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const [isLocked, setIsLocked] = useState(false);
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const signoutTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const isLockedRef = useRef(false);
+
+  useEffect(() => {
+    isLockedRef.current = isLocked;
+  }, [isLocked]);
+
+  const clearTimers = useCallback(() => {
+    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    if (signoutTimerRef.current) clearTimeout(signoutTimerRef.current);
+  }, []);
 
   const doSignOut = useCallback(async () => {
+    clearTimers();
+    setIsLocked(false);
     await supabase.auth.signOut();
     setUser(null);
     setIsAdmin(false);
     setRole(null);
     setPermissions({});
-  }, []);
+  }, [clearTimers]);
 
-  const resetTimeout = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
+  const resetTimers = useCallback(() => {
+    clearTimers();
+    lockTimerRef.current = setTimeout(() => {
+      setIsLocked(true);
+    }, LOCK_TIMEOUT_MS);
+    signoutTimerRef.current = setTimeout(() => {
       doSignOut();
-    }, SESSION_TIMEOUT_MS);
-  }, [doSignOut]);
+    }, SIGNOUT_TIMEOUT_MS);
+  }, [clearTimers, doSignOut]);
 
-  // Idle session timeout
+  // Idle activity listeners — only reset when not locked
   useEffect(() => {
     if (!user) return;
-    const events = ["mousedown", "keydown", "scroll", "touchstart"];
-    events.forEach((e) => window.addEventListener(e, resetTimeout, { passive: true }));
-    resetTimeout();
-    return () => {
-      events.forEach((e) => window.removeEventListener(e, resetTimeout));
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const handleActivity = () => {
+      if (!isLockedRef.current) resetTimers();
     };
-  }, [user, resetTimeout]);
+    const events = ["mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, handleActivity, { passive: true }));
+    resetTimers();
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, handleActivity));
+      clearTimers();
+    };
+  }, [user, resetTimers, clearTimers]);
 
-  // Bootstrap: register listener FIRST, then getSession() as backup.
-  // Set user synchronously inside the listener — never await before setUser.
+  // Bootstrap auth
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -84,7 +108,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Stable refetch — used by initial load, focus/visibility, and as fallback.
   const refetchRole = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from("user_roles")
@@ -97,13 +120,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setPermissions(normalizePermissions((data as { permissions?: unknown } | null)?.permissions));
   }, []);
 
-  // Initial role/permissions resolution — does NOT block `loading`.
   useEffect(() => {
     if (!user) {
       setRole(null);
       setIsAdmin(false);
       setPermissions({});
       setRoleLoading(false);
+      setIsLocked(false);
+      clearTimers();
       return;
     }
     let cancelled = false;
@@ -114,9 +138,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, refetchRole]);
+  }, [user?.id, refetchRole, clearTimers]);
 
-  // Live permission sync: realtime UPDATE on this user's row + focus/visibility refetch fallback.
   useEffect(() => {
     if (!user?.id) return;
     const uid = user.id;
@@ -159,8 +182,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error: null };
   }, []);
 
+  const unlock = useCallback(async (password: string) => {
+    if (!user?.email) return { error: "No active session" };
+    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
+    if (error) return { error: error.message };
+    setIsLocked(false);
+    resetTimers();
+    return { error: null };
+  }, [user?.email, resetTimers]);
+
   return (
-    <AuthContext.Provider value={{ user, isAdmin, role, permissions, loading, roleLoading, signIn, signOut: doSignOut }}>
+    <AuthContext.Provider value={{ user, isAdmin, role, permissions, loading, roleLoading, isLocked, signIn, signOut: doSignOut, unlock }}>
       {children}
     </AuthContext.Provider>
   );
