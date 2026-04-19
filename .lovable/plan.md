@@ -1,103 +1,90 @@
 
 
-# Reorganize General Settings into Role-Appropriate Tabs
+# Combined Implementation: Registry Sync + Dashboard Gating
 
-## What's wrong today
+## Part 1 — Permission Registry Sync (SQL migration)
 
-`src/components/admin/GeneralSettings.tsx` lumps **18 unrelated keys** into one "General" tab gated by a single `can_manage_settings` permission. A staff member granted that permission to (e.g.) edit business hours also gets to rewrite the homepage hero, About page mission, footer tagline, and tax rate. No separation of concerns.
+```sql
+-- Rename mismatched key
+UPDATE permission_registry SET key = 'can_edit_availability'
+ WHERE key = 'can_edit_availability_settings';
 
-Current keys in General:
-- **Contact/Hours** (operational): `phone`, `phone_link`, `email`, `service_area`, `call_availability`, `business_hours_mf/sat/sun`
-- **Website Content** (marketing): `footer_tagline`, `hero_headline`, `hero_subheadline`, `about_mission_title`, `about_mission_p1/p2`, `stats_clients/years/satisfaction/rating`
-- **Business Rules** (sensitive): `auto_approve_bookings`, `tax_rate`
+-- Drop duplicate + orphan
+DELETE FROM permission_registry
+ WHERE key IN ('can_manage_site_settings','can_publish_gallery');
 
-These are three distinct concerns mashed together.
+-- Add missing payment key
+INSERT INTO permission_registry (key, label, description) VALUES
+  ('can_manage_payment','Manage Payment Settings',
+   'Edit payment methods (Cash, Zelle) and payout details')
+ON CONFLICT (key) DO NOTHING;
 
-## Proposed split
+-- Migrate existing user grants
+UPDATE user_roles
+   SET permissions = (permissions - 'can_edit_availability_settings')
+                  || jsonb_build_object('can_edit_availability', true)
+ WHERE permissions ? 'can_edit_availability_settings';
 
-Break General into three permission-gated sub-areas. Pricing/Availability/Payment/Socials stay as-is.
+UPDATE user_roles
+   SET permissions = permissions - 'can_manage_site_settings' - 'can_publish_gallery'
+ WHERE permissions ?| ARRAY['can_manage_site_settings','can_publish_gallery'];
 
-### A. Settings → "Business Info" tab — `can_manage_settings`
-Operational contact + hours that staff/managers reasonably maintain.
-- `phone`, `phone_link`, `email`, `service_area`, `call_availability`
-- `business_hours_mf`, `business_hours_sat`, `business_hours_sun`
+-- RLS hardening (additive — admin policies remain)
+CREATE POLICY "Permitted users manage availability"
+ON availability_settings FOR ALL TO authenticated
+USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'))
+WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'));
 
-### B. Settings → "Business Rules" tab — `can_manage_business_rules` *(new)*
-Sensitive operational toggles that change how the system behaves.
-- `auto_approve_bookings`
-- `tax_rate`
+CREATE POLICY "Permitted users manage blocked dates"
+ON blocked_dates FOR ALL TO authenticated
+USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'))
+WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'));
+```
 
-### C. Move to **Website** section (sidebar) → new "Site Content" page — `can_manage_site_content` *(new)*
-Marketing copy that belongs with Branding/Homepage Images/Testimonials.
-- `footer_tagline`
-- `hero_headline`, `hero_subheadline`
-- `about_mission_title`, `about_mission_p1`, `about_mission_p2`
-- `stats_clients`, `stats_years`, `stats_satisfaction`, `stats_rating`
+`lib/permissions.ts` and `SettingsAdmin.tsx` already use canonical keys (`can_edit_availability`, `can_manage_payment`) — verify only, no edit expected.
 
-This is a **client-side reorganization only**. The `site_settings` table keys are unchanged — every consumer (`useSiteSettings`, `Footer`, `Index`, `About`, `LocalBusinessSchema`) keeps working with zero churn.
+## Part 2 — Dashboard Card Gating (`src/pages/admin/Dashboard.tsx`)
 
-## Implementation
+### Per-card permission map
 
-### 1. `src/components/admin/GeneralSettings.tsx` → split into two
-- Rename to `BusinessInfoSettings.tsx` containing only the 8 contact/hours keys.
-- New `BusinessRulesSettings.tsx` containing `auto_approve_bookings` + `tax_rate`.
-- Same query/mutate pattern as current; each component owns only its own keys list.
-
-### 2. New `src/pages/admin/SiteContentAdmin.tsx`
-- Standalone page (like `BrandingAdmin`, `HomepageImagesAdmin`).
-- Reads/writes the 11 marketing keys above using the same `site_settings` upsert pattern.
-- Gated by `can_manage_site_content` via `AdminLayout`'s existing `canAccessPath` check.
-
-### 3. `src/pages/admin/SettingsAdmin.tsx` — update tab list
-Tabs become:
-| Tab | Permission |
+| Card | Gate |
 |---|---|
-| Business Info | `can_manage_settings` |
-| Business Rules | `can_manage_business_rules` |
-| Availability | `can_edit_availability` |
-| Payment | `can_manage_payment` |
-| Pricing | `can_edit_pricing` |
-| Social Media | `can_manage_socials` |
+| Total Submissions | always visible |
+| Bookings, Active Bookings | `can_manage_bookings` |
+| Quote Requests, Open Quotes | `can_manage_quotes` |
+| Contact Submissions, New Inquiries | `can_manage_messages` |
+| Services | admin role only |
+| Gallery | `can_manage_gallery` |
+| Testimonials | `can_manage_testimonials` |
 
-### 4. `src/lib/permissions.ts`
-- Add `Site Content` nav row to the **website** group, path `/admin/site-content`, permission `can_manage_site_content`.
-- Extend the `__settings__` sentinel's permission list to include `can_manage_business_rules`.
+### Implementation
 
-### 5. `src/App.tsx`
-- Register the new `/admin/site-content` route → `SiteContentAdmin`.
+1. Import `useHasPermission` and `useAuth`. Pre-compute booleans at component top:
+   ```ts
+   const { role } = useAuth();
+   const canBookings = useHasPermission("can_manage_bookings");
+   const canQuotes = useHasPermission("can_manage_quotes");
+   const canMessages = useHasPermission("can_manage_messages");
+   const canGallery = useHasPermission("can_manage_gallery");
+   const canTestimonials = useHasPermission("can_manage_testimonials");
+   ```
+2. Add `permission?: string | "admin"` field to each stat object.
+3. Build `visibleStats` by filtering with the precomputed flags (key→bool map). Keep all `useQuery` calls unconditional (React hook rules); count-only HEAD queries are cheap.
+4. Update grid: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`. CSS grid auto-reflows surviving cards.
+5. Empty-state fallback: if `visibleStats.length === 0`, render "No metrics available for your role."
 
-### 6. Migration — register new permission keys
-Idempotent insert into `permission_registry`:
-- `can_manage_business_rules` — "Manage Business Rules" — "Edit booking auto-approval and tax rate"
-- `can_manage_site_content` — "Manage Site Content" — "Edit homepage, about, footer copy and stats"
-
-These then auto-appear in the User Management permissions UI (which reads from the registry).
-
-### 7. Result matrix
-
-| Role/Permission | Sees |
-|---|---|
-| Staff with `can_manage_settings` only | Business Info tab only |
-| Staff with `can_manage_business_rules` only | Business Rules tab only |
-| Staff with `can_manage_site_content` only | "Site Content" sidebar link (no Settings link) |
-| Manager (admin role) | Everything |
-| Super Admin | Everything |
-
-A staff member will no longer see footer/hero/about/stats fields unless explicitly granted `can_manage_site_content`. Tax rate and booking auto-approval are isolated behind their own toggle.
+Admin role bypasses all gates (the hook already returns `true` for admin).
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| `src/components/admin/GeneralSettings.tsx` → renamed `BusinessInfoSettings.tsx` | Keep only 8 contact/hours keys |
-| `src/components/admin/BusinessRulesSettings.tsx` (new) | `auto_approve_bookings` + `tax_rate` |
-| `src/pages/admin/SiteContentAdmin.tsx` (new) | 11 marketing keys, standalone page |
-| `src/pages/admin/SettingsAdmin.tsx` | Replace General tab with Business Info + Business Rules |
-| `src/lib/permissions.ts` | Add Site Content nav row; extend `__settings__` sentinel |
-| `src/App.tsx` | Register `/admin/site-content` route |
-| New migration | Insert `can_manage_business_rules` + `can_manage_site_content` into `permission_registry` |
+| New SQL migration | Registry rename/delete/insert + grant migration + 2 RLS policies |
+| `src/pages/admin/Dashboard.tsx` | Permission gating, responsive grid, empty state |
+| `src/lib/permissions.ts` | Verify only |
+| `src/pages/admin/SettingsAdmin.tsx` | Verify only |
 
 ## Untouched
 
-`site_settings` table schema and all keys (no data migration), `useSiteSettings`, `Footer`, `Index`, `About`, `LocalBusinessSchema`, RLS policies, edge functions, all other admin pages, Pricing/Availability/Payment/Socials components.
+`useAuth`, `usePermissions`, `<HasPermission>`, `AdminLayout`, edge functions, all other admin pages and RLS policies.
 
