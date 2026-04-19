@@ -17,12 +17,25 @@ const UserManagement = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { data: registry } = usePermissionRegistry();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [permsTarget, setPermsTarget] = useState<{ user_id: string; full_name?: string | null; email?: string | null; role: string; permissions?: Record<string, boolean> | null } | null>(null);
+  const [permsState, setPermsState] = useState<Record<string, boolean>>({});
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<string>("staff");
+
+  useEffect(() => {
+    if (permsTarget) {
+      const initial: Record<string, boolean> = {};
+      (registry ?? []).forEach((p) => {
+        initial[p.key] = permsTarget.permissions?.[p.key] === true;
+      });
+      setPermsState(initial);
+    }
+  }, [permsTarget, registry]);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
