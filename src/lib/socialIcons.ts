@@ -1,62 +1,74 @@
 import {
-  FacebookIcon as Facebook,
-  InstagramIcon as Instagram,
-  TwitterIcon as Twitter,
-  YoutubeIcon as Youtube,
-  LinkedinIcon as Linkedin,
-  GithubIcon as Github,
-  TwitchIcon as Twitch,
-  Music2Icon as Music2,
-  SendIcon as Send,
-  MessageCircleIcon as MessageCircle,
-  RssIcon as Rss,
-  GlobeIcon as Globe,
-  LinkIcon,
-  type LucideIcon,
-} from "lucide-react";
+  FaFacebook,
+  FaInstagram,
+  FaXTwitter,
+  FaYoutube,
+  FaLinkedin,
+  FaGithub,
+  FaTwitch,
+  FaTiktok,
+  FaSpotify,
+  FaSoundcloud,
+  FaTelegram,
+  FaWhatsapp,
+  FaFacebookMessenger,
+  FaDiscord,
+  FaThreads,
+  FaPinterest,
+  FaSnapchat,
+  FaReddit,
+  FaMedium,
+  FaRss,
+  FaGlobe,
+  FaLink,
+} from "react-icons/fa6";
+import type { IconType } from "react-icons";
 
-/** Normalize platform name: trim, lowercase, strip all whitespace. */
+/** Normalize platform name: lowercase, strip ALL whitespace. Handles "Facebook ", "FACEBOOK", "Face Book". */
 export const normalizePlatform = (raw: string): string =>
   (raw ?? "").toLowerCase().replace(/\s+/g, "").trim();
 
-const ICONS: Record<string, LucideIcon> = {
-  facebook: Facebook,
-  fb: Facebook,
-  instagram: Instagram,
-  ig: Instagram,
-  insta: Instagram,
-  twitter: Twitter,
-  x: Twitter,
-  youtube: Youtube,
-  yt: Youtube,
-  linkedin: Linkedin,
-  github: Github,
-  gh: Github,
-  twitch: Twitch,
-  tiktok: Music2,
-  spotify: Music2,
-  soundcloud: Music2,
-  telegram: Send,
-  whatsapp: MessageCircle,
-  messenger: MessageCircle,
-  discord: MessageCircle,
-  threads: MessageCircle,
-  rss: Rss,
-  blog: Rss,
-  website: Globe,
-  web: Globe,
+const ICONS: Record<string, { icon: IconType; label: string }> = {
+  facebook: { icon: FaFacebook, label: "Facebook" },
+  fb: { icon: FaFacebook, label: "Facebook" },
+  instagram: { icon: FaInstagram, label: "Instagram" },
+  ig: { icon: FaInstagram, label: "Instagram" },
+  insta: { icon: FaInstagram, label: "Instagram" },
+  twitter: { icon: FaXTwitter, label: "X / Twitter" },
+  x: { icon: FaXTwitter, label: "X / Twitter" },
+  youtube: { icon: FaYoutube, label: "YouTube" },
+  yt: { icon: FaYoutube, label: "YouTube" },
+  linkedin: { icon: FaLinkedin, label: "LinkedIn" },
+  github: { icon: FaGithub, label: "GitHub" },
+  gh: { icon: FaGithub, label: "GitHub" },
+  twitch: { icon: FaTwitch, label: "Twitch" },
+  tiktok: { icon: FaTiktok, label: "TikTok" },
+  spotify: { icon: FaSpotify, label: "Spotify" },
+  soundcloud: { icon: FaSoundcloud, label: "SoundCloud" },
+  telegram: { icon: FaTelegram, label: "Telegram" },
+  whatsapp: { icon: FaWhatsapp, label: "WhatsApp" },
+  messenger: { icon: FaFacebookMessenger, label: "Messenger" },
+  discord: { icon: FaDiscord, label: "Discord" },
+  threads: { icon: FaThreads, label: "Threads" },
+  pinterest: { icon: FaPinterest, label: "Pinterest" },
+  snapchat: { icon: FaSnapchat, label: "Snapchat" },
+  reddit: { icon: FaReddit, label: "Reddit" },
+  medium: { icon: FaMedium, label: "Medium" },
+  rss: { icon: FaRss, label: "RSS" },
+  blog: { icon: FaRss, label: "Blog" },
+  website: { icon: FaGlobe, label: "Website" },
+  web: { icon: FaGlobe, label: "Website" },
 };
 
-/** Resolve a Lucide icon for a platform name, falling back to Link. */
-export const getSocialIcon = (platformName: string): LucideIcon => {
+/** Resolve a brand icon for a platform name, falling back to a generic Link icon. */
+export const getSocialIcon = (platformName: string): IconType => {
   const key = normalizePlatform(platformName);
-  return ICONS[key] ?? LinkIcon;
+  return ICONS[key]?.icon ?? FaLink;
 };
 
-/** Returns the canonical match label, or null if no match. */
+/** Returns a friendly matched label, or null if no match. */
 export const getMatchedPlatformLabel = (platformName: string): string | null => {
   const key = normalizePlatform(platformName);
   if (!key) return null;
-  if (!ICONS[key]) return null;
-  return key.charAt(0).toUpperCase() + key.slice(1);
+  return ICONS[key]?.label ?? null;
 };
