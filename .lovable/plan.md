@@ -1,131 +1,106 @@
 
 
-# Dynamic Permission System + Social Links + Login Fix
+# Fix Dashboard Counters + Extend Permission-Gated RLS
 
-Single atomic migration + UI work. Includes the `user_roles` self-read RLS fix so newly created managers/staff can actually log in.
-
-## Migration (one transaction, runs before any UI ships)
+## Migration (one transaction)
 
 ```sql
--- 1. Permission registry
-CREATE TABLE public.permission_registry (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  key text UNIQUE NOT NULL,
-  label text NOT NULL,
-  description text,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
--- 2. Per-user grants on existing user_roles
-ALTER TABLE public.user_roles
-  ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{}'::jsonb;
-
--- 3. Dynamic social links
-CREATE TABLE public.social_links (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  platform_name text NOT NULL,
-  url text NOT NULL,
-  display_order int NOT NULL DEFAULT 0,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
--- 4. SECURITY DEFINER permission check
-CREATE OR REPLACE FUNCTION public.has_permission(_user_id uuid, _key text)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = _user_id
-      AND (role = 'admin' OR (permissions ->> _key)::boolean = true)
-  )
-$$;
-
--- 5. RLS — registry
-ALTER TABLE public.permission_registry ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated read registry" ON public.permission_registry
-  FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admins manage registry" ON public.permission_registry
-  FOR ALL TO authenticated
-  USING (has_role(auth.uid(),'admin')) WITH CHECK (has_role(auth.uid(),'admin'));
-
--- 6. RLS — social_links
-ALTER TABLE public.social_links ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read active socials" ON public.social_links
-  FOR SELECT USING (is_active = true);
-CREATE POLICY "Permitted users manage socials" ON public.social_links
-  FOR ALL TO authenticated
-  USING (has_permission(auth.uid(),'can_manage_socials'))
-  WITH CHECK (has_permission(auth.uid(),'can_manage_socials'));
-
--- 7. LOGIN FIX — let users read their own role row
-CREATE POLICY "Users can read their own role"
-ON public.user_roles FOR SELECT TO authenticated
-USING (auth.uid() = user_id);
-
--- 8. Seed registry
-INSERT INTO public.permission_registry (key,label,description) VALUES
-  ('can_manage_socials','Manage Social Links','Add/edit/delete social media links'),
-  ('can_edit_pricing','Edit Pricing','Change service prices and rules'),
-  ('can_publish_gallery','Publish Gallery','Add/remove gallery items'),
-  ('can_manage_legal','Manage Legal Pages','Edit legal/policy content')
+-- 1. Seed all operational permission keys
+INSERT INTO public.permission_registry (key, label, description) VALUES
+  ('can_manage_bookings',    'Manage Bookings',    'View and manage bookings'),
+  ('can_manage_quotes',      'Manage Quotes',      'View and manage quote requests'),
+  ('can_manage_messages',    'Manage Messages',    'View and manage contact submissions'),
+  ('can_manage_settings',    'Manage Settings',    'View and manage site settings'),
+  ('can_manage_gallery',     'Manage Gallery',     'View and manage gallery images'),
+  ('can_manage_testimonials','Manage Testimonials','View and manage testimonials')
 ON CONFLICT (key) DO NOTHING;
+
+-- 2. Permission-aware RLS (admin OR has_permission). Existing admin-only policies stay.
+
+-- bookings (SELECT)
+CREATE POLICY "Permitted users can view bookings"
+  ON public.bookings FOR SELECT TO authenticated
+  USING (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_bookings'));
+
+-- contact_submissions (SELECT)
+CREATE POLICY "Permitted users can view contact_submissions"
+  ON public.contact_submissions FOR SELECT TO authenticated
+  USING (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_messages'));
+
+-- site_settings (ALL — read + write needed for settings UI)
+CREATE POLICY "Permitted users can manage site_settings"
+  ON public.site_settings FOR ALL TO authenticated
+  USING (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_settings'))
+  WITH CHECK (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_settings'));
+
+-- gallery (ALL)
+CREATE POLICY "Permitted users can manage gallery"
+  ON public.gallery FOR ALL TO authenticated
+  USING (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_gallery'))
+  WITH CHECK (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_gallery'));
+
+-- testimonials (ALL)
+CREATE POLICY "Permitted users can manage testimonials"
+  ON public.testimonials FOR ALL TO authenticated
+  USING (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_testimonials'))
+  WITH CHECK (has_role(auth.uid(), 'admin') OR has_permission(auth.uid(), 'can_manage_testimonials'));
+
+-- 3. Realtime publication for dashboard reactivity
+DO $$
+BEGIN
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.bookings;
+  EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.quote_requests;
+  EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.contact_submissions;
+  EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
+
+ALTER TABLE public.bookings            REPLICA IDENTITY FULL;
+ALTER TABLE public.quote_requests      REPLICA IDENTITY FULL;
+ALTER TABLE public.contact_submissions REPLICA IDENTITY FULL;
 ```
 
-## New files
+## `src/pages/admin/Dashboard.tsx` changes
 
-- `src/lib/socialIcons.ts` — `normalizePlatform()` (trim + lowercase + strip spaces) + `getSocialIcon()` (Lucide map, falls back to `Link`). Handles `"Facebook "`, `"FACEBOOK"`, `"face book"` → Facebook icon.
-- `src/hooks/usePermissions.tsx` — `useHasPermission(key)` (admin always true) + `usePermissionRegistry()`
-- `src/components/HasPermission.tsx` — `<HasPermission permission="..." fallback={...}>`
-- `src/hooks/useSocialLinks.ts` — public query for active links, ordered
-- `src/pages/admin/PermissionsAdmin.tsx` — registry CRUD (admin-only)
-- `src/components/admin/SocialLinksSettings.tsx` — list + add/edit/delete with **live icon preview** as admin types `platform_name` ("Matched: Facebook" / "No match — using Link icon")
+Confirmed actual statuses: `bookings` uses `pending|confirmed|completed|cancelled`; `quote_requests` uses `requested|in_progress|converted|closed`; `contact_submissions` uses `pending|read|responded|converted`.
 
-## Edited files
+- **"Pending Bookings"** → label **"Active Bookings"**, query `.in("status", ["pending","confirmed"])`, path `/admin/bookings?status=active`
+- **"Pending Quotes"** → label **"Open Quotes"**, query `.in("status", ["requested","in_progress"])`, path `/admin/quotes?status=open`
+- **"New Inquiries"** unchanged (matches `pending`)
+- Add realtime subscription invalidating the relevant React Query keys on any change to the three tables
 
-- `supabase/functions/create-admin-user/index.ts` — after role insert, seed `permissions` with all registry keys defaulting to `false`
-- `src/hooks/useAuth.tsx` — select `role, permissions` together; expose `permissions` in context; re-fetch on `SIGNED_IN` / `TOKEN_REFRESHED`
-- `src/lib/permissions.ts` — add `Permissions` nav entry (admin-only, "system" group)
-- `src/App.tsx` — register `/admin/permissions` route
-- `src/pages/admin/AdminLayout.tsx` — add `Permissions` icon to `iconMap`
-- `src/pages/admin/UserManagement.tsx` — per-user "Permissions" dialog: `<Switch>` per registry key; admin role shows all-on disabled
-- `src/pages/admin/SettingsAdmin.tsx` — add "Social Media" tab wrapped in `<HasPermission permission="can_manage_socials">`
-- `src/components/Footer.tsx` — render dynamic social icons via `useSocialLinks()` + `getSocialIcon()`; hidden when no active links
-
-## Permission semantics
-
-```ts
-useHasPermission("can_manage_socials")
-// admin → true
-// user_roles.permissions["can_manage_socials"] === true → true
-// otherwise → false
+```tsx
+useEffect(() => {
+  const ch = supabase.channel("dashboard-stats")
+    .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
+      qc.invalidateQueries({ queryKey: ["admin-bookings-count"] });
+      qc.invalidateQueries({ queryKey: ["admin-pending-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-grand-total"] });
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "quote_requests" }, () => {
+      qc.invalidateQueries({ queryKey: ["admin-quotes-count"] });
+      qc.invalidateQueries({ queryKey: ["admin-pending-quotes-count"] });
+      qc.invalidateQueries({ queryKey: ["admin-grand-total"] });
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, () => {
+      qc.invalidateQueries({ queryKey: ["admin-submissions-count"] });
+      qc.invalidateQueries({ queryKey: ["admin-pending-count"] });
+      qc.invalidateQueries({ queryKey: ["admin-grand-total"] });
+    })
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}, [qc]);
 ```
-
-Database `has_permission()` mirrors this exactly — UI gating and RLS share one truth.
-
-## What's untouched
-
-- Role system (`admin`/`manager`/`staff`) — permissions are additive
-- Existing `NAV_PERMISSIONS`, edge functions for user CRUD, `service_type_id` work
-- Public footer layout (only the icon row data source changes)
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| New migration | registry + `user_roles.permissions` + `social_links` + `has_permission()` + RLS + **self-read user_roles policy** + seed (atomic) |
-| `supabase/functions/create-admin-user/index.ts` | Seed default permissions on user creation |
-| `src/lib/socialIcons.ts` | New: normalizer + icon map + `Link` fallback |
-| `src/hooks/usePermissions.tsx` | New |
-| `src/components/HasPermission.tsx` | New |
-| `src/hooks/useSocialLinks.ts` | New |
-| `src/pages/admin/PermissionsAdmin.tsx` | New: registry CRUD |
-| `src/components/admin/SocialLinksSettings.tsx` | New: gated CRUD + live icon preview |
-| `src/hooks/useAuth.tsx` | Expose permissions JSONB; re-fetch on auth events |
-| `src/lib/permissions.ts` | Add Permissions nav entry |
-| `src/App.tsx` | Register `/admin/permissions` |
-| `src/pages/admin/AdminLayout.tsx` | Add Permissions icon |
-| `src/pages/admin/UserManagement.tsx` | Per-user permissions dialog |
-| `src/pages/admin/SettingsAdmin.tsx` | Add gated Social Media tab |
-| `src/components/Footer.tsx` | Render dynamic social icons |
+| New migration | Seed 6 permission keys; permission-OR-admin RLS on `bookings`, `contact_submissions`, `site_settings`, `gallery`, `testimonials`; realtime publication + REPLICA IDENTITY |
+| `src/pages/admin/Dashboard.tsx` | Correct status filters, rename labels, add realtime subscription |
+
+## Untouched
+
+`NotificationBell`, list pages, `useAuth`, social links, existing admin RLS (additive), public submission flows.
 
