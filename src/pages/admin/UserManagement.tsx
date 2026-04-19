@@ -117,8 +117,13 @@ const UserManagement = () => {
         body: { user_id: userId },
       });
 
-      if (res.error) throw new Error(res.error.message || "Failed to delete user");
-      if (res.data?.error) throw new Error(res.data.error);
+      // Prefer specific message from edge function body, then context, then generic
+      const dataErr = (res.data as { error?: string } | null)?.error;
+      const ctxErr = (res.error as { context?: { error?: string } } | null)?.context?.error;
+      const msgErr = res.error?.message;
+      if (dataErr) throw new Error(dataErr);
+      if (ctxErr) throw new Error(ctxErr);
+      if (res.error) throw new Error(msgErr || "Failed to delete user");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
