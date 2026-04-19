@@ -14,6 +14,7 @@ import { useServices } from "@/hooks/useServices";
 import imageCompression from "browser-image-compression";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import PageMeta from "@/components/PageMeta";
+import DynamicField from "@/components/DynamicField";
 
 // Keys that map to typed columns on quote_requests; everything else goes into custom_fields.
 const TYPED_FIELD_KEYS = new Set([
@@ -409,53 +410,6 @@ const RequestQuote = () => {
           </motion.div>
         </div>
       </section>
-    </div>
-  );
-};
-
-const DynamicField = ({ field, value, onChange }: { field: any; value: any; onChange: (v: any) => void }) => {
-  const required = field.required ? <span className="text-destructive"> *</span> : null;
-
-  if (field.input_type === "select") {
-    const options: string[] = Array.isArray(field.options) ? field.options : [];
-    return (
-      <div>
-        <label className="text-sm font-medium text-foreground mb-1.5 block">{field.label}{required}</label>
-        <select
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <option value="">Select...</option>
-          {options.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </div>
-    );
-  }
-
-  if (field.input_type === "toggle") {
-    return (
-      <div className="flex items-center gap-2 h-10 sm:col-span-1">
-        <Checkbox id={`dyn-${field.field_key}`} checked={!!value} onCheckedChange={(v) => onChange(!!v)} />
-        <label htmlFor={`dyn-${field.field_key}`} className="text-sm font-medium text-foreground cursor-pointer">
-          {field.label}{required}
-        </label>
-      </div>
-    );
-  }
-
-  // number (default)
-  return (
-    <div>
-      <label className="text-sm font-medium text-foreground mb-1.5 block">{field.label}{required}</label>
-      <Input
-        type="number"
-        min="0"
-        max="100"
-        placeholder="0"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-      />
     </div>
   );
 };
