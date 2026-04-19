@@ -1,5 +1,5 @@
+# Diagnosing "new user cannot log in"
 
+## Investigation needed
 
-# Investigation needed before patching
-
-The user says service fields are not being converted to line items, but `computeQuote()` in `pricingEngine.ts` (lines 117-129) already does exactly that mapping. I need to verify the actual runtime behavior before patching.
+Let me check what's actually happening in the create-user flow and auth logs to identify the cause before proposing a fix. update the previuos plan with the new findings for review
