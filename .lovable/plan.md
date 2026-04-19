@@ -1,90 +1,55 @@
 
 
-# Combined Implementation: Registry Sync + Dashboard Gating
+# Booking Form → Service-Driven Dynamic (Patch)
 
-## Part 1 — Permission Registry Sync (SQL migration)
+## Schema gap
+
+`bookings` lacks `custom_fields` (quote_requests has it). Need migration to add it so unknown dynamic fields persist — same pattern as quotes.
 
 ```sql
--- Rename mismatched key
-UPDATE permission_registry SET key = 'can_edit_availability'
- WHERE key = 'can_edit_availability_settings';
-
--- Drop duplicate + orphan
-DELETE FROM permission_registry
- WHERE key IN ('can_manage_site_settings','can_publish_gallery');
-
--- Add missing payment key
-INSERT INTO permission_registry (key, label, description) VALUES
-  ('can_manage_payment','Manage Payment Settings',
-   'Edit payment methods (Cash, Zelle) and payout details')
-ON CONFLICT (key) DO NOTHING;
-
--- Migrate existing user grants
-UPDATE user_roles
-   SET permissions = (permissions - 'can_edit_availability_settings')
-                  || jsonb_build_object('can_edit_availability', true)
- WHERE permissions ? 'can_edit_availability_settings';
-
-UPDATE user_roles
-   SET permissions = permissions - 'can_manage_site_settings' - 'can_publish_gallery'
- WHERE permissions ?| ARRAY['can_manage_site_settings','can_publish_gallery'];
-
--- RLS hardening (additive — admin policies remain)
-CREATE POLICY "Permitted users manage availability"
-ON availability_settings FOR ALL TO authenticated
-USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'))
-WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'));
-
-CREATE POLICY "Permitted users manage blocked dates"
-ON blocked_dates FOR ALL TO authenticated
-USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'))
-WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_edit_availability'));
+ALTER TABLE public.bookings
+  ADD COLUMN IF NOT EXISTS custom_fields jsonb NOT NULL DEFAULT '{}'::jsonb;
 ```
 
-`lib/permissions.ts` and `SettingsAdmin.tsx` already use canonical keys (`can_edit_availability`, `can_manage_payment`) — verify only, no edit expected.
+Existing typed columns on bookings (kept, used when field_key matches): `bedrooms`, `bathrooms`, `frequency`, `has_pets`, `entry_codes`, `square_footage`, `property_type`. Anything else from `service_fields` → `custom_fields`.
 
-## Part 2 — Dashboard Card Gating (`src/pages/admin/Dashboard.tsx`)
+## Code changes — `src/pages/BookService.tsx` only
 
-### Per-card permission map
+Mirror the quote form's dynamic pattern. **No layout redesign** — just swap the hardcoded property-detail block for the same Service Type → service_fields engine.
 
-| Card | Gate |
-|---|---|
-| Total Submissions | always visible |
-| Bookings, Active Bookings | `can_manage_bookings` |
-| Quote Requests, Open Quotes | `can_manage_quotes` |
-| Contact Submissions, New Inquiries | `can_manage_messages` |
-| Services | admin role only |
-| Gallery | `can_manage_gallery` |
-| Testimonials | `can_manage_testimonials` |
-
-### Implementation
-
-1. Import `useHasPermission` and `useAuth`. Pre-compute booleans at component top:
+1. **Add state**: `service_type_id`, `dynValues: Record<string, any>`.
+2. **Fetch `service_types`** (`useQuery` `public-service-types`) — same query as quote form.
+3. **Resolve `matchedServiceType`** by id (fallback by name for prefilled `?service=` deep links from the homepage cards — preserves quote→booking & service card flows).
+4. **Fetch `service_fields`** for the matched id (same query key as quote form → cache-shared).
+5. **Replace the Property Details block** (the bedrooms/bathrooms/sq-ft/frequency/property-type grid in the form's left column, lines ~285-335 of `BookService.tsx`) with:
+   - The Service selector becomes the **first** field (move up before name/email block keeping current visual order: keep name/email/phone/address as-is; the Service selector is already in the form, just make it `service_type_id`-driven like quote form).
+   - After selection: render Property Type + Sq Ft (kept as common fields), then map `serviceFields` through the existing `DynamicField` component.
+6. **Extract `DynamicField`** — copy the component from `RequestQuote.tsx` into a new shared file `src/components/DynamicField.tsx` and import from both pages. Avoids duplication; same render logic for `number | select | toggle`.
+7. **Submit handler**: split `dynValues` into typed columns vs `custom_fields`. Typed-column allowlist for bookings:
    ```ts
-   const { role } = useAuth();
-   const canBookings = useHasPermission("can_manage_bookings");
-   const canQuotes = useHasPermission("can_manage_quotes");
-   const canMessages = useHasPermission("can_manage_messages");
-   const canGallery = useHasPermission("can_manage_gallery");
-   const canTestimonials = useHasPermission("can_manage_testimonials");
+   const BOOKING_TYPED = new Set(["bedrooms","bathrooms","frequency","has_pets","entry_codes","square_footage","property_type"]);
    ```
-2. Add `permission?: string | "admin"` field to each stat object.
-3. Build `visibleStats` by filtering with the precomputed flags (key→bool map). Keep all `useQuery` calls unconditional (React hook rules); count-only HEAD queries are cheap.
-4. Update grid: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`. CSS grid auto-reflows surviving cards.
-5. Empty-state fallback: if `visibleStats.length === 0`, render "No metrics available for your role."
+   Numeric coerce for `bedrooms`/`bathrooms`; boolean coerce for `has_pets`; string for the rest. Everything else → `custom_fields` JSON.
+8. **Validate required dynamic fields** the same way the quote form does (loop `serviceFields`, check `dynValues[field_key]`).
+9. **Persist `service_type_id`** on the bookings insert (column already exists).
 
-Admin role bypasses all gates (the hook already returns `true` for admin).
+## Untouched (per critical rules)
+
+- Date/time picker, calendar, slot logic, double-booking RPC, rate-limit RPC, notify, addon block, price summary, consent, success state.
+- `quote_requests` flow, `createInvoiceFromBooking`, `pricingEngine`.
+- All RLS, no admin pages.
+- The hardcoded fallback `service` text column on bookings stays populated (for legacy display in admin lists).
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| New SQL migration | Registry rename/delete/insert + grant migration + 2 RLS policies |
-| `src/pages/admin/Dashboard.tsx` | Permission gating, responsive grid, empty state |
-| `src/lib/permissions.ts` | Verify only |
-| `src/pages/admin/SettingsAdmin.tsx` | Verify only |
+| New migration | `ALTER TABLE bookings ADD COLUMN custom_fields jsonb` |
+| New `src/components/DynamicField.tsx` | Shared dynamic field renderer extracted from RequestQuote |
+| `src/pages/RequestQuote.tsx` | Import shared `DynamicField`, delete inline copy |
+| `src/pages/BookService.tsx` | Service-type-driven dropdown + `service_fields` query + replace hardcoded property-detail grid with dynamic block + split typed/custom on submit |
 
-## Untouched
+## Result
 
-`useAuth`, `usePermissions`, `<HasPermission>`, `AdminLayout`, edge functions, all other admin pages and RLS policies.
+Booking form behaves like the quote form: pick **Commercial Cleaning** → only the configured fields (Half Bathrooms, Kitchens, Conference Rooms, Office Rooms…) appear. Pick **Residential** → bedrooms/bathrooms/etc. Same data shape feeds pricing engine & invoice generation.
 
