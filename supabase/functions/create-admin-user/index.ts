@@ -62,10 +62,19 @@ Deno.serve(async (req) => {
     if (createError) throw createError;
     if (!newUser.user) throw new Error("Failed to create user");
 
-    // Assign role
+    // Build default permissions: all registry keys → false
+    const { data: registry } = await adminClient
+      .from("permission_registry")
+      .select("key");
+    const defaultPerms: Record<string, boolean> = {};
+    (registry ?? []).forEach((r: { key: string }) => {
+      defaultPerms[r.key] = false;
+    });
+
+    // Assign role + default permissions
     const { error: roleError } = await adminClient
       .from("user_roles")
-      .insert({ user_id: newUser.user.id, role: dbRole });
+      .insert({ user_id: newUser.user.id, role: dbRole, permissions: defaultPerms });
 
     if (roleError) throw roleError;
 
