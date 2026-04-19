@@ -233,6 +233,25 @@ const BookService = () => {
       || siteSettings?.booking_approval_mode === "auto";
     const initialStatus = autoApprove ? "confirmed" : "pending";
 
+    // Split dynamic values into typed columns vs custom_fields
+    const typedPayload: Record<string, any> = {};
+    const customFields: Record<string, any> = {};
+    for (const [k, v] of Object.entries(dynValues)) {
+      if (v === undefined || v === null || v === "") continue;
+      if (BOOKING_TYPED_KEYS.has(k)) {
+        if (BOOKING_NUMERIC_KEYS.has(k)) {
+          const n = parseInt(String(v), 10);
+          typedPayload[k] = Number.isFinite(n) ? n : null;
+        } else if (BOOKING_BOOLEAN_KEYS.has(k)) {
+          typedPayload[k] = !!v;
+        } else {
+          typedPayload[k] = String(v);
+        }
+      } else {
+        customFields[k] = v;
+      }
+    }
+
     try {
       const { data: insertedBooking, error } = await supabase.from("bookings").insert({
         name: form.name.trim(),
@@ -240,6 +259,7 @@ const BookService = () => {
         phone: form.phone.trim() || null,
         address: form.address.trim(),
         service_type: form.service || null,
+        service_type_id: matchedServiceType?.id ?? null,
         booking_date: format(selectedDate, "yyyy-MM-dd"),
         time_slot: selectedSlot,
         notes: form.notes.trim() || null,
@@ -247,17 +267,14 @@ const BookService = () => {
         status: initialStatus,
         property_type: form.property_type || null,
         square_footage: form.square_footage || null,
-        bedrooms: form.bedrooms ? parseInt(form.bedrooms) : null,
-        bathrooms: form.bathrooms ? parseInt(form.bathrooms) : null,
-        frequency: form.frequency || null,
-        has_pets: form.has_pets,
-        entry_codes: form.entry_codes.trim() || null,
         selected_addons: selectedAddons.map((title) => {
           const addon = addons.find((a) => a.title === title);
           return { title, price: parsePrice(addon?.price_starting) };
         }),
         total_price: totalPrice > 0 ? totalPrice : null,
-      }).select("id").single();
+        custom_fields: customFields,
+        ...typedPayload,
+      } as any).select("id").single();
 
       if (error) {
         toast({ title: "Booking failed.", description: "Please try again later.", variant: "destructive" });
@@ -329,67 +346,65 @@ const BookService = () => {
                     <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
                   </div>
 
-                  {/* Property Details */}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
-                      <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                        <option value="">Select type</option>
-                        <option value="House">House</option>
-                        <option value="Apartment/Condo">Apartment / Condo</option>
-                        <option value="Office">Office</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
-                      <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
-                    </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Bedrooms</label>
-                      <Input type="number" min="0" max="20" placeholder="0" value={form.bedrooms} onChange={update("bedrooms")} />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Bathrooms</label>
-                      <Input type="number" min="0" max="20" placeholder="0" value={form.bathrooms} onChange={update("bathrooms")} />
-                    </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-1.5 block">Cleaning Frequency</label>
-                      <select value={form.frequency} onChange={update("frequency")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                        <option value="">Select frequency</option>
-                        <option value="One-Time">One-Time</option>
-                        <option value="Weekly">Weekly</option>
-                        <option value="Bi-Weekly">Bi-Weekly</option>
-                        <option value="Monthly">Monthly</option>
-                      </select>
-                    </div>
-                    <div className="flex items-end pb-1">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
-                        <span className="text-sm font-medium text-foreground">Pets in home</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1.5 block">Entry / Gate Codes</label>
-                    <Input placeholder="Gate code, lockbox, etc." value={form.entry_codes} onChange={update("entry_codes")} maxLength={100} />
-                  </div>
-
+                  {/* Service Type — drives the dynamic form */}
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Service *</label>
-                    <select value={form.service} onChange={update("service")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    <select
+                      value={form.service_type_id || ""}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const st = (serviceTypes ?? []).find((s: any) => s.id === id);
+                        const name = st?.name ?? "";
+                        setForm((prev) => ({ ...prev, service_type_id: id, service: name }));
+                        setDynValues({});
+                      }}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
                       <option value="">Select a service</option>
-                      {mainServices.map((s) => (
-                        <option key={s.title} value={s.title}>
-                          {s.title}{s.price_starting ? ` — ${s.price_starting}` : ""}
-                        </option>
+                      {(serviceTypes ?? []).map((st: any) => (
+                        <option key={st.id} value={st.id}>{st.name}</option>
                       ))}
                     </select>
+                    {!form.service && (
+                      <p className="text-xs text-muted-foreground mt-1.5">Choose a service to see relevant details.</p>
+                    )}
                   </div>
+
+                  {form.service && (
+                    <>
+                      {/* Common: Property Type & Sq Ft */}
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
+                          <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                            <option value="">Select type</option>
+                            <option value="House">House</option>
+                            <option value="Apartment/Condo">Apartment / Condo</option>
+                            <option value="Office">Office</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
+                          <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
+                        </div>
+                      </div>
+
+                      {/* Dynamic admin-defined fields */}
+                      {(serviceFields ?? []).length > 0 && (
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          {(serviceFields ?? []).map((f: any) => (
+                            <DynamicField
+                              key={f.id}
+                              field={f}
+                              value={dynValues[f.field_key]}
+                              onChange={(v) => setDyn(f.field_key, v)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
 
                   {/* Add-ons selection */}
                   {form.service && addons.length > 0 && (
