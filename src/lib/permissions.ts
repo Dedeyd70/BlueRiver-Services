@@ -25,7 +25,7 @@ export const NAV_GROUPS = [
 
 export const NAV_PERMISSIONS: NavPermission[] = [
   // Main
-  { label: "Dashboard", path: "/admin", roles: ["admin", "manager"], group: "main" },
+  { label: "Dashboard", path: "/admin", roles: ["admin", "manager"], group: "main", permission: "__dashboard__" },
 
   // Operations
   { label: "Bookings", path: "/admin/bookings", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_bookings" },
@@ -55,11 +55,18 @@ export const NAV_PERMISSIONS: NavPermission[] = [
 
 /** Visibility precedence:
  *  1. admin → always allowed
- *  2. item has a `permission` key → that key is authoritative (explicit false hides)
- *  3. otherwise → role-based fallback
+ *  2. Dashboard sentinel → role OR any granular permission
+ *  3. item has a `permission` key → that key is authoritative (explicit false hides)
+ *  4. otherwise → role-based fallback
  */
+const hasAnyManagementPermission = (permissions: PermissionsMap): boolean =>
+  Object.values(permissions || {}).some((v) => v === true);
+
 const isVisible = (item: NavPermission, role: AppRole, permissions: PermissionsMap): boolean => {
   if (role === "admin") return true;
+  if (item.permission === "__dashboard__") {
+    return item.roles.includes(role) || hasAnyManagementPermission(permissions);
+  }
   if (item.permission) return permissions?.[item.permission] === true;
   return item.roles.includes(role);
 };
