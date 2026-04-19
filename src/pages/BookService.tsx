@@ -16,6 +16,14 @@ import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import { notifyAdmins } from "@/lib/notifications";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import PageMeta from "@/components/PageMeta";
+import DynamicField from "@/components/DynamicField";
+
+// Keys mapped to typed columns on bookings table; everything else → custom_fields JSON.
+const BOOKING_TYPED_KEYS = new Set([
+  "bedrooms", "bathrooms", "frequency", "has_pets", "entry_codes", "square_footage", "property_type",
+]);
+const BOOKING_NUMERIC_KEYS = new Set(["bedrooms", "bathrooms"]);
+const BOOKING_BOOLEAN_KEYS = new Set(["has_pets"]);
 
 const BookService = () => {
   const { toast } = useToast();
@@ -36,15 +44,13 @@ const BookService = () => {
     phone: searchParams.get("phone") || "",
     address: "",
     service: prefilledService,
+    service_type_id: "",
     notes: "",
     property_type: "",
     square_footage: "",
-    bedrooms: "",
-    bathrooms: "",
-    frequency: "",
-    has_pets: false,
-    entry_codes: "",
   });
+  // Dynamic field values keyed by field_key
+  const [dynValues, setDynValues] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (prefilledService) setForm((f) => ({ ...f, service: prefilledService }));
@@ -57,6 +63,42 @@ const BookService = () => {
   }, [prefilledAddon]);
 
   const { mainServices, addons } = useServices();
+
+  // Service types drive the dynamic form (same as quote form)
+  const { data: serviceTypes } = useQuery({
+    queryKey: ["public-service-types"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("service_types").select("id,name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Resolve service_type_id: prefer explicit selection, fall back to name match for ?service= deep links
+  const matchedServiceType =
+    (form.service_type_id
+      ? (serviceTypes ?? []).find((s: any) => s.id === form.service_type_id)
+      : undefined) ||
+    (form.service
+      ? (serviceTypes ?? []).find((s: any) => s.name.toLowerCase() === form.service.toLowerCase())
+      : undefined);
+
+  const { data: serviceFields } = useQuery({
+    queryKey: ["public-service-fields", matchedServiceType?.id],
+    queryFn: async () => {
+      if (!matchedServiceType?.id) return [];
+      const { data, error } = await (supabase as any)
+        .from("service_fields")
+        .select("*")
+        .eq("service_type_id", matchedServiceType.id)
+        .order("display_order");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!matchedServiceType?.id,
+  });
+
+  const setDyn = (key: string, val: any) => setDynValues((p) => ({ ...p, [key]: val }));
 
   const { data: availability } = useQuery({
     queryKey: ["availability-settings"],
