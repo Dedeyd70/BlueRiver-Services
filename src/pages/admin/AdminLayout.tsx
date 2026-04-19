@@ -5,7 +5,7 @@ import { LayoutDashboard, MessageSquare, Wrench, FileText, Settings, Shield, Log
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import logo from "@/assets/blueriver-logo.png";
-import { getGroupedNavItems, canAccessPath, getRoleLabel, type AppRole } from "@/lib/permissions";
+import { getGroupedNavItems, canAccessPath, getRoleLabel, type AppRole, type PermissionsMap } from "@/lib/permissions";
 import NotificationBell from "@/components/admin/NotificationBell";
 
 const iconMap: Record<string, any> = {
@@ -29,8 +29,8 @@ const iconMap: Record<string, any> = {
   Account: Shield,
 };
 
-const SidebarContent = ({ location, signOut, role, onNavClick }: { location: ReturnType<typeof useLocation>; signOut: () => void; role: AppRole; onNavClick?: () => void }) => {
-  const groups = getGroupedNavItems(role);
+const SidebarContent = ({ location, signOut, role, permissions, onNavClick }: { location: ReturnType<typeof useLocation>; signOut: () => void; role: AppRole; permissions: PermissionsMap; onNavClick?: () => void }) => {
+  const groups = getGroupedNavItems(role, permissions);
 
   return (
     <>
@@ -83,7 +83,7 @@ const SidebarContent = ({ location, signOut, role, onNavClick }: { location: Ret
 };
 
 const AdminLayout = () => {
-  const { user, role, loading, roleLoading, signOut } = useAuth();
+  const { user, role, permissions, loading, roleLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -98,11 +98,11 @@ const AdminLayout = () => {
   // Path access check only runs once role is known
   useEffect(() => {
     if (!loading && user && role) {
-      if (!canAccessPath(role, location.pathname)) {
+      if (!canAccessPath(role, location.pathname, permissions)) {
         navigate("/admin");
       }
     }
-  }, [loading, user, role, location.pathname, navigate]);
+  }, [loading, user, role, permissions, location.pathname, navigate]);
 
   useEffect(() => setSheetOpen(false), [location]);
 
@@ -128,7 +128,7 @@ const AdminLayout = () => {
   return (
     <div className="min-h-screen flex bg-muted/50">
       <aside className="hidden md:flex w-64 bg-card border-r border-border flex-col shrink-0">
-        <SidebarContent location={location} signOut={signOut} role={role} />
+        <SidebarContent location={location} signOut={signOut} role={role} permissions={permissions} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -140,7 +140,7 @@ const AdminLayout = () => {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0 flex flex-col">
-              <SidebarContent location={location} signOut={signOut} role={role} onNavClick={() => setSheetOpen(false)} />
+              <SidebarContent location={location} signOut={signOut} role={role} permissions={permissions} onNavClick={() => setSheetOpen(false)} />
             </SheetContent>
           </Sheet>
           <div className="flex items-center gap-2 flex-1">
