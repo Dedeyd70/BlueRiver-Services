@@ -495,6 +495,30 @@ export type Database = {
         }
         Relationships: []
       }
+      permission_registry: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          label: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          label: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          label?: string
+        }
+        Relationships: []
+      }
       quote_drafts: {
         Row: {
           addons: Json
@@ -899,6 +923,36 @@ export type Database = {
         }
         Relationships: []
       }
+      social_links: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          platform_name: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          platform_name: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          platform_name?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       testimonials: {
         Row: {
           author_name: string
@@ -938,16 +992,19 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
+          permissions: Json
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           id?: string
+          permissions?: Json
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           id?: string
+          permissions?: Json
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -967,6 +1024,10 @@ export type Database = {
         Returns: {
           time_slot: string
         }[]
+      }
+      has_permission: {
+        Args: { _key: string; _user_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {

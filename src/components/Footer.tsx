@@ -3,11 +3,14 @@ import { Link } from "react-router-dom";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServices } from "@/hooks/useServices";
+import { useSocialLinks } from "@/hooks/useSocialLinks";
+import { getSocialIcon } from "@/lib/socialIcons";
 import logo from "@/assets/blueriver-logo.png";
 
 const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
   const { data: settings } = useSiteSettings();
   const { services } = useServices();
+  const { data: socialLinks } = useSocialLinks();
 
   const phone = settings?.phone || "(206) 317-8300";
   const phoneLink = settings?.phone_link || "+12063178300";
@@ -88,10 +91,27 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-navy-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-navy-foreground/50">
+        <div className="mt-12 pt-8 border-t border-navy-foreground/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-navy-foreground/50">
           <span>© {new Date().getFullYear()} BlueRiver Services. All rights reserved.</span>
-          <div className="flex gap-4">
-          </div>
+          {socialLinks && socialLinks.length > 0 && (
+            <div className="flex gap-3">
+              {socialLinks.map((link) => {
+                const Icon = getSocialIcon(link.platform_name);
+                return (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={link.platform_name}
+                    className="w-9 h-9 flex items-center justify-center rounded-full bg-navy-foreground/5 hover:bg-primary/20 text-navy-foreground/70 hover:text-primary transition-colors"
+                  >
+                    <Icon className="w-4 h-4" />
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </footer>

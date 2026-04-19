@@ -1,26 +1,41 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Users, ShieldAlert } from "lucide-react";
+import { Plus, Trash2, Users, ShieldAlert, ShieldCheck } from "lucide-react";
 import { getRoleLabel, type AppRole } from "@/lib/permissions";
+import { usePermissionRegistry } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
 
 const UserManagement = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { data: registry } = usePermissionRegistry();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [permsTarget, setPermsTarget] = useState<{ user_id: string; full_name?: string | null; email?: string | null; role: string; permissions?: Record<string, boolean> | null } | null>(null);
+  const [permsState, setPermsState] = useState<Record<string, boolean>>({});
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<string>("staff");
+
+  useEffect(() => {
+    if (permsTarget) {
+      const initial: Record<string, boolean> = {};
+      (registry ?? []).forEach((p) => {
+        initial[p.key] = permsTarget.permissions?.[p.key] === true;
+      });
+      setPermsState(initial);
+    }
+  }, [permsTarget, registry]);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -109,6 +124,23 @@ const UserManagement = () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "User removed" });
       setDeleteConfirm(null);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const savePerms = useMutation({
+    mutationFn: async () => {
+      if (!permsTarget) return;
+      const { error } = await supabase
+        .from("user_roles")
+        .update({ permissions: permsState as any })
+        .eq("user_id", permsTarget.user_id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "Permissions updated" });
+      setPermsTarget(null);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -224,6 +256,21 @@ const UserManagement = () => {
                     variant="ghost"
                     size="icon"
                     className="w-8 h-8"
+                    title="Manage permissions"
+                    onClick={() => setPermsTarget({
+                      user_id: u.user_id,
+                      full_name: u.full_name,
+                      email: u.email,
+                      role: u.role,
+                      permissions: (u as any).permissions ?? {},
+                    })}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-8 h-8"
                     onClick={() => setDeleteConfirm(u.user_id)}
                     disabled={isLastAdmin || isSelf}
                   >
@@ -235,6 +282,44 @@ const UserManagement = () => {
           })}
         </div>
       )}
+
+      <Dialog open={!!permsTarget} onOpenChange={(o) => !o && setPermsTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Permissions for {permsTarget?.full_name || permsTarget?.email || "User"}</DialogTitle>
+          </DialogHeader>
+          {permsTarget?.role === "admin" ? (
+            <p className="text-sm text-muted-foreground">Super Admins automatically have all permissions.</p>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {!registry?.length ? (
+                <p className="text-sm text-muted-foreground">No permissions defined yet. Add some on the Permissions page.</p>
+              ) : (
+                registry.map((p) => (
+                  <div key={p.id} className="flex items-start justify-between gap-3 py-2 border-b border-border last:border-0">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{p.label}</p>
+                      <p className="text-xs font-mono text-muted-foreground">{p.key}</p>
+                      {p.description && <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>}
+                    </div>
+                    <Switch
+                      checked={!!permsState[p.key]}
+                      onCheckedChange={(v) => setPermsState((s) => ({ ...s, [p.key]: v }))}
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {permsTarget?.role !== "admin" && !!registry?.length && (
+            <DialogFooter>
+              <Button onClick={() => savePerms.mutate()} disabled={savePerms.isPending}>
+                {savePerms.isPending ? "Saving..." : "Save Permissions"}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
