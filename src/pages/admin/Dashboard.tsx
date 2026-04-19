@@ -1,10 +1,36 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessageSquare, Wrench, Star, Clock, Image, CalendarDays, FileQuestion, BarChart2 } from "lucide-react";
-import { useNavigate } from "react-router-dom"; // Added for navigation
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
-  const navigate = useNavigate(); // Initialize navigation
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("dashboard-stats")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-bookings-count"] });
+        qc.invalidateQueries({ queryKey: ["admin-pending-bookings"] });
+        qc.invalidateQueries({ queryKey: ["admin-grand-total"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "quote_requests" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-quotes-count"] });
+        qc.invalidateQueries({ queryKey: ["admin-pending-quotes-count"] });
+        qc.invalidateQueries({ queryKey: ["admin-grand-total"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, () => {
+        qc.invalidateQueries({ queryKey: ["admin-submissions-count"] });
+        qc.invalidateQueries({ queryKey: ["admin-pending-count"] });
+        qc.invalidateQueries({ queryKey: ["admin-grand-total"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [qc]);
 
   // Fetch ALL interactions for the "Total Submissions"
   const { data: totalAll } = useQuery({
@@ -52,7 +78,7 @@ const Dashboard = () => {
       const { count } = await supabase
         .from("bookings")
         .select("*", { count: "exact", head: true })
-        .eq("status", "pending");
+        .in("status", ["pending", "confirmed"]);
       return count ?? 0;
     },
   });
@@ -66,14 +92,14 @@ const Dashboard = () => {
     },
   });
 
-  // Fetch ONLY pending quote requests
+  // Fetch open (requested + in_progress) quote requests
   const { data: pendingQuotes } = useQuery({
     queryKey: ["admin-pending-quotes-count"],
     queryFn: async () => {
       const { count } = await supabase
         .from("quote_requests")
         .select("*", { count: "exact", head: true })
-        .eq("status", "pending"); // This is the filter you were missing
+        .in("status", ["requested", "in_progress"]);
       return count ?? 0;
     },
   });
@@ -120,11 +146,11 @@ const Dashboard = () => {
       path: "/admin/bookings",
     },
     {
-      label: "Pending Bookings",
+      label: "Active Bookings",
       value: pendingBookings ?? 0,
       icon: Clock,
       color: "text-amber-500",
-      path: "/admin/bookings?status=pending",
+      path: "/admin/bookings?status=active",
     },
     {
       label: "Quote Requests",
@@ -134,11 +160,11 @@ const Dashboard = () => {
       path: "/admin/quotes",
     },
     {
-      label: "Pending Quotes",
+      label: "Open Quotes",
       value: pendingQuotes ?? 0,
       icon: FileQuestion,
       color: "text-amber-500",
-      path: "/admin/quotes?status=pending",
+      path: "/admin/quotes?status=open",
     },
     {
       label: "Contact Submissions",
