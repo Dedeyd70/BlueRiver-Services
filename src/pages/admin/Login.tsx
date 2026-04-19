@@ -1,29 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Droplets, LogIn, ArrowLeft } from "lucide-react";
+import { Droplets, LogIn, ArrowLeft, Eye, EyeOff, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getRoleLabel } from "@/lib/permissions";
 
 const AdminLogin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
-  const { user, isAdmin, loading: authLoading, signIn } = useAuth();
+  const { user, isAdmin, role, isLocked, signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  // Redirect if already authenticated as admin
-  useEffect(() => {
-    if (!authLoading && user && isAdmin) {
-      navigate("/admin", { replace: true });
-    }
-  }, [user, isAdmin, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,8 +27,9 @@ const AdminLogin = () => {
     setLoading(false);
     if (error) {
       toast({ title: "Login failed", description: error, variant: "destructive" });
+    } else {
+      navigate("/admin", { replace: true });
     }
-    // Navigation is handled by the useEffect above once isAdmin becomes true
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -51,6 +47,12 @@ const AdminLogin = () => {
     }
   };
 
+  const handleSwitchAccount = async () => {
+    await signOut();
+  };
+
+  const showActiveSessionPanel = user && isAdmin && !isLocked && !showForgot;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/50 px-4">
       <div className="w-full max-w-sm">
@@ -62,7 +64,24 @@ const AdminLogin = () => {
           <p className="text-sm text-muted-foreground mt-1">BlueRiver Services Dashboard</p>
         </div>
 
-        {showForgot ? (
+        {showActiveSessionPanel ? (
+          <div className="space-y-4 bg-card p-6 rounded-2xl border border-border shadow-sm">
+            <div>
+              <p className="text-sm text-muted-foreground">You are currently signed in as</p>
+              <p className="text-base font-medium text-foreground mt-1">{user.email}</p>
+              {role && (
+                <p className="text-xs text-muted-foreground mt-0.5">{getRoleLabel(role)}</p>
+              )}
+            </div>
+            <Button className="w-full" onClick={() => navigate("/admin")}>
+              Continue to Dashboard
+            </Button>
+            <Button variant="ghost" className="w-full text-muted-foreground" onClick={handleSwitchAccount}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Switch Account
+            </Button>
+          </div>
+        ) : showForgot ? (
           <form onSubmit={handleResetPassword} className="space-y-4 bg-card p-6 rounded-2xl border border-border shadow-sm">
             <button
               type="button"
@@ -88,7 +107,26 @@ const AdminLogin = () => {
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Password</label>
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required autoComplete="current-password" />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               <LogIn className="w-4 h-4 mr-2" />

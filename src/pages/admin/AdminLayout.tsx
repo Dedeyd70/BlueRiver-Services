@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import logo from "@/assets/blueriver-logo.png";
 import { getGroupedNavItems, canAccessPath, getRoleLabel, type AppRole, type PermissionsMap } from "@/lib/permissions";
 import NotificationBell from "@/components/admin/NotificationBell";
+import SessionLockOverlay from "@/components/admin/SessionLockOverlay";
 
 const iconMap: Record<string, any> = {
   Dashboard: LayoutDashboard,
@@ -83,7 +84,7 @@ const SidebarContent = ({ location, signOut, role, permissions, onNavClick }: { 
 };
 
 const AdminLayout = () => {
-  const { user, role, permissions, loading, roleLoading, signOut } = useAuth();
+  const { user, role, permissions, loading, roleLoading, isLocked, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -161,6 +162,7 @@ const AdminLayout = () => {
           </div>
         </main>
       </div>
+      {isLocked && user && <SessionLockOverlay />}
     </div>
   );
 };
