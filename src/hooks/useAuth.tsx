@@ -3,10 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { AppRole } from "@/lib/permissions";
 
+type PermissionsMap = Record<string, boolean>;
+
 interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
   role: AppRole | null;
+  permissions: PermissionsMap;
   loading: boolean;
   roleLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -19,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isAdmin: false,
   role: null,
+  permissions: {},
   loading: true,
   roleLoading: false,
   signIn: async () => ({ error: null }),
@@ -29,6 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [permissions, setPermissions] = useState<PermissionsMap>({});
   const [loading, setLoading] = useState(true);
   const [roleLoading, setRoleLoading] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -38,6 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setIsAdmin(false);
     setRole(null);
+    setPermissions({});
   }, []);
 
   const resetTimeout = useCallback(() => {
@@ -75,11 +81,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Resolve role separately — does NOT block `loading`.
+  // Resolve role + permissions separately — does NOT block `loading`.
   useEffect(() => {
     if (!user) {
       setRole(null);
       setIsAdmin(false);
+      setPermissions({});
       setRoleLoading(false);
       return;
     }
@@ -87,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setRoleLoading(true);
     supabase
       .from("user_roles")
-      .select("role")
+      .select("role, permissions")
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -95,6 +102,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const r = (data?.role as AppRole) ?? null;
         setRole(r);
         setIsAdmin(r === "admin" || r === "manager" || r === "staff");
+        const raw = (data as { permissions?: unknown } | null)?.permissions;
+        setPermissions(
+          raw && typeof raw === "object" && !Array.isArray(raw)
+            ? (raw as PermissionsMap)
+            : {}
+        );
         setRoleLoading(false);
       });
     return () => {
@@ -109,7 +122,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, role, loading, roleLoading, signIn, signOut: doSignOut }}>
+    <AuthContext.Provider value={{ user, isAdmin, role, permissions, loading, roleLoading, signIn, signOut: doSignOut }}>
       {children}
     </AuthContext.Provider>
   );
