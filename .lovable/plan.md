@@ -1,55 +1,32 @@
 
 
-# Booking Form → Service-Driven Dynamic (Patch)
+# SQL Schema Export — BlueRiver Database
 
-## Schema gap
+## What you'll receive
 
-`bookings` lacks `custom_fields` (quote_requests has it). Need migration to add it so unknown dynamic fields persist — same pattern as quotes.
+A single downloadable `.sql` file at `/mnt/documents/bluerivers_schema.sql` containing the full current state of the `public` schema, organized in install order so it can be replayed against an empty database.
 
-```sql
-ALTER TABLE public.bookings
-  ADD COLUMN IF NOT EXISTS custom_fields jsonb NOT NULL DEFAULT '{}'::jsonb;
-```
+## File contents (in order)
 
-Existing typed columns on bookings (kept, used when field_key matches): `bedrooms`, `bathrooms`, `frequency`, `has_pets`, `entry_codes`, `square_footage`, `property_type`. Anything else from `service_fields` → `custom_fields`.
+1. **Header** — generated date, project ref, source.
+2. **Extensions** — `uuid-ossp` (used by `faqs.id`).
+3. **Custom types** — `app_role` enum (`admin`, `manager`, `staff`).
+4. **Sequences** — `invoice_number_seq` (used by invoice numbering).
+5. **Tables (24)** — full `CREATE TABLE` for every public table with exact column types, nullability, defaults, primary keys, and unique constraints:
+   - `availability_settings`, `blocked_dates`, `bookings`, `branding_settings`, `condition_settings`, `contact_submissions`, `faqs`, `gallery`, `homepage_images`, `invoices`, `notifications`, `page_content`, `permission_registry`, `quote_drafts`, `quote_notes`, `quote_requests`, `service_fields`, `service_pricing_rules`, `service_types`, `services`, `site_settings`, `social_links`, `testimonials`, `user_roles`.
+6. **Indexes (~30)** — all primary-key, unique, and secondary indexes including the partial unique index `idx_unique_confirmed_booking_slot` that enforces double-booking prevention.
+7. **Functions (6)** — `generate_invoice_number()`, `get_booked_slots(date)`, `check_recent_submission(text,text)`, `has_permission(uuid,text)`, `has_role(uuid,app_role)`, `update_updated_at_column()` — full bodies with `SECURITY DEFINER` and `search_path` settings preserved.
+8. **Triggers** — none currently exist (confirmed via `pg_trigger`); a comment noting this will be included.
+9. **RLS** — `ALTER TABLE … ENABLE ROW LEVEL SECURITY` for every table, followed by every policy reproduced verbatim (all ~60 policies, grouped per table).
+10. **Foreign keys** — none currently exist; included as a commented-out section noting the implied relationships from prior introspection (so the document is self-describing without falsely claiming FKs that aren't there).
 
-## Code changes — `src/pages/BookService.tsx` only
+## Disclaimers in the file
 
-Mirror the quote form's dynamic pattern. **No layout redesign** — just swap the hardcoded property-detail block for the same Service Type → service_fields engine.
+- Tables `auth.*`, `storage.*`, and other Supabase-managed schemas are **excluded** — only `public` schema is exported.
+- Storage bucket `site-images` (public) noted as a comment, not as SQL (buckets are managed via Supabase API, not DDL).
+- Secrets and edge functions are not part of database schema and are excluded.
 
-1. **Add state**: `service_type_id`, `dynValues: Record<string, any>`.
-2. **Fetch `service_types`** (`useQuery` `public-service-types`) — same query as quote form.
-3. **Resolve `matchedServiceType`** by id (fallback by name for prefilled `?service=` deep links from the homepage cards — preserves quote→booking & service card flows).
-4. **Fetch `service_fields`** for the matched id (same query key as quote form → cache-shared).
-5. **Replace the Property Details block** (the bedrooms/bathrooms/sq-ft/frequency/property-type grid in the form's left column, lines ~285-335 of `BookService.tsx`) with:
-   - The Service selector becomes the **first** field (move up before name/email block keeping current visual order: keep name/email/phone/address as-is; the Service selector is already in the form, just make it `service_type_id`-driven like quote form).
-   - After selection: render Property Type + Sq Ft (kept as common fields), then map `serviceFields` through the existing `DynamicField` component.
-6. **Extract `DynamicField`** — copy the component from `RequestQuote.tsx` into a new shared file `src/components/DynamicField.tsx` and import from both pages. Avoids duplication; same render logic for `number | select | toggle`.
-7. **Submit handler**: split `dynValues` into typed columns vs `custom_fields`. Typed-column allowlist for bookings:
-   ```ts
-   const BOOKING_TYPED = new Set(["bedrooms","bathrooms","frequency","has_pets","entry_codes","square_footage","property_type"]);
-   ```
-   Numeric coerce for `bedrooms`/`bathrooms`; boolean coerce for `has_pets`; string for the rest. Everything else → `custom_fields` JSON.
-8. **Validate required dynamic fields** the same way the quote form does (loop `serviceFields`, check `dynValues[field_key]`).
-9. **Persist `service_type_id`** on the bookings insert (column already exists).
+## Deliverable
 
-## Untouched (per critical rules)
-
-- Date/time picker, calendar, slot logic, double-booking RPC, rate-limit RPC, notify, addon block, price summary, consent, success state.
-- `quote_requests` flow, `createInvoiceFromBooking`, `pricingEngine`.
-- All RLS, no admin pages.
-- The hardcoded fallback `service` text column on bookings stays populated (for legacy display in admin lists).
-
-## Files Touched
-
-| File | Change |
-|---|---|
-| New migration | `ALTER TABLE bookings ADD COLUMN custom_fields jsonb` |
-| New `src/components/DynamicField.tsx` | Shared dynamic field renderer extracted from RequestQuote |
-| `src/pages/RequestQuote.tsx` | Import shared `DynamicField`, delete inline copy |
-| `src/pages/BookService.tsx` | Service-type-driven dropdown + `service_fields` query + replace hardcoded property-detail grid with dynamic block + split typed/custom on submit |
-
-## Result
-
-Booking form behaves like the quote form: pick **Commercial Cleaning** → only the configured fields (Half Bathrooms, Kitchens, Conference Rooms, Office Rooms…) appear. Pick **Residential** → bedrooms/bathrooms/etc. Same data shape feeds pricing engine & invoice generation.
+A single `<lov-artifact>` tag pointing to the generated SQL file, ready to download or paste into documentation.
 
