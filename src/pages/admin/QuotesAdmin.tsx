@@ -15,6 +15,7 @@ import { generateQuotePdf } from "@/lib/quotePdf";
 import { notifyAdmins } from "@/lib/notifications";
 import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 import DynamicQuoteSummary from "@/components/admin/DynamicQuoteSummary";
+import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -254,19 +255,78 @@ const QuotesAdmin = () => {
         .eq("setting_key", "auto_approve_bookings");
       const autoApprove = settingsRows?.[0]?.setting_value === "true";
 
+      // Resolve total price: prefer existing draft (subtotal+tax), else compute live
+      const draft = draftMap[selectedQuote.id];
+      let total: number | null = null;
+      if (draft) {
+        const items: LineItem[] = Array.isArray(draft.line_items) ? draft.line_items : [];
+        if (items.length > 0) {
+          const recomputed = recomputeFromLineItems(items, Number(draft.tax_rate) || 0);
+          total = recomputed.total;
+        } else {
+          total = (Number(draft.base_price) || 0) + (Number(draft.tax_rate) || 0);
+        }
+      } else {
+        try {
+          const computed = computeQuote(
+            selectedQuote,
+            pricingServiceTypes ?? [],
+            pricingRules ?? [],
+            conditionSettings ?? [],
+            Number(settings?.tax_rate ?? 0) || 0,
+            pricingFields ?? [],
+          );
+          total = computed.total;
+        } catch {
+          total = null;
+        }
+      }
+
+      // Snapshot quote-only typed columns into custom_fields so nothing is lost
+      const quoteOnlyTyped: Record<string, any> = {};
+      const carryKeys = ["kitchen_count", "living_rooms", "office_rooms", "full_bathrooms", "half_bathrooms", "has_cabinets", "floor_type"];
+      for (const k of carryKeys) {
+        const v = (selectedQuote as any)[k];
+        if (v !== null && v !== undefined && v !== "") quoteOnlyTyped[k] = v;
+      }
+      const mergedCustom = {
+        ...(selectedQuote.custom_fields && typeof selectedQuote.custom_fields === "object" ? selectedQuote.custom_fields : {}),
+        ...quoteOnlyTyped,
+      };
+
       const { data: insertedBooking, error: bookingError } = await supabase.from("bookings").insert({
+        // Contact
         name: selectedQuote.name,
         email: selectedQuote.email,
         phone: selectedQuote.phone,
         address: selectedQuote.address || "",
+        // Service
         service_type: selectedQuote.service_type,
         service_type_id: selectedQuote.service_type_id ?? null,
         booking_date: bookingDate,
         time_slot: timeSlot,
+        // Notes & consent
         notes: selectedQuote.description,
         consent_given: selectedQuote.consent_given,
         status: autoApprove ? "confirmed" : "pending",
+        // Property snapshot
+        property_type: selectedQuote.property_type ?? null,
+        square_footage: selectedQuote.square_footage ?? null,
+        floor_type: selectedQuote.floor_type ?? null,
+        condition_level: selectedQuote.condition_level ?? null,
+        is_empty_property: selectedQuote.is_empty_property ?? false,
+        has_pets: selectedQuote.has_pets ?? false,
+        pet_count: (selectedQuote as any).pet_count ?? null,
+        entry_codes: selectedQuote.entry_codes ?? null,
+        bedrooms: selectedQuote.bedrooms ?? null,
+        bathrooms: selectedQuote.bathrooms ?? null,
+        frequency: selectedQuote.frequency ?? null,
+        // Pricing snapshot
+        total_price: total,
+        // Add-ons + custom fields snapshot
         selected_addons: selectedQuote.selected_addons || [],
+        custom_fields: mergedCustom,
+        // Link back (kept nullable so booking survives quote deletion)
         quote_id: selectedQuote.id,
       } as any).select("id").single();
       if (bookingError) throw bookingError;
@@ -278,6 +338,17 @@ const QuotesAdmin = () => {
       if (quoteError) throw quoteError;
 
       await logActivity(selectedQuote.id, `Converted to booking on ${bookingDate} at ${timeSlot}`);
+
+      // Booking activity log: created from quote
+      const { data: { user } } = await supabase.auth.getUser();
+      await (supabase as any).from("booking_activity_logs").insert({
+        booking_id: insertedBooking?.id,
+        action: "created",
+        details: `Created from quote ${selectedQuote.id}`,
+        new_status: autoApprove ? "confirmed" : "pending",
+        actor_id: user?.id ?? null,
+      });
+
       await notifyAdmins("quote_converted", `Quote from ${selectedQuote.name} converted to booking`, insertedBooking?.id, "booking");
     },
     onSuccess: () => {
