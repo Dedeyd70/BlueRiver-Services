@@ -85,27 +85,7 @@ const BookingsAdmin = () => {
   });
   const archivedBookings = (bookings ?? []).filter((b) => b.status === "completed" || b.status === "cancelled");
 
-  const updateStatus = useMutation({
-    mutationFn: async ({
-      id,
-      status,
-      cancellation_reason,
-    }: {
-      id: string;
-      status: string;
-      cancellation_reason?: string;
-    }) => {
-      const updates: any = { status };
-      if (cancellation_reason !== undefined) updates.cancellation_reason = cancellation_reason;
-      const { error } = await supabase.from("bookings").update(updates).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
-      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
-      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
-    },
-  });
+  // (status updates are written directly within handlers below so we can also log activity)
 
   const handleConfirm = async (b: any) => {
     try {

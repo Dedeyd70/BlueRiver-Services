@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Mail, CheckCircle, ArrowRight, MessageSquare, Send } from "lucide-react";
+import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 
 // 1. Interface matches your Supabase screenshot exactly
 interface ContactSubmission {
@@ -44,6 +45,8 @@ const MessagesAdmin = () => {
       return (data as unknown as ContactSubmission[]) ?? [];
     },
   });
+
+  const { getRef } = useFocusHighlight(!isLoading && !!messages);
 
   const updateMessage = useMutation({
     mutationFn: async ({ id, status, admin_notes }: { id: string; status: string; admin_notes?: string }) => {
@@ -99,7 +102,7 @@ const MessagesAdmin = () => {
       ) : (
         <div className="space-y-4">
           {messages.map((m: ContactSubmission) => (
-            <div key={m.id} className="p-5 rounded-xl border border-border bg-card shadow-sm">
+            <div ref={getRef(m.id)} key={m.id} className="p-5 rounded-xl border border-border bg-card shadow-sm scroll-mt-24">
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="font-semibold text-lg">{m.name}</p>
