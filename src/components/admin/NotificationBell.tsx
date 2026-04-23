@@ -11,6 +11,7 @@ const referenceRoutes: Record<string, string> = {
   booking: "/admin/bookings",
   quote: "/admin/quotes",
   contact: "/admin/messages",
+  invoice: "/admin/invoices",
 };
 
 const NotificationBell = () => {
@@ -58,7 +59,8 @@ const NotificationBell = () => {
     const route = referenceRoutes[n.reference_type];
     if (route) {
       setOpen(false);
-      navigate(route);
+      const url = n.reference_id ? `${route}?focus=${n.reference_id}` : route;
+      navigate(url);
     }
   };
 
