@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
@@ -59,6 +59,39 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_activity_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          booking_id: string
+          created_at: string
+          details: string | null
+          id: string
+          new_status: string | null
+          previous_status: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          booking_id: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          new_status?: string | null
+          previous_status?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          booking_id?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          new_status?: string | null
+          previous_status?: string | null
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           address: string
@@ -66,16 +99,20 @@ export type Database = {
           bedrooms: number | null
           booking_date: string
           cancellation_reason: string | null
+          condition_level: string | null
           consent_given: boolean
           created_at: string
           custom_fields: Json
           email: string
           entry_codes: string | null
+          floor_type: string | null
           frequency: string | null
           has_pets: boolean | null
           id: string
+          is_empty_property: boolean | null
           name: string
           notes: string | null
+          pet_count: number | null
           phone: string | null
           preferred_contact: string | null
           property_type: string | null
@@ -95,16 +132,20 @@ export type Database = {
           bedrooms?: number | null
           booking_date: string
           cancellation_reason?: string | null
+          condition_level?: string | null
           consent_given?: boolean
           created_at?: string
           custom_fields?: Json
           email: string
           entry_codes?: string | null
+          floor_type?: string | null
           frequency?: string | null
           has_pets?: boolean | null
           id?: string
+          is_empty_property?: boolean | null
           name: string
           notes?: string | null
+          pet_count?: number | null
           phone?: string | null
           preferred_contact?: string | null
           property_type?: string | null
@@ -124,16 +165,20 @@ export type Database = {
           bedrooms?: number | null
           booking_date?: string
           cancellation_reason?: string | null
+          condition_level?: string | null
           consent_given?: boolean
           created_at?: string
           custom_fields?: Json
           email?: string
           entry_codes?: string | null
+          floor_type?: string | null
           frequency?: string | null
           has_pets?: boolean | null
           id?: string
+          is_empty_property?: boolean | null
           name?: string
           notes?: string | null
+          pet_count?: number | null
           phone?: string | null
           preferred_contact?: string | null
           property_type?: string | null
@@ -149,14 +194,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "bookings_quote_fk"
+            foreignKeyName: "bookings_quote_id_fkey"
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "bookings_service_type_fk"
+            foreignKeyName: "bookings_service_type_id_fkey"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -357,7 +402,9 @@ export type Database = {
           invoice_number: string | null
           issued_date: string
           notes: string | null
+          payment_date: string | null
           payment_method: string | null
+          payment_reference: string | null
           payment_status: string
           quote_id: string | null
           service_type_id: string | null
@@ -380,7 +427,9 @@ export type Database = {
           invoice_number?: string | null
           issued_date?: string
           notes?: string | null
+          payment_date?: string | null
           payment_method?: string | null
+          payment_reference?: string | null
           payment_status?: string
           quote_id?: string | null
           service_type_id?: string | null
@@ -403,7 +452,9 @@ export type Database = {
           invoice_number?: string | null
           issued_date?: string
           notes?: string | null
+          payment_date?: string | null
           payment_method?: string | null
+          payment_reference?: string | null
           payment_status?: string
           quote_id?: string | null
           service_type_id?: string | null
@@ -416,21 +467,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "invoices_booking_fk"
+            foreignKeyName: "invoices_booking_id_fkey"
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "invoices_quote_fk"
+            foreignKeyName: "invoices_quote_id_fkey"
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "invoices_service_type_fk"
+            foreignKeyName: "invoices_service_type_id_fkey"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -585,14 +636,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "quote_drafts_quote_fk"
+            foreignKeyName: "quote_drafts_quote_id_fkey"
             columns: ["quote_id"]
             isOneToOne: true
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "quote_drafts_service_type_fk"
+            foreignKeyName: "quote_drafts_service_type_id_fkey"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -624,7 +675,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "quote_notes_quote_fk"
+            foreignKeyName: "quote_notes_quote_id_fkey"
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quote_requests"
@@ -658,6 +709,7 @@ export type Database = {
           living_rooms: number | null
           name: string
           office_rooms: number | null
+          pet_count: number | null
           phone: string | null
           preferred_contact: string | null
           property_size: string | null
@@ -694,6 +746,7 @@ export type Database = {
           living_rooms?: number | null
           name: string
           office_rooms?: number | null
+          pet_count?: number | null
           phone?: string | null
           preferred_contact?: string | null
           property_size?: string | null
@@ -730,6 +783,7 @@ export type Database = {
           living_rooms?: number | null
           name?: string
           office_rooms?: number | null
+          pet_count?: number | null
           phone?: string | null
           preferred_contact?: string | null
           property_size?: string | null
@@ -743,7 +797,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "quote_requests_service_type_fk"
+            foreignKeyName: "quote_requests_service_type_id_fkey"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -790,7 +844,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "service_fields_service_type_fk"
+            foreignKeyName: "service_fields_service_type_id_fkey"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -825,7 +879,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "service_pricing_rules_service_type_fk"
+            foreignKeyName: "service_pricing_rules_service_type_id_fkey"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
