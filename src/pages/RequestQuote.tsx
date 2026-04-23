@@ -39,8 +39,10 @@ const RequestQuote = () => {
     service_type_id: "",
     description: "", preferred_contact: "email",
     property_type: "", square_footage: "",
-    has_pets: false, entry_codes: "",
+    has_pets: false, pet_count: "", entry_codes: "",
     condition_level: "",
+    floor_type: "",
+    is_empty_property: false,
   });
   // Dynamic field values keyed by field_key
   const [dynValues, setDynValues] = useState<Record<string, any>>({});
@@ -174,6 +176,7 @@ const RequestQuote = () => {
     }
 
     try {
+      const petCountNum = form.has_pets && form.pet_count ? parseInt(form.pet_count, 10) : null;
       const { data: insertedQuote, error } = await supabase.from("quote_requests").insert({
         name: form.name.trim(),
         email: form.email.trim(),
@@ -187,8 +190,11 @@ const RequestQuote = () => {
         consent_given: consent,
         property_type: form.property_type || null,
         square_footage: form.square_footage || null,
+        floor_type: form.floor_type || null,
         condition_level: form.condition_level || null,
+        is_empty_property: form.is_empty_property,
         has_pets: form.has_pets,
+        pet_count: Number.isFinite(petCountNum as number) ? petCountNum : null,
         entry_codes: form.entry_codes.trim() || null,
         selected_addons: selectedAddons.map((title) => ({ title })),
         custom_fields: customFields,
@@ -301,23 +307,53 @@ const RequestQuote = () => {
 
                 {form.service && (
                   <>
-                    {/* Common: Property Type & Sq Ft */}
+                    {/* Property & Conditions — standardized industry fields */}
                     <div className="border border-border rounded-lg p-4 bg-card space-y-4">
-                      <h3 className="text-sm font-semibold text-foreground">Property</h3>
+                      <h3 className="text-sm font-semibold text-foreground">Property & Conditions</h3>
                       <div className="grid sm:grid-cols-2 gap-5">
                         <div>
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
                           <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                             <option value="">Select type</option>
                             <option value="House">House</option>
-                            <option value="Apartment/Condo">Apartment / Condo</option>
+                            <option value="Apartment">Apartment</option>
                             <option value="Office">Office</option>
-                            <option value="Other">Other</option>
+                            <option value="Townhome">Townhome</option>
                           </select>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
-                          <Input placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
+                          <Input type="number" inputMode="numeric" placeholder="e.g. 1500" value={form.square_footage} onChange={update("square_footage")} maxLength={10} />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Floor Type</label>
+                          <select value={form.floor_type} onChange={update("floor_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                            <option value="">Select floor</option>
+                            <option value="Hardwood">Hardwood</option>
+                            <option value="Carpet">Carpet</option>
+                            <option value="Tile">Tile</option>
+                            <option value="Mixed">Mixed</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
+                          <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                            <option value="">Select condition</option>
+                            <option value="Standard">Standard</option>
+                            <option value="Heavy">Heavy</option>
+                            <option value="Post-Construction">Post-Construction</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Occupancy</label>
+                          <select
+                            value={form.is_empty_property ? "empty" : "occupied"}
+                            onChange={(e) => setForm((f) => ({ ...f, is_empty_property: e.target.value === "empty" }))}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <option value="occupied">Occupied</option>
+                            <option value="empty">Empty (Move-out)</option>
+                          </select>
                         </div>
                       </div>
                     </div>
@@ -339,26 +375,22 @@ const RequestQuote = () => {
                       </div>
                     )}
 
-                    {/* Common: Condition + Pets + Entry codes */}
+                    {/* Pets + Entry instructions */}
                     <div className="border border-border rounded-lg p-4 bg-card space-y-4">
                       <h3 className="text-sm font-semibold text-foreground">Additional Info</h3>
-                      <div>
-                        <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
-                        <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                          <option value="">Select condition</option>
-                          <option value="light">Light</option>
-                          <option value="standard">Standard</option>
-                          <option value="heavy">Heavy</option>
-                          <option value="post-renovation">Post-Renovation</option>
-                        </select>
-                      </div>
                       <div className="flex items-center gap-2">
-                        <Checkbox id="quote-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v }))} />
+                        <Checkbox id="quote-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v, pet_count: v ? f.pet_count : "" }))} />
                         <label htmlFor="quote-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
                       </div>
+                      {form.has_pets && (
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-1.5 block">Number of Pets</label>
+                          <Input type="number" inputMode="numeric" min={1} placeholder="e.g. 2" value={form.pet_count} onChange={update("pet_count")} className="max-w-[140px]" />
+                        </div>
+                      )}
                       <div>
-                        <label className="text-sm font-medium text-foreground mb-1.5 block">Entry / Gate Codes</label>
-                        <Input placeholder="Gate code, lockbox, etc." value={form.entry_codes} onChange={update("entry_codes")} maxLength={100} />
+                        <label className="text-sm font-medium text-foreground mb-1.5 block">Entry Codes / Key Location</label>
+                        <Textarea placeholder="Gate code, lockbox combo, where to find the key, etc." rows={2} value={form.entry_codes} onChange={update("entry_codes")} maxLength={300} />
                       </div>
                     </div>
                   </>
