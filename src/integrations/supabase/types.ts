@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -149,14 +149,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "bookings_quote_id_fkey"
+            foreignKeyName: "bookings_quote_fk"
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "bookings_service_type_id_fkey"
+            foreignKeyName: "bookings_service_type_fk"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -416,21 +416,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "invoices_booking_id_fkey"
+            foreignKeyName: "invoices_booking_fk"
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "invoices_quote_id_fkey"
+            foreignKeyName: "invoices_quote_fk"
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "invoices_service_type_id_fkey"
+            foreignKeyName: "invoices_service_type_fk"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -585,14 +585,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "quote_drafts_quote_id_fkey"
+            foreignKeyName: "quote_drafts_quote_fk"
             columns: ["quote_id"]
             isOneToOne: true
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "quote_drafts_service_type_id_fkey"
+            foreignKeyName: "quote_drafts_service_type_fk"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -624,7 +624,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "quote_notes_quote_id_fkey"
+            foreignKeyName: "quote_notes_quote_fk"
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quote_requests"
@@ -743,7 +743,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "quote_requests_service_type_id_fkey"
+            foreignKeyName: "quote_requests_service_type_fk"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -790,7 +790,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "service_fields_service_type_id_fkey"
+            foreignKeyName: "service_fields_service_type_fk"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
@@ -825,7 +825,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "service_pricing_rules_service_type_id_fkey"
+            foreignKeyName: "service_pricing_rules_service_type_fk"
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
