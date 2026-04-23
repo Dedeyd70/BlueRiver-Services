@@ -83,7 +83,7 @@ const QuotesAdmin = () => {
     },
   });
 
-  const { focusId, getRef } = useFocusHighlight(!isLoading && !!quotes);
+  const { getRef } = useFocusHighlight(!isLoading && !!quotes);
 
   const { data: branding } = useQuery({
     queryKey: ["branding-for-pdf"],
@@ -474,7 +474,7 @@ const QuotesAdmin = () => {
                   const canConvert = q.status === "in_progress" && notes.length > 0;
 
                   return (
-                    <div key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                    <div ref={getRef(q.id)} key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <h3 className="font-medium text-foreground">{q.name}</h3>
@@ -690,7 +690,7 @@ const QuotesAdmin = () => {
                   const isExpanded = expandedNotes === q.id;
 
                   return (
-                    <div key={q.id} className="bg-card border border-border rounded-xl p-6 space-y-4 relative">
+                    <div ref={getRef(q.id)} key={q.id} className="bg-card border border-border rounded-xl p-6 space-y-4 relative scroll-mt-24">
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="font-medium text-xl text-foreground">{q.name}</h3>
