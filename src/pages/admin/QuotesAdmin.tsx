@@ -83,6 +83,8 @@ const QuotesAdmin = () => {
     },
   });
 
+  const { focusId, getRef } = useFocusHighlight(!isLoading && !!quotes);
+
   const { data: branding } = useQuery({
     queryKey: ["branding-for-pdf"],
     queryFn: async () => {
