@@ -11,12 +11,37 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
+import { useFocusHighlight } from "@/hooks/useFocusHighlight";
+import { ChevronDown, ChevronUp, Clock } from "lucide-react";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
   confirmed: "bg-green-100 text-green-800",
   completed: "bg-primary/10 text-primary",
   cancelled: "bg-destructive/10 text-destructive",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  created: "Created",
+  confirmed: "Confirmed",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+const logBookingActivity = async (
+  bookingId: string,
+  action: string,
+  options: { details?: string; previous_status?: string; new_status?: string } = {}
+) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  await (supabase as any).from("booking_activity_logs").insert({
+    booking_id: bookingId,
+    action,
+    details: options.details ?? null,
+    previous_status: options.previous_status ?? null,
+    new_status: options.new_status ?? null,
+    actor_id: user?.id ?? null,
+  });
 };
 
 const BookingsAdmin = () => {
@@ -27,6 +52,7 @@ const BookingsAdmin = () => {
   const statusFilter = searchParams.get("status");
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
@@ -36,6 +62,20 @@ const BookingsAdmin = () => {
       return data;
     },
   });
+
+  const { data: activityLogs } = useQuery({
+    queryKey: ["admin-booking-activity"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("booking_activity_logs")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { getRef } = useFocusHighlight(!isLoading && !!bookings);
 
   const activeBookings = (bookings ?? []).filter((b) => {
     if (statusFilter === "pending") {
@@ -63,12 +103,22 @@ const BookingsAdmin = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
     },
   });
 
-  const handleConfirm = (b: any) => {
-    updateStatus.mutate({ id: b.id, status: "confirmed" });
-    toast({ title: "Booking confirmed." });
+  const handleConfirm = async (b: any) => {
+    try {
+      const { error } = await supabase.from("bookings").update({ status: "confirmed" }).eq("id", b.id);
+      if (error) throw error;
+      await logBookingActivity(b.id, "confirmed", { previous_status: b.status, new_status: "confirmed" });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      toast({ title: "Booking confirmed." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   };
 
   const handleCompleted = async (b: any) => {
@@ -82,6 +132,13 @@ const BookingsAdmin = () => {
 
       // Auto-create invoice
       const invoice = await createInvoiceFromBooking(b, user?.id);
+
+      await logBookingActivity(b.id, "completed", {
+        previous_status: b.status,
+        new_status: "completed",
+        details: invoice?.invoice_number ? `Invoice ${invoice.invoice_number} generated` : undefined,
+      });
+
       await notifyAdmins(
         "booking_completed",
         `Booking for ${b.name} completed. Invoice ${invoice?.invoice_number ?? ""} generated.`,
@@ -92,18 +149,34 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
       toast({ title: `Marked completed. Invoice ${invoice?.invoice_number ?? ""} created.` });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
-  const handleCancelConfirm = () => {
+  const handleCancelConfirm = async () => {
     if (!cancelTarget) return;
-    updateStatus.mutate({ id: cancelTarget.id, status: "cancelled", cancellation_reason: cancelReason || undefined });
-    toast({ title: `Booking cancelled. ${cancelReason ? `Reason: ${cancelReason}` : ""}` });
-    setCancelTarget(null);
-    setCancelReason("");
+    try {
+      const updates: any = { status: "cancelled" };
+      if (cancelReason) updates.cancellation_reason = cancelReason;
+      const { error } = await supabase.from("bookings").update(updates).eq("id", cancelTarget.id);
+      if (error) throw error;
+      await logBookingActivity(cancelTarget.id, "cancelled", {
+        previous_status: cancelTarget.status,
+        new_status: "cancelled",
+        details: cancelReason || undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      toast({ title: `Booking cancelled. ${cancelReason ? `Reason: ${cancelReason}` : ""}` });
+      setCancelTarget(null);
+      setCancelReason("");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   };
 
   const parseAddons = (addons: any): { title: string; price?: number }[] => {
@@ -111,14 +184,19 @@ const BookingsAdmin = () => {
     return addons;
   };
 
+  const getActivityFor = (bookingId: string) =>
+    (activityLogs ?? []).filter((l) => l.booking_id === bookingId);
+
   const renderBookingCard = (b: any) => {
     const addons = parseAddons((b as any).selected_addons);
     const totalPrice = (b as any).total_price;
     const isCancelled = b.status === "cancelled";
     const isCompleted = b.status === "completed";
+    const activity = getActivityFor(b.id);
+    const isActivityOpen = expandedActivity === b.id;
 
     return (
-      <div key={b.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+      <div ref={getRef(b.id)} key={b.id} className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 className="font-medium text-foreground">{b.name}</h3>
@@ -162,6 +240,20 @@ const BookingsAdmin = () => {
             {b.square_footage ? ` · ${b.square_footage} sq ft` : ""}
             {b.bedrooms ? ` · ${b.bedrooms} bed` : ""}
             {b.bathrooms ? ` / ${b.bathrooms} bath` : ""}
+            {(b as any).floor_type ? ` · ${(b as any).floor_type}` : ""}
+          </p>
+        )}
+
+        {((b as any).condition_level || (b as any).is_empty_property) && (
+          <p className="text-sm text-muted-foreground">
+            {(b as any).condition_level && (
+              <>
+                <span className="text-foreground font-medium">Condition:</span> {(b as any).condition_level}
+              </>
+            )}
+            {(b as any).is_empty_property && (
+              <span className="ml-2 inline-block px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium">Empty / Move-out</span>
+            )}
           </p>
         )}
 
@@ -174,6 +266,7 @@ const BookingsAdmin = () => {
         {b.has_pets && (
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Pets:</span> Yes
+            {(b as any).pet_count ? ` (${(b as any).pet_count})` : ""}
           </p>
         )}
 
@@ -223,6 +316,39 @@ const BookingsAdmin = () => {
             </p>
           </div>
         )}
+
+        {/* Activity Log */}
+        <div className="border-t border-border pt-3">
+          <button
+            onClick={() => setExpandedActivity(isActivityOpen ? null : b.id)}
+            className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
+          >
+            <Clock className="w-3.5 h-3.5" /> Activity ({activity.length})
+            {isActivityOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          {isActivityOpen && (
+            <div className="mt-3 space-y-2">
+              {activity.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No activity recorded yet.</p>
+              )}
+              {activity.map((entry) => (
+                <div key={entry.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">
+                      {ACTION_LABELS[entry.action] ?? entry.action}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(entry.created_at), "MMM d, yyyy 'at' h:mm a")}
+                    </span>
+                  </div>
+                  {entry.details && (
+                    <p className="text-xs text-muted-foreground mt-1">{entry.details}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {!isCompleted && (
           <div className="pt-3 border-t border-border/50">
