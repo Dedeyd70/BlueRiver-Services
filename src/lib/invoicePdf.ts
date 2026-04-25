@@ -1,0 +1,216 @@
+import jsPDF from "jspdf";
+import { format } from "date-fns";
+
+interface BrandingMap { [key: string]: string }
+interface SettingsMap { [key: string]: string }
+
+/**
+ * Branded invoice PDF. Reads only from the persisted `invoices` row —
+ * never recalculates pricing. Mirrors `quotePdf.ts` layout/spacing.
+ *
+ * Adds a translucent "PAID" watermark when payment_status === "paid".
+ */
+export const generateInvoicePdf = (
+  inv: any,
+  branding: BrandingMap,
+  settings: SettingsMap
+) => {
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  let y = 20;
+
+  // Header — same as quote PDF
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(branding.business_name || "BlueRiver Services LLC", margin, y);
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100);
+  const tagline = settings.footer_tagline || "Professional cleaning services";
+  doc.text(tagline, margin, y);
+  y += 5;
+  const contactLine = [settings.phone, settings.email].filter(Boolean).join(" · ");
+  if (contactLine) {
+    doc.text(contactLine, margin, y);
+    y += 6;
+  }
+  doc.setTextColor(0);
+
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageW - margin, y);
+  y += 10;
+
+  // Invoice header
+  const invoiceNum = inv.invoice_number || `BR-${inv.id?.slice(0, 8).toUpperCase()}`;
+  const issued = inv.issued_date
+    ? format(new Date(inv.issued_date), "MMM d, yyyy")
+    : format(new Date(), "MMM d, yyyy");
+  const due = inv.due_date ? format(new Date(inv.due_date), "MMM d, yyyy") : "—";
+
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text(`INVOICE  #${invoiceNum}`, margin, y);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Issued: ${issued}`, pageW - margin, y - 4, { align: "right" });
+  doc.text(`Due: ${due}`, pageW - margin, y + 2, { align: "right" });
+  y += 12;
+
+  // Bill to / Service location
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("Bill to:", margin, y);
+  doc.text("Service location:", pageW / 2, y);
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.text(inv.customer_name || "—", margin, y);
+  doc.text(inv.address || "—", pageW / 2, y);
+  y += 5;
+  doc.text(inv.customer_email || "", margin, y);
+  y += 10;
+
+  // Itemized table
+  const services = Array.isArray(inv.services) ? inv.services : [];
+  doc.setFont("helvetica", "bold");
+  doc.text("Itemized Breakdown", margin, y);
+  y += 6;
+
+  const colItem = margin;
+  const colQty = pageW - margin - 80;
+  const colUnit = pageW - margin - 45;
+  const colTotal = pageW - margin;
+
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text("Item", colItem, y);
+  doc.text("Qty", colQty, y, { align: "right" });
+  doc.text("Unit", colUnit, y, { align: "right" });
+  doc.text("Total", colTotal, y, { align: "right" });
+  y += 2;
+  doc.setDrawColor(220);
+  doc.line(margin, y, pageW - margin, y);
+  y += 4;
+  doc.setTextColor(0);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+
+  services.forEach((s: any) => {
+    const qty = Number(s.quantity) || 1;
+    const unit = Number(s.unit_price) != null && !isNaN(Number(s.unit_price))
+      ? Number(s.unit_price)
+      : Number(s.price) || 0;
+    const total = Number(s.price) || qty * unit;
+    const name = String(s.title || "Item");
+    const nameLines = doc.splitTextToSize(name, colQty - colItem - 4);
+    doc.text(nameLines[0], colItem, y);
+    doc.text(String(qty), colQty, y, { align: "right" });
+    doc.text(`$${unit.toFixed(2)}`, colUnit, y, { align: "right" });
+    doc.text(`$${total.toFixed(2)}`, colTotal, y, { align: "right" });
+    y += 5;
+    for (let i = 1; i < nameLines.length; i++) {
+      doc.text(nameLines[i], colItem, y);
+      y += 5;
+    }
+  });
+
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageW - margin, y);
+  y += 5;
+
+  // Totals — read directly from persisted row, never recalc
+  const subtotal = Number(inv.subtotal) || 0;
+  const taxRate = Number(inv.tax_rate) || 0;
+  const taxAmount = Number(inv.tax_amount) || 0;
+  const totalAmount = Number(inv.total_amount) || 0;
+  const amountPaid = Number(inv.amount_paid) || 0;
+  const balance = +(totalAmount - amountPaid).toFixed(2);
+
+  doc.text("Subtotal", margin + 2, y);
+  doc.text(`$${subtotal.toFixed(2)}`, colTotal, y, { align: "right" });
+  y += 5;
+
+  if (taxRate > 0 || taxAmount > 0) {
+    doc.text(`Tax (${taxRate}%)`, margin + 2, y);
+    doc.text(`$${taxAmount.toFixed(2)}`, colTotal, y, { align: "right" });
+    y += 5;
+  }
+
+  doc.line(margin, y, pageW - margin, y);
+  y += 5;
+  doc.setFont("helvetica", "bold");
+  doc.text("Total", margin + 2, y);
+  doc.text(`$${totalAmount.toFixed(2)}`, colTotal, y, { align: "right" });
+  y += 6;
+  doc.setFont("helvetica", "normal");
+  doc.text("Paid", margin + 2, y);
+  doc.text(`$${amountPaid.toFixed(2)}`, colTotal, y, { align: "right" });
+  y += 5;
+  doc.setFont("helvetica", "bold");
+  doc.text("Balance Due", margin + 2, y);
+  doc.text(`$${balance.toFixed(2)}`, colTotal, y, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  y += 10;
+
+  // Payment details (when any payment recorded)
+  if (inv.payment_status && inv.payment_status !== "unpaid") {
+    doc.setFont("helvetica", "bold");
+    doc.text("Payment Details", margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    if (inv.payment_method) {
+      doc.text(`Method: ${inv.payment_method}`, margin + 2, y);
+      y += 5;
+    }
+    if (inv.payment_date) {
+      doc.text(`Date Received: ${format(new Date(inv.payment_date), "MMM d, yyyy")}`, margin + 2, y);
+      y += 5;
+    }
+    if (inv.payment_reference) {
+      doc.text(`Reference #: ${inv.payment_reference}`, margin + 2, y);
+      y += 5;
+    }
+    y += 5;
+  }
+
+  // Notes
+  if (inv.notes) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Notes", margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    const lines = doc.splitTextToSize(String(inv.notes), pageW - margin * 2);
+    lines.forEach((line: string) => {
+      doc.text(line, margin, y);
+      y += 5;
+    });
+    y += 5;
+  }
+
+  // Footer thank-you (mirrors quote PDF closing)
+  doc.setTextColor(0);
+  doc.setFont("helvetica", "bold");
+  doc.text("Thank you for choosing BlueRiver Services.", margin, Math.min(y + 4, pageH - 20));
+
+  // PAID watermark — applied LAST so it overlays content with low opacity
+  if (inv.payment_status === "paid") {
+    try {
+      doc.saveGraphicsState();
+      const GState = (doc as any).GState;
+      if (GState) {
+        doc.setGState(new GState({ opacity: 0.12 }));
+      }
+      doc.setTextColor(40, 130, 60);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(110);
+      doc.text("PAID", pageW / 2, pageH / 2, { align: "center", angle: 30 });
+      doc.restoreGraphicsState();
+    } catch {
+      // GState unsupported — skip watermark gracefully
+    }
+  }
+
+  doc.save(`invoice-${invoiceNum}.pdf`);
+};
