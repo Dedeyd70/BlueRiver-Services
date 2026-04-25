@@ -7,6 +7,16 @@ import { supabase } from "@/integrations/supabase/client";
  * - Applies tax rate from site_settings.tax_rate (or quote draft tax_rate when applicable).
  */
 export const createInvoiceFromBooking = async (booking: any, createdBy?: string | null) => {
+  // Idempotency: 1 booking → 1 invoice. Return existing if present.
+  if (booking?.id) {
+    const { data: existingInvoice } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("booking_id", booking.id)
+      .maybeSingle();
+    if (existingInvoice) return existingInvoice;
+  }
+
   // Read tax rate (site default)
   const { data: settings } = await supabase
     .from("site_settings")

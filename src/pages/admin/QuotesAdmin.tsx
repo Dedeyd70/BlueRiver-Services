@@ -251,6 +251,16 @@ const QuotesAdmin = () => {
     mutationFn: async () => {
       if (!selectedQuote || !bookingDate || !timeSlot) throw new Error("Please select date and time");
 
+      // Idempotency: 1 quote → 1 booking. Block duplicate creation.
+      const { data: existingBooking } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("quote_id", selectedQuote.id)
+        .maybeSingle();
+      if (existingBooking) {
+        throw new Error("A booking already exists for this quote.");
+      }
+
       const { data: settingsRows } = await supabase
         .from("site_settings")
         .select("setting_key, setting_value")
