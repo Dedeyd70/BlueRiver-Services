@@ -7,15 +7,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { FileText, Plus, DollarSign, Download } from "lucide-react";
+import { FileText, Plus, DollarSign, Download, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import jsPDF from "jspdf";
+import HasPermission from "@/components/HasPermission";
+import { useFocusHighlight } from "@/hooks/useFocusHighlight";
+import { generateInvoicePdf } from "@/lib/invoicePdf";
 
 const statusColors: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-800",
   partial: "bg-blue-100 text-blue-800",
   paid: "bg-green-100 text-green-800",
 };
+
+const PAYMENT_METHODS = ["Cash", "Check", "Bank Transfer", "Square", "Zelle", "Other"] as const;
 
 interface InvoiceForm {
   service_type_id: string;
@@ -43,51 +47,22 @@ const emptyForm: InvoiceForm = {
   booking_id: null,
 };
 
-const generateInvoicePDF = (inv: any) => {
-  const doc = new jsPDF();
-  doc.setFontSize(18);
-  doc.text("INVOICE", 20, 25);
-  doc.setFontSize(11);
-  if (inv.invoice_number) doc.text(`Invoice #: ${inv.invoice_number}`, 20, 33);
-  doc.text(`Customer: ${inv.customer_name}`, 20, 44);
-  doc.text(`Email: ${inv.customer_email}`, 20, 52);
-  doc.text(`Issued: ${format(new Date(inv.issued_date), "MMM d, yyyy")}`, 20, 60);
-  doc.text(`Due: ${inv.due_date ? format(new Date(inv.due_date), "MMM d, yyyy") : "N/A"}`, 20, 68);
-
-  const services = Array.isArray(inv.services) ? inv.services : [];
-  let y = 82;
-  if (services.length) {
-    doc.text("Services:", 20, y);
-    services.forEach((s: any) => {
-      y += 8;
-      doc.text(`• ${s.title || "Item"} — $${Number(s.price || 0).toFixed(2)}`, 24, y);
-    });
-    y += 6;
-  }
-
-  doc.text(`Subtotal: $${Number(inv.subtotal || 0).toFixed(2)}`, 20, y); y += 8;
-  doc.text(`Tax (${Number(inv.tax_rate || 0).toFixed(2)}%): $${Number(inv.tax_amount || 0).toFixed(2)}`, 20, y); y += 8;
-  doc.setFontSize(13);
-  doc.text(`Total: $${Number(inv.total_amount).toFixed(2)}`, 20, y); y += 8;
-  doc.setFontSize(11);
-  doc.text(`Paid: $${Number(inv.amount_paid).toFixed(2)}`, 20, y); y += 8;
-  doc.text(`Status: ${inv.payment_status}`, 20, y); y += 8;
-  if (inv.payment_method) { doc.text(`Method: ${inv.payment_method}`, 20, y); y += 8; }
-
-  if (inv.notes) {
-    doc.text(`Notes: ${inv.notes}`, 20, doc.internal.pageSize.height - 30);
-  }
-
-  doc.save(`invoice-${inv.invoice_number || inv.customer_name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
-};
+interface PaymentTarget {
+  id: string;
+  remaining: number;
+  mode: "full" | "partial";
+}
 
 const InvoicesAdmin = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [paymentOpen, setPaymentOpen] = useState<string | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentTarget, setPaymentTarget] = useState<PaymentTarget | null>(null);
+  const [payMethod, setPayMethod] = useState<string>("Cash");
+  const [payDate, setPayDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [payRef, setPayRef] = useState<string>("");
+  const [payAmount, setPayAmount] = useState<string>("");
   const [form, setForm] = useState<InvoiceForm>({ ...emptyForm });
 
   const { data: invoices, isLoading } = useQuery({
@@ -102,6 +77,8 @@ const InvoicesAdmin = () => {
     },
   });
 
+  const { getRef } = useFocusHighlight(!isLoading && !!invoices);
+
   const { data: serviceTypes } = useQuery({
     queryKey: ["service-types-for-invoice"],
     queryFn: async () => {
@@ -111,6 +88,27 @@ const InvoicesAdmin = () => {
         .order("name");
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Branding + settings for PDF (mirrors QuotesAdmin)
+  const { data: branding } = useQuery({
+    queryKey: ["branding-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("branding_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+
+  const { data: pdfSettings } = useQuery({
+    queryKey: ["site-settings-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
     },
   });
 
@@ -145,46 +143,79 @@ const InvoicesAdmin = () => {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const recordPayment = useMutation({
-    mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
-      const invoice = invoices?.find((i) => i.id === id);
-      if (!invoice) throw new Error("Invoice not found");
-      const newPaid = Number(invoice.amount_paid) + amount;
-      const newStatus = newPaid >= Number(invoice.total_amount) ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+  // Single source of truth for ALL payment recording (full or partial).
+  const applyPayment = useMutation({
+    mutationFn: async (args: { id: string; amount: number; method: string; date: string; reference: string }) => {
+      const inv = invoices?.find((i) => i.id === args.id);
+      if (!inv) throw new Error("Invoice not found");
+      if (!args.method) throw new Error("Payment method is required");
+      if (!args.amount || args.amount <= 0) throw new Error("Amount must be greater than zero");
+
+      const newPaid = +(Number(inv.amount_paid) + args.amount).toFixed(2);
+      const total = Number(inv.total_amount);
+      const newStatus = newPaid >= total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+
       const { error } = await supabase
         .from("invoices")
-        .update({ amount_paid: newPaid, payment_status: newStatus })
-        .eq("id", id);
+        .update({
+          amount_paid: newPaid,
+          payment_status: newStatus,
+          payment_method: args.method,
+          payment_date: args.date,
+          payment_reference: args.reference || null,
+        })
+        .eq("id", args.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
-      setPaymentOpen(null);
-      setPaymentAmount("");
+      closePaymentDialog();
       toast({ title: "Payment recorded" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const markPaid = useMutation({
-    mutationFn: async (id: string) => {
-      const invoice = invoices?.find((i) => i.id === id);
-      if (!invoice) return;
-      const { error } = await supabase
-        .from("invoices")
-        .update({ amount_paid: invoice.total_amount, payment_status: "paid" })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
-      toast({ title: "Invoice marked as paid" });
-    },
-  });
+  const openPaymentDialog = (inv: any, mode: "full" | "partial") => {
+    const remaining = +(Number(inv.total_amount) - Number(inv.amount_paid)).toFixed(2);
+    setPaymentTarget({ id: inv.id, remaining, mode });
+    setPayMethod("Cash");
+    setPayDate(format(new Date(), "yyyy-MM-dd"));
+    setPayRef("");
+    setPayAmount(mode === "partial" ? String(remaining) : "");
+  };
+
+  const closePaymentDialog = () => {
+    setPaymentTarget(null);
+    setPayMethod("Cash");
+    setPayDate(format(new Date(), "yyyy-MM-dd"));
+    setPayRef("");
+    setPayAmount("");
+  };
+
+  const submitPayment = () => {
+    if (!paymentTarget) return;
+    const amount =
+      paymentTarget.mode === "full" ? paymentTarget.remaining : Number(payAmount);
+    applyPayment.mutate({
+      id: paymentTarget.id,
+      amount,
+      method: payMethod,
+      date: payDate,
+      reference: payRef.trim(),
+    });
+  };
 
   const handleOpenChange = (o: boolean) => {
     setOpen(o);
     if (!o) setForm({ ...emptyForm });
+  };
+
+  const handleDownloadPdf = (inv: any) => {
+    if (!branding || !pdfSettings) {
+      toast({ title: "Loading branding…", description: "Please try again in a moment." });
+      return;
+    }
+    generateInvoicePdf(inv, branding, pdfSettings);
   };
 
   return (
@@ -194,75 +225,86 @@ const InvoicesAdmin = () => {
           <FileText className="w-5 h-5 text-primary" />
           <h1 className="text-2xl font-display font-bold text-foreground">Invoices</h1>
         </div>
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-          <DialogTrigger asChild>
-            <Button variant="outline" onClick={() => setForm({ ...emptyForm })}>
-              <Plus className="w-4 h-4 mr-2" /> Manual Invoice
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create Manual Invoice</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <p className="text-xs text-muted-foreground">
-                Invoices are normally generated automatically when a booking is marked Completed. Use this only for manual adjustments.
-              </p>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Service Type *</label>
-                <select
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={form.service_type_id}
-                  onChange={(e) => setForm({ ...form, service_type_id: e.target.value })}
-                >
-                  <option value="">Select a service…</option>
-                  {serviceTypes?.map((st) => (
-                    <option key={st.id} value={st.id}>{st.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Customer Name *</label>
-                  <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Customer Email *</label>
-                  <Input value={form.customer_email} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Subtotal ($)</label>
-                  <Input type="number" min={0} step={0.01} value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Tax (%)</label>
-                  <Input type="number" min={0} step={0.01} value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Due Date</label>
-                  <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Payment Method</label>
-                <Input value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })} placeholder="Cash, Zelle, etc." />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Notes</label>
-                <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
-              </div>
-              <Button
-                className="w-full"
-                onClick={() => createInvoice.mutate()}
-                disabled={!form.service_type_id || !form.customer_name || !form.customer_email || createInvoice.isPending}
-              >
-                Create Invoice
+        <HasPermission permission="can_manage_bookings">
+          <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogTrigger asChild>
+              <Button variant="outline" onClick={() => setForm({ ...emptyForm })}>
+                <Plus className="w-4 h-4 mr-2" /> Manual Invoice
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create Manual Invoice</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <p className="text-xs text-muted-foreground">
+                  Invoices are normally generated automatically when a booking is marked Completed. Use this only for manual adjustments.
+                </p>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Service Type *</label>
+                  <select
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={form.service_type_id}
+                    onChange={(e) => setForm({ ...form, service_type_id: e.target.value })}
+                  >
+                    <option value="">Select a service…</option>
+                    {serviceTypes?.map((st) => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Customer Name *</label>
+                    <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Customer Email *</label>
+                    <Input value={form.customer_email} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Subtotal ($)</label>
+                    <Input type="number" min={0} step={0.01} value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Tax (%)</label>
+                    <Input type="number" min={0} step={0.01} value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: Number(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Due Date</label>
+                    <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Payment Method</label>
+                  <select
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    value={form.payment_method}
+                    onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
+                  >
+                    <option value="">— None —</option>
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Notes</label>
+                  <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => createInvoice.mutate()}
+                  disabled={!form.service_type_id || !form.customer_name || !form.customer_email || createInvoice.isPending}
+                >
+                  Create Invoice
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </HasPermission>
       </div>
       <p className="text-sm text-muted-foreground mb-6">Invoices are automatically generated when a booking is marked as Completed.</p>
 
@@ -273,7 +315,11 @@ const InvoicesAdmin = () => {
       ) : (
         <div className="space-y-3">
           {invoices.map((inv) => (
-            <div key={inv.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <div
+              key={inv.id}
+              ref={getRef(inv.id)}
+              className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24"
+            >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2">
@@ -312,60 +358,98 @@ const InvoicesAdmin = () => {
                   <p className="font-medium text-foreground">{format(new Date(inv.issued_date), "MMM d, yyyy")}</p>
                 </div>
               </div>
-              {inv.payment_method && (
-                <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Method:</span> {inv.payment_method}</p>
+              {inv.payment_status !== "unpaid" && (inv.payment_method || (inv as any).payment_date || (inv as any).payment_reference) && (
+                <p className="text-sm text-muted-foreground">
+                  <span className="text-foreground font-medium">Payment:</span>{" "}
+                  {[
+                    inv.payment_method,
+                    (inv as any).payment_date ? format(new Date((inv as any).payment_date), "MMM d, yyyy") : null,
+                    (inv as any).payment_reference ? `Ref ${(inv as any).payment_reference}` : null,
+                  ].filter(Boolean).join(" · ")}
+                </p>
               )}
               {inv.notes && (
                 <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {inv.notes}</p>
               )}
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => generateInvoicePDF(inv)}>
+                <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)}>
                   <Download className="w-3 h-3 mr-1" /> Download PDF
                 </Button>
                 {inv.payment_status !== "paid" && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => markPaid.mutate(inv.id)}>
-                      Mark Paid
+                  <HasPermission permission="can_manage_bookings">
+                    <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "full")}>
+                      <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Paid
                     </Button>
-                    <Dialog open={paymentOpen === inv.id} onOpenChange={(o) => { setPaymentOpen(o ? inv.id : null); setPaymentAmount(""); }}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <DollarSign className="w-3 h-3 mr-1" /> Add Payment
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-sm">
-                        <DialogHeader>
-                          <DialogTitle>Record Payment</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-3 mt-2">
-                          <p className="text-sm text-muted-foreground">
-                            Remaining: ${(Number(inv.total_amount) - Number(inv.amount_paid)).toFixed(2)}
-                          </p>
-                          <Input
-                            type="number"
-                            min={0.01}
-                            step={0.01}
-                            placeholder="Amount"
-                            value={paymentAmount}
-                            onChange={(e) => setPaymentAmount(e.target.value)}
-                          />
-                          <Button
-                            className="w-full"
-                            onClick={() => recordPayment.mutate({ id: inv.id, amount: Number(paymentAmount) })}
-                            disabled={!paymentAmount || Number(paymentAmount) <= 0}
-                          >
-                            Record Payment
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </>
+                    <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "partial")}>
+                      <DollarSign className="w-3 h-3 mr-1" /> Add Payment
+                    </Button>
+                  </HasPermission>
                 )}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Single PaymentDialog — handles both Mark Paid (full) and Add Payment (partial) */}
+      <Dialog open={!!paymentTarget} onOpenChange={(o) => !o && closePaymentDialog()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {paymentTarget?.mode === "full" ? "Mark Invoice as Paid" : "Record Payment"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-muted-foreground">
+              Remaining balance: <span className="font-medium text-foreground">${paymentTarget?.remaining.toFixed(2)}</span>
+            </p>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Method *</label>
+              <select
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={payMethod}
+                onChange={(e) => setPayMethod(e.target.value)}
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Date Received *</label>
+              <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Reference # <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Check #, txn id, …" />
+            </div>
+            {paymentTarget?.mode === "partial" && (
+              <div>
+                <label className="text-sm font-medium mb-1 block">Amount *</label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                />
+              </div>
+            )}
+            <Button
+              className="w-full"
+              onClick={submitPayment}
+              disabled={
+                applyPayment.isPending ||
+                !payMethod ||
+                !payDate ||
+                (paymentTarget?.mode === "partial" && (!payAmount || Number(payAmount) <= 0))
+              }
+            >
+              {paymentTarget?.mode === "full" ? "Confirm Payment" : "Record Payment"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
