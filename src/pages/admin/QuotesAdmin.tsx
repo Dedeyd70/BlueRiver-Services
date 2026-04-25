@@ -16,6 +16,7 @@ import { notifyAdmins } from "@/lib/notifications";
 import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 import DynamicQuoteSummary from "@/components/admin/DynamicQuoteSummary";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
+import HasPermission from "@/components/HasPermission";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
