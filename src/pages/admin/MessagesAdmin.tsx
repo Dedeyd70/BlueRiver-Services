@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Mail, CheckCircle, ArrowRight, MessageSquare, Send } from "lucide-react";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
+import HasPermission from "@/components/HasPermission";
 
 // 1. Interface matches your Supabase screenshot exactly
 interface ContactSubmission {
@@ -134,24 +135,26 @@ const MessagesAdmin = () => {
               )}
 
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
-                {m.status === "pending" && (
-                  <Button variant="ghost" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "read" })}>
-                    <CheckCircle className="w-4 h-4 mr-1 text-green-500" /> Mark Read
+                <HasPermission permission="can_manage_messages">
+                  {m.status === "pending" && (
+                    <Button variant="ghost" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "read" })}>
+                      <CheckCircle className="w-4 h-4 mr-1 text-green-500" /> Mark Read
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setActiveNoteId(activeNoteId === m.id ? null : m.id);
+                      setNoteContent(m.admin_notes || "");
+                    }}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-1" /> Log Response
                   </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setActiveNoteId(activeNoteId === m.id ? null : m.id);
-                    setNoteContent(m.admin_notes || "");
-                  }}
-                >
-                  <MessageSquare className="w-4 h-4 mr-1" /> Log Response
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => handleConvertToBooking(m)}>
-                  <ArrowRight className="w-4 h-4 mr-1" /> Convert
-                </Button>
+                  <Button variant="secondary" size="sm" onClick={() => handleConvertToBooking(m)}>
+                    <ArrowRight className="w-4 h-4 mr-1" /> Convert
+                  </Button>
+                </HasPermission>
               </div>
 
               {activeNoteId === m.id && (
