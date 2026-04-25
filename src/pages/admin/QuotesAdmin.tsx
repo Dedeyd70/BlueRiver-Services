@@ -601,17 +601,19 @@ const QuotesAdmin = () => {
 
                       {/* Action Buttons */}
                       <div className="flex flex-wrap gap-2 pt-1">
-                        {q.status === "requested" && (
-                          <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q.id)} className="gap-1">
-                            <PlayCircle className="w-3 h-3" /> Mark In Progress
-                          </Button>
-                        )}
+                        <HasPermission permission="can_manage_quotes">
+                          {q.status === "requested" && (
+                            <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q.id)} className="gap-1">
+                              <PlayCircle className="w-3 h-3" /> Mark In Progress
+                            </Button>
+                          )}
 
-                        {q.status === "in_progress" && (
-                          <Button variant="outline" size="sm" onClick={() => openPrepare(q)} className="gap-1">
-                            <FileEdit className="w-3 h-3" /> {hasDraft ? "Edit Quote" : "Prepare Quote"}
-                          </Button>
-                        )}
+                          {q.status === "in_progress" && (
+                            <Button variant="outline" size="sm" onClick={() => openPrepare(q)} className="gap-1">
+                              <FileEdit className="w-3 h-3" /> {hasDraft ? "Edit Quote" : "Prepare Quote"}
+                            </Button>
+                          )}
+                        </HasPermission>
 
                         <Tooltip>
                           <TooltipTrigger asChild>
