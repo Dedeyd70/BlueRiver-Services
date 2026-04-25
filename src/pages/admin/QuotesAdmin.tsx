@@ -635,56 +635,58 @@ const QuotesAdmin = () => {
                           )}
                         </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Button variant="outline" size="sm" disabled className="gap-1">
-                                <Mail className="w-3 h-3" /> Send Quote
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>Email integration coming soon</TooltipContent>
-                        </Tooltip>
-
-                        {q.status === "in_progress" && (
+                        <HasPermission permission="can_manage_quotes">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span>
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  onClick={() => {
-                                    if (!canConvert) {
-                                      toast({
-                                        title: "Activity log required",
-                                        description: "Please add at least one interaction before converting this quote",
-                                        variant: "destructive",
-                                      });
-                                      return;
-                                    }
-                                    openConvert(q);
-                                  }}
-                                  className="gap-1"
-                                  aria-disabled={!canConvert}
-                                >
-                                  <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                                <Button variant="outline" size="sm" disabled className="gap-1">
+                                  <Mail className="w-3 h-3" /> Send Quote
                                 </Button>
                               </span>
                             </TooltipTrigger>
-                            {!canConvert && (
-                              <TooltipContent>Add at least one activity log note before converting.</TooltipContent>
-                            )}
+                            <TooltipContent>Email integration coming soon</TooltipContent>
                           </Tooltip>
-                        )}
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCloseTarget(q)}
-                          className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
-                        >
-                          <XCircle className="w-3 h-3" /> Close
-                        </Button>
+                          {q.status === "in_progress" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (!canConvert) {
+                                        toast({
+                                          title: "Activity log required",
+                                          description: "Please add at least one interaction before converting this quote",
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+                                      openConvert(q);
+                                    }}
+                                    className="gap-1"
+                                    aria-disabled={!canConvert}
+                                  >
+                                    <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {!canConvert && (
+                                <TooltipContent>Add at least one activity log note before converting.</TooltipContent>
+                              )}
+                            </Tooltip>
+                          )}
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCloseTarget(q)}
+                            className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                          >
+                            <XCircle className="w-3 h-3" /> Close
+                          </Button>
+                        </HasPermission>
                       </div>
                     </div>
                   );

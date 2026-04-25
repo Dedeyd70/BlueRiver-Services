@@ -13,6 +13,7 @@ import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { ChevronDown, ChevronUp, Clock } from "lucide-react";
+import HasPermission from "@/components/HasPermission";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -339,26 +340,28 @@ const BookingsAdmin = () => {
                 </p>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {b.status === "pending" && (
-                  <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
-                    Confirm
+              <HasPermission permission="can_manage_bookings">
+                <div className="flex flex-wrap gap-2">
+                  {b.status === "pending" && (
+                    <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
+                      Confirm
+                    </Button>
+                  )}
+                  {b.status === "confirmed" && (
+                    <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
+                      Mark Completed
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={() => setCancelTarget(b)}
+                  >
+                    Cancel
                   </Button>
-                )}
-                {b.status === "confirmed" && (
-                  <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
-                    Mark Completed
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                  onClick={() => setCancelTarget(b)}
-                >
-                  Cancel
-                </Button>
-              </div>
+                </div>
+              </HasPermission>
             )}
           </div>
         )}
