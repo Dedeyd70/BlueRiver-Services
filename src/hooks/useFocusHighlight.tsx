@@ -24,10 +24,11 @@ export function useFocusHighlight(ready: boolean = true) {
     // Defer slightly so layout is settled
     const t = setTimeout(() => {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background", "transition-shadow");
+      const cls = ["ring-2", "ring-primary", "ring-offset-2", "ring-offset-background", "shadow-lg", "shadow-primary/30", "transition-shadow"];
+      el.classList.add(...cls);
       setTimeout(() => {
-        el.classList.remove("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background");
-      }, 3000);
+        el.classList.remove("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background", "shadow-lg", "shadow-primary/30");
+      }, 4000);
     }, 150);
     return () => clearTimeout(t);
   }, [focusId, ready]);
