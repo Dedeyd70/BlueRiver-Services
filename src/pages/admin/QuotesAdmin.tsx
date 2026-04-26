@@ -186,8 +186,14 @@ const QuotesAdmin = () => {
 
   const markInProgress = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("quote_requests").update({ status: "in_progress" }).eq("id", id);
+      const { data, error } = await supabase
+        .from("quote_requests")
+        .update({ status: "in_progress" })
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
       await logActivity(id, "Status changed to In Progress");
     },
     onSuccess: () => {
@@ -199,11 +205,14 @@ const QuotesAdmin = () => {
 
   const closeQuote = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("quote_requests")
         .update({ status: "closed", close_reason: reason } as any)
-        .eq("id", id);
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
       await logActivity(id, `Quote closed. Reason: ${reason}`);
     },
     onSuccess: () => {
@@ -252,14 +261,23 @@ const QuotesAdmin = () => {
     mutationFn: async () => {
       if (!selectedQuote || !bookingDate || !timeSlot) throw new Error("Please select date and time");
 
-      // Idempotency: 1 quote → 1 booking. Block duplicate creation.
+      // Idempotency: 1 quote → 1 booking. If one exists, ensure quote is marked converted and exit cleanly.
       const { data: existingBooking } = await supabase
         .from("bookings")
         .select("id")
         .eq("quote_id", selectedQuote.id)
         .maybeSingle();
       if (existingBooking) {
-        throw new Error("A booking already exists for this quote.");
+        // Make sure the quote status reflects reality, then short-circuit safely.
+        if (selectedQuote.status !== "converted") {
+          await supabase
+            .from("quote_requests")
+            .update({ status: "converted" })
+            .eq("id", selectedQuote.id)
+            .select("id")
+            .maybeSingle();
+        }
+        return;
       }
 
       const { data: settingsRows } = await supabase
@@ -344,11 +362,14 @@ const QuotesAdmin = () => {
       } as any).select("id").single();
       if (bookingError) throw bookingError;
 
-      const { error: quoteError } = await supabase
+      const { data: updatedQuote, error: quoteError } = await supabase
         .from("quote_requests")
         .update({ status: "converted" })
-        .eq("id", selectedQuote.id);
+        .eq("id", selectedQuote.id)
+        .select("id")
+        .maybeSingle();
       if (quoteError) throw quoteError;
+      if (!updatedQuote) throw new Error("Update blocked by permissions or RLS");
 
       await logActivity(selectedQuote.id, `Converted to booking on ${bookingDate} at ${timeSlot}`);
 

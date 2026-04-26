@@ -56,11 +56,14 @@ const SocialLinksSettings = () => {
         is_active: isActive,
       };
       if (editing) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("social_links" as any)
           .update(payload)
-          .eq("id", editing.id);
+          .eq("id", editing.id)
+          .select("id")
+          .maybeSingle();
         if (error) throw error;
+        if (!data) throw new Error("Update blocked by permissions or RLS");
       } else {
         const { error } = await supabase.from("social_links" as any).insert(payload);
         if (error) throw error;

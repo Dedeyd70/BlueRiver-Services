@@ -155,7 +155,7 @@ const InvoicesAdmin = () => {
       const total = Number(inv.total_amount);
       const newStatus = newPaid >= total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("invoices")
         .update({
           amount_paid: newPaid,
@@ -164,8 +164,11 @@ const InvoicesAdmin = () => {
           payment_date: args.date,
           payment_reference: args.reference || null,
         })
-        .eq("id", args.id);
+        .eq("id", args.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });

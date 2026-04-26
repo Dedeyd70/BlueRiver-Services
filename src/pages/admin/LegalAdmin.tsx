@@ -39,8 +39,9 @@ const LegalAdmin = () => {
     mutationFn: async () => {
       const payload = { page_name: tab, section_key: "main", content: { body } };
       if (content?.id) {
-        const { error } = await supabase.from("page_content").update({ content: { body } }).eq("id", content.id);
+        const { data, error } = await supabase.from("page_content").update({ content: { body } }).eq("id", content.id).select("id").maybeSingle();
         if (error) throw error;
+        if (!data) throw new Error("Update blocked by permissions or RLS");
       } else {
         const { error } = await supabase.from("page_content").insert(payload);
         if (error) throw error;

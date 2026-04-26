@@ -1,205 +1,107 @@
-# Phase 2 Final — Idempotency, Unified Payments, Branded Invoice PDF
+# Phase 2 Stabilization — RLS UPDATE Policies + Global Safe-Update Pattern
 
-Strict guardrails: no schema changes, no new tables, no parallel flows, no UI redesign. Every change extends an existing function or wraps an existing button.
-
----
-
-## Part 1 — Idempotency guards (1 quote → 1 booking → 1 invoice)
-
-**File: `src/pages/admin/QuotesAdmin.tsx`** — `convertToBooking` mutation (line 250)
-
-At the **top** of `mutationFn`, before the insert, add a pre-check:
-
-```ts
-const { data: existing } = await supabase
-  .from("bookings")
-  .select("id")
-  .eq("quote_id", selectedQuote.id)
-  .maybeSingle();
-if (existing) {
-  throw new Error("A booking already exists for this quote.");
-}
-```
-
-No new table, no new path — just a guard that prevents the duplicate insert and surfaces a toast via the existing `onError` handler.
-
-**File: `src/lib/createInvoiceFromBooking.ts`** — `createInvoiceFromBooking` function
-
-At the **top** of the function, before any work, add:
-
-```ts
-const { data: existingInvoice } = await supabase
-  .from("invoices")
-  .select("*")
-  .eq("booking_id", booking.id)
-  .maybeSingle();
-if (existingInvoice) return existingInvoice;
-```
-
-This way the existing `handleCompleted` flow in `BookingsAdmin.tsx` keeps working — it just receives the already-created invoice on a second click instead of inserting a duplicate. No call site changes required.
+Three coordinated changes, all additive and backward-compatible. No schema changes, no UI changes, no renames.
 
 ---
 
-## Part 2 — Unified PaymentDialog (replaces markPaid + recordPayment)
+## Part 1 — Add three RLS UPDATE policies (migration)
 
-**File: `src/pages/admin/InvoicesAdmin.tsx`** only — single source of truth.
+A single migration adds the missing `UPDATE` policies. Existing admin-only policies stay in place; these are purely additive so admin behavior is unchanged.
 
-### Component (defined inline in the same file, no new file)
+```sql
+-- Quotes
+CREATE POLICY "Permitted users can update quotes"
+ON public.quote_requests
+FOR UPDATE TO authenticated
+USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_quotes'))
+WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_quotes'));
 
-`<PaymentDialog invoice mode="full"|"partial" open onOpenChange />`
+-- Bookings
+CREATE POLICY "Permitted users can update bookings"
+ON public.bookings
+FOR UPDATE TO authenticated
+USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_bookings'))
+WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_bookings'));
 
-Fields:
-- **Method** — `<select>` with: Cash, Check, Bank Transfer, Square, Zelle, Other (controlled list)
-- **Date Received** — date input, default today
-- **Reference #** — optional text
-- **Amount** — only rendered when `mode === "partial"`, defaults to remaining balance
-
-### Single mutation replaces both old ones
-
-Delete `markPaid` (lines 169–183) and the inline-input variant of `recordPayment` (lines 148–167). Replace with one mutation `applyPayment`:
-
-```ts
-const applyPayment = useMutation({
-  mutationFn: async ({ id, amount, method, date, reference }) => {
-    const inv = invoices?.find(i => i.id === id);
-    if (!inv) throw new Error("Invoice not found");
-    const newPaid = Number(inv.amount_paid) + amount;
-    const newStatus = newPaid >= Number(inv.total_amount) ? "paid"
-                    : newPaid > 0 ? "partial" : "unpaid";
-    const { error } = await supabase.from("invoices").update({
-      amount_paid: newPaid,
-      payment_status: newStatus,
-      payment_method: method,
-      payment_date: date,
-      payment_reference: reference || null,
-    }).eq("id", id);
-    if (error) throw error;
-  },
-  onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-invoices"] }); ... },
-});
+-- Contact / Messages
+CREATE POLICY "Permitted users can update contact_submissions"
+ON public.contact_submissions
+FOR UPDATE TO authenticated
+USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_messages'))
+WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_messages'));
 ```
 
-### Buttons on each invoice card
-
-- **Mark Paid** → opens PaymentDialog in `mode="full"`, hides Amount, on submit passes `amount = total_amount - amount_paid`
-- **Add Payment** → opens PaymentDialog in `mode="partial"`, shows Amount
-
-Both buttons go through the same dialog and the same mutation. No other payment paths exist anywhere else in the app (already verified — `markPaid`/`recordPayment` only appear in `InvoicesAdmin.tsx`).
-
-### Manual Invoice creation form
-
-Replace the free-text **Payment Method** `<Input>` (line 250) with the same controlled `<select>` (Cash/Check/Bank Transfer/Square/Zelle/Other). No other form fields change.
-
-### Card display
-
-When `payment_status !== 'unpaid'`, surface `Method · Date Received · Reference #` as one extra muted line under the existing Method line. Card layout unchanged otherwise.
+This unblocks managers and staff who hold the right permission flag — fixing the silent-failure root cause behind "Convert to Booking leaves quote In Progress", "Confirm doesn't change status", etc.
 
 ---
 
-## Part 3 — Branded invoice PDF (new file `src/lib/invoicePdf.ts`)
+## Part 2 — Apply the safe-update pattern to **every** `.update()` call
 
-Mirrors `quotePdf.ts` exactly — same margins, fonts, header, divider, two-column "Bill to / Service location", itemized table columns (Item / Qty / Unit / Total), totals stack. **No helper duplication** — both files independently call `jsPDF` primitives the same way; we don't extract shared code (per "do not duplicate" — there's nothing currently shared to break).
-
-### What's different from the quote PDF
-
-- Header label: `INVOICE  #<invoice_number>` instead of `QUOTE  #...`
-- Right-side meta: `Issued: …` and `Due: …`
-- Totals stack adds **Paid** and **Balance Due** lines
-- When any payment exists: extra block printing **Method**, **Date Received**, **Reference #**
-- When `payment_status === "paid"`: **PAID watermark**
-
-### PAID watermark implementation
+Rule applied uniformly:
 
 ```ts
-if (inv.payment_status === "paid") {
-  doc.saveGraphicsState();
-  doc.setGState(new (doc as any).GState({ opacity: 0.12 }));
-  doc.setTextColor(40, 130, 60);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(110);
-  doc.text("PAID", pageW / 2, doc.internal.pageSize.getHeight() / 2,
-           { align: "center", angle: 30 });
-  doc.restoreGraphicsState();
-}
+const { data, error } = await supabase
+  .from("table").update({...}).eq("id", id)
+  .select("id").maybeSingle();
+if (error) throw error;
+if (!data) throw new Error("Update blocked by permissions or RLS");
 ```
 
-Drawn **after** all content so it sits on top with low opacity but doesn't push layout. Skipped for `unpaid` and `partial`.
+Audit found **25 `.update()` call sites** across 16 files. All will be upgraded:
 
-### Source of truth
-
-The PDF reads **only** from the persisted `invoices` row — `services` (line items snapshot), `subtotal`, `tax_rate`, `tax_amount`, `total_amount`, `amount_paid`, `payment_*` columns. **No recalculation, no joining back to drafts.** This matches Part 7 of your rules — invoices are stable records.
-
-### Wire-up
-
-`InvoicesAdmin.tsx` imports `generateInvoicePdf` from `@/lib/invoicePdf` and replaces the inline `generateInvoicePDF` (lines 46–82). It fetches `branding_settings` and `site_settings` via the same `useQuery` pattern already used in `QuotesAdmin.tsx`. The inline 37-line function is deleted.
-
----
-
-## Part 4 — Permission gating with existing `<HasPermission />`
-
-Wrap **only mutating** action buttons. Read-only (Download PDF, expand details) stay open.
-
-| File | Buttons wrapped | Permission |
+| File | Lines | Notes |
 |---|---|---|
-| `QuotesAdmin.tsx` | Mark In Progress, Prepare/Edit Quote, Send Quote, Convert to Booking, Close | `can_manage_quotes` |
-| `BookingsAdmin.tsx` | Confirm, Mark Completed, Cancel | `can_manage_bookings` |
-| `InvoicesAdmin.tsx` | Manual Invoice trigger, Mark Paid, Add Payment | `can_manage_bookings` |
-| `MessagesAdmin.tsx` | Mark Read, Convert, Log Response | `can_manage_messages` |
+| `src/pages/admin/QuotesAdmin.tsx` | 189, 204, 349 | mark in-progress, close, convert→converted |
+| `src/pages/admin/BookingsAdmin.tsx` | 93, 110, 145 | confirm, complete, cancel |
+| `src/pages/admin/MessagesAdmin.tsx` | 57 | status updates |
+| `src/pages/admin/InvoicesAdmin.tsx` | 160 | applyPayment |
+| `src/pages/admin/UserManagement.tsx` | 90, 141 | role, permissions |
+| `src/pages/admin/PermissionsAdmin.tsx` | 46 | registry edits |
+| `src/pages/admin/ServicesAdmin.tsx` | 56 | service edits |
+| `src/pages/admin/TestimonialsAdmin.tsx` | 49 | testimonial edits |
+| `src/pages/admin/GalleryAdmin.tsx` | 127 | gallery edits |
+| `src/pages/admin/HomepageImagesAdmin.tsx` | 38 | image url |
+| `src/pages/admin/LegalAdmin.tsx` | 42 | legal body |
+| `src/pages/admin/TermsAdmin.tsx` | 38 | terms body |
+| `src/pages/admin/PrivacyPolicyAdmin.tsx` | 43 | privacy body |
+| `src/components/admin/SocialLinksSettings.tsx` | 61 | social link edit |
+| `src/components/admin/PricingSettings.tsx` | 123, 142, 161, 218 | base/unit/surcharge/multi-field |
+| `src/components/admin/NotificationBell.tsx` | 40, 51 | mark single read, mark many read (uses `.in(...)` — pattern adapted to `.select("id")` array length check; throw if zero rows returned) |
 
-`<HasPermission>` short-circuits to `true` for `role === "admin"` (already implemented in `useHasPermission`), so admins lose nothing. No layout change — wrapping is invisible when permission is granted.
+Multi-row updates (`NotificationBell` `markAllRead`) use `.select("id")` and throw if the returned array is empty rather than `maybeSingle()`.
+
+No function names, button labels, or UI flow change — only the await-chain inside each mutation gets `.select("id").maybeSingle()` plus the empty-row guard.
 
 ---
 
-## Part 5 — Focus polish + invoice support
+## Part 3 — Idempotency softening
 
-**File: `src/hooks/useFocusHighlight.tsx`** — strengthen highlight only:
+Two existing guard sites currently throw when a record already exists. Switch to safe return so retries don't surface false errors:
 
-Replace ring class set with: `ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg shadow-primary/30` and bump the timeout from `3000` to `4000`. **Hook API unchanged**, all four pages keep working.
+| File | Current | Change |
+|---|---|---|
+| `src/pages/admin/QuotesAdmin.tsx` `convertToBooking` | throws when booking exists for `quote_id` | return existing booking |
+| `src/lib/createInvoiceFromBooking.ts` | already returns existing — verify only | (no change needed; already safe) |
 
-**File: `src/pages/admin/InvoicesAdmin.tsx`** — add `?focus=` support:
-
-- `const { getRef } = useFocusHighlight(!isLoading && !!invoices);`
-- Add `ref={getRef(inv.id)}` and `scroll-mt-24` to each invoice card div.
-
-The bell route `invoice → /admin/invoices?focus=<id>` was added in Phase 1, so no `NotificationBell.tsx` change is needed.
+After Part 1's RLS fix, the convert flow will also succeed in flipping the quote status to `converted`, so the button no longer lingers.
 
 ---
 
-## Files touched (final list)
+## Compatibility guarantees
 
-| File | Change |
-|---|---|
-| `src/pages/admin/QuotesAdmin.tsx` | Add idempotency guard at top of `convertToBooking`; wrap mutating buttons in `<HasPermission permission="can_manage_quotes">` |
-| `src/lib/createInvoiceFromBooking.ts` | Add idempotent early-return when invoice exists for `booking_id` |
-| `src/pages/admin/InvoicesAdmin.tsx` | Replace `markPaid` + `recordPayment` with single `applyPayment` mutation + inline `PaymentDialog`; constrain Manual-Invoice method to select; swap inline PDF for `invoicePdf.ts`; wrap mutating buttons with `<HasPermission permission="can_manage_bookings">`; add `?focus=` plumbing |
-| `src/lib/invoicePdf.ts` | **New** — branded invoice PDF mirroring `quotePdf.ts` layout; PAID watermark when paid; reads only from `invoices` row |
-| `src/pages/admin/BookingsAdmin.tsx` | Wrap Confirm / Mark Completed / Cancel with `<HasPermission permission="can_manage_bookings">` |
-| `src/pages/admin/MessagesAdmin.tsx` | Wrap Mark Read / Convert / Log Response with `<HasPermission permission="can_manage_messages">` |
-| `src/hooks/useFocusHighlight.tsx` | Stronger ring + shadow, 4 s duration; **API unchanged** |
+- **No schema changes.** No new tables, no new columns, no renames.
+- **Additive RLS.** Existing admin-only policies untouched; new policies grant the same operation to permitted non-admins.
+- **No UI / layout / naming changes.** Only the body of each `.update()` await chain changes.
+- **No new mutations or duplicate flows.** Same buttons, same handlers, same toasts.
+- **Error surfacing.** Silent RLS denials now produce a visible toast instead of fake success.
+- **Idempotency.** Convert-to-booking becomes safe to click twice; returns the existing booking row.
 
-## What is **not** touched
+---
 
-- ❌ No DB migration, no new columns, no new tables — Phase 1 schema is sufficient (`payment_date`, `payment_reference` exist; `booking_activity_logs` exists)
-- ❌ No RLS / FK / constraint changes
-- ❌ No new triggers
-- ❌ `quotePdf.ts` untouched
-- ❌ `pricingEngine.ts` untouched — invoices never recalculate, only display persisted totals
-- ❌ `NotificationBell.tsx` untouched — `invoice` mapping already in place
-- ❌ Public booking / public quote forms untouched
-- ❌ Existing booking insert RLS path for anonymous users unaffected
+## Files touched
 
-## Final safety checklist that this plan satisfies
+- New migration: 3 `CREATE POLICY` statements (Part 1)
+- 16 source files: `.update()` chains upgraded to safe pattern (Part 2)
+- `src/pages/admin/QuotesAdmin.tsx`: `convertToBooking` early-return on existing booking (Part 3)
 
-| Rule | How |
-|---|---|
-| 1 quote → 1 booking | guard in `convertToBooking` |
-| 1 booking → 1 invoice | guard in `createInvoiceFromBooking` (returns existing) |
-| One payment system | single `applyPayment` mutation + single `PaymentDialog`; old mutations deleted |
-| No new payment tables/APIs | reuses `invoices` columns added in Phase 1 |
-| Invoice uses persisted totals | PDF reads only from `invoices` row |
-| Permissions only on mutations | read-only buttons (Download PDF, view) stay visible |
-| Watermark only when paid | guard `if (inv.payment_status === "paid")` |
-| Focus hook API unchanged | only class + duration change |
-| Public booking still works | `bookings` insert RLS untouched, no new required columns |
-
-Ready to implement on approval.
+All changes deploy in a single pass.

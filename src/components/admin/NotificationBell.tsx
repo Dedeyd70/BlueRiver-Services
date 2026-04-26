@@ -37,8 +37,14 @@ const NotificationBell = () => {
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+      const { data, error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-notifications"] }),
   });
@@ -48,8 +54,13 @@ const NotificationBell = () => {
       const unread = notifications?.filter((n: any) => !n.is_read) ?? [];
       if (!unread.length) return;
       const ids = unread.map((n: any) => n.id);
-      const { error } = await supabase.from("notifications").update({ is_read: true }).in("id", ids);
+      const { data, error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .in("id", ids)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-notifications"] }),
   });

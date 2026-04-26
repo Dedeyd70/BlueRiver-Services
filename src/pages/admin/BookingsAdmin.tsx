@@ -90,8 +90,14 @@ const BookingsAdmin = () => {
 
   const handleConfirm = async (b: any) => {
     try {
-      const { error } = await supabase.from("bookings").update({ status: "confirmed" }).eq("id", b.id);
+      const { data, error } = await supabase
+        .from("bookings")
+        .update({ status: "confirmed" })
+        .eq("id", b.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
       await logBookingActivity(b.id, "confirmed", { previous_status: b.status, new_status: "confirmed" });
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
@@ -105,11 +111,14 @@ const BookingsAdmin = () => {
   const handleCompleted = async (b: any) => {
     try {
       // Update status first
-      const { error: updErr } = await supabase
+      const { data: updData, error: updErr } = await supabase
         .from("bookings")
         .update({ status: "completed" })
-        .eq("id", b.id);
+        .eq("id", b.id)
+        .select("id")
+        .maybeSingle();
       if (updErr) throw updErr;
+      if (!updData) throw new Error("Update blocked by permissions or RLS");
 
       // Auto-create invoice
       const invoice = await createInvoiceFromBooking(b, user?.id);
@@ -142,8 +151,14 @@ const BookingsAdmin = () => {
     try {
       const updates: any = { status: "cancelled" };
       if (cancelReason) updates.cancellation_reason = cancelReason;
-      const { error } = await supabase.from("bookings").update(updates).eq("id", cancelTarget.id);
+      const { data, error } = await supabase
+        .from("bookings")
+        .update(updates)
+        .eq("id", cancelTarget.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
       await logBookingActivity(cancelTarget.id, "cancelled", {
         previous_status: cancelTarget.status,
         new_status: "cancelled",
