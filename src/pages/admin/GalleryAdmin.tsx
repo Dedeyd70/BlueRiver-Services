@@ -124,13 +124,14 @@ const GalleryAdmin = () => {
   const updateSingle = useMutation({
     mutationFn: async () => {
       if (!editId) return;
-      const { error } = await supabase.from("gallery").update({
+      const { data, error } = await supabase.from("gallery").update({
         image_url: singleForm.image_url,
         caption: singleForm.caption,
         category: singleForm.category,
         is_active: singleForm.is_active,
-      }).eq("id", editId);
+      }).eq("id", editId).select("id").maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-gallery"] });
