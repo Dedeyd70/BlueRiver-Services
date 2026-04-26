@@ -186,8 +186,14 @@ const QuotesAdmin = () => {
 
   const markInProgress = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("quote_requests").update({ status: "in_progress" }).eq("id", id);
+      const { data, error } = await supabase
+        .from("quote_requests")
+        .update({ status: "in_progress" })
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
       await logActivity(id, "Status changed to In Progress");
     },
     onSuccess: () => {
@@ -199,11 +205,14 @@ const QuotesAdmin = () => {
 
   const closeQuote = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("quote_requests")
         .update({ status: "closed", close_reason: reason } as any)
-        .eq("id", id);
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
       await logActivity(id, `Quote closed. Reason: ${reason}`);
     },
     onSuccess: () => {
