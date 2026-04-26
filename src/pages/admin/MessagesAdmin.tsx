@@ -52,15 +52,18 @@ const MessagesAdmin = () => {
   const updateMessage = useMutation({
     mutationFn: async ({ id, status, admin_notes }: { id: string; status: string; admin_notes?: string }) => {
       // Use 'as any' to force the update through regardless of local type cache
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("contact_submissions")
         .update({
           status: status,
           admin_notes: admin_notes, // MUST be plural to match your DB
         } as any)
-        .eq("id", id);
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
