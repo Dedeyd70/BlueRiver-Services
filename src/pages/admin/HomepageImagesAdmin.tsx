@@ -33,11 +33,14 @@ const HomepageImagesAdmin = () => {
       for (const section of sections ?? []) {
         const newUrl = images[section.section_key] ?? "";
         if (newUrl !== section.image_url) {
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from("homepage_images")
             .update({ image_url: newUrl })
-            .eq("id", section.id);
+            .eq("id", section.id)
+            .select("id")
+            .maybeSingle();
           if (error) throw error;
+          if (!data) throw new Error("Update blocked by permissions or RLS");
         }
       }
     },
