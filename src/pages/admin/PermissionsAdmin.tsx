@@ -41,11 +41,14 @@ const PermissionsAdmin = () => {
       const safeKey = keyVal.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
       const payload = { key: safeKey, label: label.trim(), description: description.trim() || null };
       if (editing) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("permission_registry" as any)
           .update(payload)
-          .eq("id", editing.id);
+          .eq("id", editing.id)
+          .select("id")
+          .maybeSingle();
         if (error) throw error;
+        if (!data) throw new Error("Update blocked by permissions or RLS");
       } else {
         const { error } = await supabase.from("permission_registry" as any).insert(payload);
         if (error) throw error;

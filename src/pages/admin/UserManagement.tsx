@@ -85,11 +85,14 @@ const UserManagement = () => {
       if (currentUser?.role === "admin" && newRole !== "admin" && adminCount <= 1) {
         throw new Error("Cannot change the last Super Admin's role. At least one Super Admin must remain.");
       }
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("user_roles")
         .update({ role: newRole as any })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
@@ -136,11 +139,14 @@ const UserManagement = () => {
   const savePerms = useMutation({
     mutationFn: async () => {
       if (!permsTarget) return;
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("user_roles")
         .update({ permissions: permsState as any })
-        .eq("user_id", permsTarget.user_id);
+        .eq("user_id", permsTarget.user_id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });

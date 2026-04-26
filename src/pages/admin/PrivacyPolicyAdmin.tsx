@@ -40,7 +40,9 @@ const PrivacyPolicyAdmin = () => {
     mutationFn: async () => {
       const content = { body, contact_email: contactEmail, contact_phone: contactPhone };
       if (data?.id) {
-        await supabase.from("page_content").update({ content }).eq("id", data.id);
+        const { data: updated, error } = await supabase.from("page_content").update({ content }).eq("id", data.id).select("id").maybeSingle();
+        if (error) throw error;
+        if (!updated) throw new Error("Update blocked by permissions or RLS");
       } else {
         await supabase.from("page_content").insert({ page_name: "privacy-policy", section_key: "main", content });
       }

@@ -46,8 +46,9 @@ const TestimonialsAdmin = () => {
         display_order: editId ? undefined : (testimonials?.length ?? 0) + 1,
       };
       if (editId) {
-        const { error } = await supabase.from("testimonials").update(payload).eq("id", editId);
+        const { data, error } = await supabase.from("testimonials").update(payload).eq("id", editId).select("id").maybeSingle();
         if (error) throw error;
+        if (!data) throw new Error("Update blocked by permissions or RLS");
       } else {
         const { error } = await supabase.from("testimonials").insert(payload);
         if (error) throw error;

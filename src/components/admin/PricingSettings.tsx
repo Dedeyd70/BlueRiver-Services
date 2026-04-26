@@ -121,11 +121,15 @@ const PricingSettings = () => {
         (supabase as any)
           .from("service_types")
           .update({ base_price: intInput(String(base_price)) })
-          .eq("id", id),
+          .eq("id", id)
+          .select("id")
+          .maybeSingle(),
       );
       const results = await Promise.all(updates);
       const err = results.find((r: any) => r.error);
       if (err?.error) throw err.error;
+      const blocked = results.find((r: any) => !r.data);
+      if (blocked) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-service-types"] });
