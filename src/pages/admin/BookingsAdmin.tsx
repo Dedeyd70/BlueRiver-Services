@@ -71,6 +71,9 @@ const BookingsAdmin = () => {
     if (focusId) setExpandedId(focusId);
   }, [focusId]);
 
+  // Jump to the page containing the focused item so it renders + can scroll/highlight.
+  // (Defined after queries below; see effect after `archivedBookings` is computed.)
+
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
     queryFn: async () => {
