@@ -147,6 +147,19 @@ const BookingsAdmin = () => {
   });
   const archivedBookings = (bookings ?? []).filter(isArchived);
 
+  // Jump to the page containing the focused item so the ref can mount and scroll.
+  useEffect(() => {
+    if (!focusId || !bookings) return;
+    const idx = activeBookings.findIndex((b: any) => b.id === focusId);
+    if (idx >= 0) {
+      setActivePage(Math.floor(idx / PAGE_SIZE) + 1);
+      return;
+    }
+    const archIdx = archivedBookings.findIndex((b: any) => b.id === focusId);
+    if (archIdx >= 0) setArchivePage(Math.floor(archIdx / PAGE_SIZE) + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, bookings]);
+
   // (status updates are written directly within handlers below so we can also log activity)
 
   const handleConfirm = async (b: any) => {
