@@ -71,6 +71,9 @@ const BookingsAdmin = () => {
     if (focusId) setExpandedId(focusId);
   }, [focusId]);
 
+  // Jump to the page containing the focused item so it renders + can scroll/highlight.
+  // (Defined after queries below; see effect after `archivedBookings` is computed.)
+
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
     queryFn: async () => {
@@ -143,6 +146,19 @@ const BookingsAdmin = () => {
     return !isArchived(b);
   });
   const archivedBookings = (bookings ?? []).filter(isArchived);
+
+  // Jump to the page containing the focused item so the ref can mount and scroll.
+  useEffect(() => {
+    if (!focusId || !bookings) return;
+    const idx = activeBookings.findIndex((b: any) => b.id === focusId);
+    if (idx >= 0) {
+      setActivePage(Math.floor(idx / PAGE_SIZE) + 1);
+      return;
+    }
+    const archIdx = archivedBookings.findIndex((b: any) => b.id === focusId);
+    if (archIdx >= 0) setArchivePage(Math.floor(archIdx / PAGE_SIZE) + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, bookings]);
 
   // (status updates are written directly within handlers below so we can also log activity)
 
@@ -501,49 +517,66 @@ const BookingsAdmin = () => {
                   </p>
                 </div>
               ) : (
-                <HasPermission permission="can_manage_bookings">
-                  <div className="flex flex-wrap gap-2">
-                    {/* Lifecycle */}
-                    {showLifecycle && b.status === "pending" && (
+                <div className="flex flex-wrap gap-2">
+                  {/* Lifecycle */}
+                  {showLifecycle && b.status === "pending" && (
+                    <PermissionGate permission="can_manage_bookings">
                       <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
                         Confirm
                       </Button>
-                    )}
-                    {showLifecycle && b.status === "confirmed" && (
+                    </PermissionGate>
+                  )}
+                  {showLifecycle && b.status === "confirmed" && (
+                    <PermissionGate permission="can_manage_bookings">
                       <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
                         Mark Completed
                       </Button>
-                    )}
+                    </PermissionGate>
+                  )}
 
-                    {/* Invoice actions */}
-                    {!linkedInvoice && !isQuoteSourced && (
+                  {/* Reschedule — collision-checked via get_booked_slots RPC */}
+                  {showLifecycle && (
+                    <PermissionGate permission="can_manage_bookings">
+                      <Button variant="outline" size="sm" onClick={() => openReschedule(b)}>
+                        <CalendarClock className="w-3 h-3 mr-1" /> Reschedule
+                      </Button>
+                    </PermissionGate>
+                  )}
+
+                  {/* Invoice actions */}
+                  {!linkedInvoice && !isQuoteSourced && (
+                    <PermissionGate permission="can_manage_invoices">
                       <Button variant="outline" size="sm" onClick={() => handleGenerateInvoice(b)}>
                         <FileText className="w-3 h-3 mr-1" /> Generate Invoice
                       </Button>
-                    )}
-                    {linkedInvoice && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
-                          <FileText className="w-3 h-3 mr-1" /> View Invoice
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
-                          <Send className="w-3 h-3 mr-1" /> Send Invoice
-                        </Button>
-                        {linkedInvoice.payment_status !== "paid" && (
+                    </PermissionGate>
+                  )}
+                  {linkedInvoice && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
+                        <FileText className="w-3 h-3 mr-1" /> View Invoice
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
+                        <Send className="w-3 h-3 mr-1" /> Send Invoice
+                      </Button>
+                      {linkedInvoice.payment_status !== "paid" && (
+                        <PermissionGate permission="can_manage_invoices">
                           <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
                             <CheckCircle2 className="w-3 h-3 mr-1" /> Mark as Paid
                           </Button>
-                        )}
-                        {linkedInvoice.payment_status === "paid" && (
-                          <Button variant="outline" size="sm" disabled>
-                            <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
-                          </Button>
-                        )}
-                      </>
-                    )}
+                        </PermissionGate>
+                      )}
+                      {linkedInvoice.payment_status === "paid" && (
+                        <Button variant="outline" size="sm" disabled>
+                          <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
+                        </Button>
+                      )}
+                    </>
+                  )}
 
-                    {/* Cancel — only on non-completed bookings */}
-                    {showLifecycle && (
+                  {/* Cancel — only on non-completed bookings */}
+                  {showLifecycle && (
+                    <PermissionGate permission="can_manage_bookings">
                       <Button
                         variant="outline"
                         size="sm"
@@ -552,9 +585,9 @@ const BookingsAdmin = () => {
                       >
                         Cancel
                       </Button>
-                    )}
-                  </div>
-                </HasPermission>
+                    </PermissionGate>
+                  )}
+                </div>
               )}
             </div>
           );
@@ -595,6 +628,43 @@ const BookingsAdmin = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!rescheduleTarget} onOpenChange={() => setRescheduleTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Booking</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">New date</label>
+              <Input
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">New time slot</label>
+              <Input
+                placeholder="e.g. 10:00 AM"
+                value={rescheduleSlot}
+                onChange={(e) => setRescheduleSlot(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Slot collisions are checked automatically before saving.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleTarget(null)}>
+              Back
+            </Button>
+            <Button onClick={handleRescheduleConfirm} disabled={!rescheduleDate || !rescheduleSlot}>
+              Confirm Reschedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -619,7 +689,12 @@ const BookingsAdmin = () => {
             {activeBookings.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center italic">No active bookings found.</p>
             ) : (
-              <div className="space-y-3">{activeBookings.map(renderBookingCard)}</div>
+              <>
+                <div className="space-y-3">
+                  {usePagedSlice(activeBookings, activePage).map(renderBookingCard)}
+                </div>
+                <Paginator page={activePage} pageSize={PAGE_SIZE} total={activeBookings.length} onChange={setActivePage} />
+              </>
             )}
           </TabsContent>
 
@@ -627,7 +702,12 @@ const BookingsAdmin = () => {
             {archivedBookings.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center italic">No archived bookings found.</p>
             ) : (
-              <div className="space-y-3">{archivedBookings.map(renderBookingCard)}</div>
+              <>
+                <div className="space-y-3">
+                  {usePagedSlice(archivedBookings, archivePage).map(renderBookingCard)}
+                </div>
+                <Paginator page={archivePage} pageSize={PAGE_SIZE} total={archivedBookings.length} onChange={setArchivePage} />
+              </>
             )}
           </TabsContent>
         </Tabs>
