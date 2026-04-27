@@ -46,6 +46,10 @@ const linkForEntry = (entry: UnifiedEntry) => {
 const Submissions = () => {
   const [tab, setTab] = useState<TabType>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+
+  // Reset to page 1 whenever the filter changes
+  useEffect(() => { setPage(1); }, [tab, statusFilter]);
 
   const { data: bookings } = useQuery({
     queryKey: ["admin-bookings-sub"],
@@ -173,39 +177,42 @@ const Submissions = () => {
       {!filtered.length ? (
         <p className="text-muted-foreground text-sm">No entries found.</p>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((e) => (
-            <div key={`${e.type}-${e.id}`} className="bg-card border border-border rounded-xl p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={e.type === "Booking" ? "default" : e.type === "Quote" ? "secondary" : "outline"} className="text-xs">
-                      {e.type}
-                    </Badge>
-                    <h3 className="font-medium text-foreground text-sm">{e.name}</h3>
+        <>
+          <div className="space-y-3">
+            {usePagedSlice(filtered, page).map((e) => (
+              <div key={`${e.type}-${e.id}`} className="bg-card border border-border rounded-xl p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={e.type === "Booking" ? "default" : e.type === "Quote" ? "secondary" : "outline"} className="text-xs">
+                        {e.type}
+                      </Badge>
+                      <h3 className="font-medium text-foreground text-sm">{e.name}</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{e.email} {e.phone && `• ${e.phone}`}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{e.email} {e.phone && `• ${e.phone}`}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[e.status] || "bg-muted text-muted-foreground"}`}>
+                      {e.status.replace("_", " ")}
+                    </span>
+                    <Link
+                      to={linkForEntry(e)}
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      Open <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[e.status] || "bg-muted text-muted-foreground"}`}>
-                    {e.status.replace("_", " ")}
-                  </span>
-                  <Link
-                    to={linkForEntry(e)}
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    Open <ExternalLink className="w-3 h-3" />
-                  </Link>
+                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                  {e.service_type && <span>Service: <strong className="text-foreground">{e.service_type}</strong></span>}
+                  <span>{format(new Date(e.created_at), "MMM d, yyyy")}</span>
                 </div>
+                <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{e.detail}</p>
               </div>
-              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                {e.service_type && <span>Service: <strong className="text-foreground">{e.service_type}</strong></span>}
-                <span>{format(new Date(e.created_at), "MMM d, yyyy")}</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{e.detail}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <Paginator page={page} pageSize={PAGE_SIZE} total={filtered.length} onChange={setPage} />
+        </>
       )}
     </div>
   );
