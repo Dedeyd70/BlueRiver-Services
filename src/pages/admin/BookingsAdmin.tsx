@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -12,9 +13,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
-import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon } from "lucide-react";
-import HasPermission from "@/components/HasPermission";
+import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon, CalendarClock } from "lucide-react";
+import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
+import { friendlyRpcError } from "@/lib/friendlyRpcError";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -52,9 +55,21 @@ const BookingsAdmin = () => {
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
+  const focusId = searchParams.get("focus");
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [rescheduleTarget, setRescheduleTarget] = useState<any>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleSlot, setRescheduleSlot] = useState("");
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState(1);
+  const [archivePage, setArchivePage] = useState(1);
+
+  // Auto-expand the focused card so deep-linked records open immediately.
+  useEffect(() => {
+    if (focusId) setExpandedId(focusId);
+  }, [focusId]);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
@@ -113,13 +128,21 @@ const BookingsAdmin = () => {
 
   const { getRef } = useFocusHighlight(!isLoading && !!bookings);
 
-  const activeBookings = (bookings ?? []).filter((b) => {
-    if (statusFilter === "pending") {
-      return b.status === "pending";
+  // Lifecycle rule: a booking is "Active" until the workflow is finished —
+  // cancelled OR (completed AND linked invoice fully paid). Otherwise it stays Active.
+  const isArchived = (b: any) => {
+    if (b.status === "cancelled") return true;
+    if (b.status === "completed") {
+      const inv = invoiceByBooking?.[b.id];
+      return inv?.payment_status === "paid";
     }
-    return b.status === "pending" || b.status === "confirmed";
+    return false;
+  };
+  const activeBookings = (bookings ?? []).filter((b) => {
+    if (statusFilter === "pending") return b.status === "pending";
+    return !isArchived(b);
   });
-  const archivedBookings = (bookings ?? []).filter((b) => b.status === "completed" || b.status === "cancelled");
+  const archivedBookings = (bookings ?? []).filter(isArchived);
 
   // (status updates are written directly within handlers below so we can also log activity)
 
@@ -227,7 +250,7 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
       toast({ title: `Invoice ${invoice?.invoice_number ?? ""} created.` });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
     }
   };
 
@@ -240,7 +263,6 @@ const BookingsAdmin = () => {
   };
 
   const handleSendInvoice = (inv: any) => {
-    // Opens the user's mail client with the invoice number pre-filled.
     const subject = encodeURIComponent(`Invoice ${inv.invoice_number ?? ""}`);
     const body = encodeURIComponent(
       `Hello,\n\nPlease find your invoice ${inv.invoice_number ?? ""} attached.\n\nThank you.`
@@ -257,7 +279,44 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-receipts"] });
       toast({ title: "Invoice marked as paid. Receipt generated." });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
+    }
+  };
+
+  const openReschedule = (b: any) => {
+    setRescheduleTarget(b);
+    setRescheduleDate(b.booking_date ?? "");
+    setRescheduleSlot(b.time_slot ?? "");
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!rescheduleTarget || !rescheduleDate || !rescheduleSlot) return;
+    try {
+      // Collision check via existing RPC
+      const { data: bookedSlots } = await (supabase as any).rpc("get_booked_slots", { p_date: rescheduleDate });
+      const taken = (bookedSlots ?? []).map((s: any) => s.time_slot);
+      const isSameSlot = rescheduleTarget.booking_date === rescheduleDate && rescheduleTarget.time_slot === rescheduleSlot;
+      if (taken.includes(rescheduleSlot) && !isSameSlot) {
+        toast({ title: "That time slot is already booked.", variant: "destructive" });
+        return;
+      }
+      const { data, error } = await supabase
+        .from("bookings")
+        .update({ booking_date: rescheduleDate, time_slot: rescheduleSlot } as any)
+        .eq("id", rescheduleTarget.id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
+      await logBookingActivity(rescheduleTarget.id, "rescheduled", {
+        details: `From ${rescheduleTarget.booking_date} ${rescheduleTarget.time_slot} → ${rescheduleDate} ${rescheduleSlot}`,
+      });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      toast({ title: "Booking rescheduled." });
+      setRescheduleTarget(null);
+    } catch (e: any) {
+      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
     }
   };
 
