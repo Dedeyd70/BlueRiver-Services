@@ -338,8 +338,13 @@ const QuotesAdmin = () => {
         bedrooms: selectedQuote.bedrooms ?? null,
         bathrooms: selectedQuote.bathrooms ?? null,
         frequency: selectedQuote.frequency ?? null,
-        // Pricing snapshot
+        // Pricing snapshot (immutable — copied from quote draft, never recalculated downstream)
         total_price: total,
+        line_items: snapshotLineItems,
+        subtotal: snapshotSubtotal,
+        tax_amount: snapshotTaxAmount,
+        total_amount: snapshotTotal,
+        source: "quote",
         // Add-ons + custom fields snapshot
         selected_addons: selectedQuote.selected_addons || [],
         custom_fields: mergedCustom,
