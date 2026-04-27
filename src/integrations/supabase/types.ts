@@ -1150,7 +1150,14 @@ export type Database = {
         Args: { p_email: string; p_table: string }
         Returns: boolean
       }
-      convert_quote_to_booking: { Args: { p_quote_id: string }; Returns: Json }
+      convert_quote_to_booking: {
+        Args: {
+          p_booking_date: string
+          p_quote_id: string
+          p_time_slot: string
+        }
+        Returns: Json
+      }
       create_invoice_from_booking: {
         Args: { p_booking_id: string }
         Returns: Json
