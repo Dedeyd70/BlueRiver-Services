@@ -1,107 +1,113 @@
-# Phase 2 Stabilization — RLS UPDATE Policies + Global Safe-Update Pattern
 
-Three coordinated changes, all additive and backward-compatible. No schema changes, no UI changes, no renames.
+# Safe-Mode Quote → Booking → Invoice → Receipt — Extension Plan
+
+This plan **extends** existing behaviour. It does not rebuild the flow, does not touch existing triggers/automation, and never recalculates pricing. All financial snapshots stay immutable.
 
 ---
 
-## Part 1 — Add three RLS UPDATE policies (migration)
+## What already exists (and we will reuse, not replace)
 
-A single migration adds the missing `UPDATE` policies. Existing admin-only policies stay in place; these are purely additive so admin behavior is unchanged.
+The database already enforces most of the spec at the constraint and RPC level:
+
+| Guarantee | How it's enforced today |
+|---|---|
+| 1 quote → 1 booking | `UNIQUE (quote_id)` on `bookings` + RPC `convert_quote_to_booking` returns existing row if found |
+| 1 booking → 1 invoice | `UNIQUE (booking_id)` on `invoices` + RPC `create_invoice_from_booking` returns existing row if found |
+| 1 invoice → 1 receipt | `UNIQUE (invoice_id)` on `receipts` + RPC `create_receipt` returns existing row if found |
+| No pricing recalc | All three RPCs copy `line_items` and totals verbatim from the parent record |
+| Invoice numbering | Function `generate_invoice_number()` called inside `create_invoice_from_booking` RPC (format `BR-YYYY-####`) |
+| Receipt auto-generation on payment | `mark_invoice_paid` RPC sets `paid_at` + status, then calls `create_receipt` |
+
+**Important finding:** there are currently **no triggers** in the public schema. `generate_invoice_number` is invoked directly by the RPC, not by a trigger. So "don't interfere with triggers" reduces to "don't bypass the RPCs."
+
+---
+
+## Critical bug found during audit (must fix or receipts break)
+
+`create_receipt` calls `generate_receipt_number()` — but that function **does not exist** in the database. Any call to `mark_invoice_paid` will throw at the receipt step, leaving the invoice marked paid but no receipt created. This silently breaks the entire payment flow.
+
+**Fix:** add the missing function (mirroring the invoice-number pattern):
 
 ```sql
--- Quotes
-CREATE POLICY "Permitted users can update quotes"
-ON public.quote_requests
-FOR UPDATE TO authenticated
-USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_quotes'))
-WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_quotes'));
+CREATE SEQUENCE IF NOT EXISTS public.receipt_number_seq START 1;
 
--- Bookings
-CREATE POLICY "Permitted users can update bookings"
-ON public.bookings
-FOR UPDATE TO authenticated
-USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_bookings'))
-WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_bookings'));
-
--- Contact / Messages
-CREATE POLICY "Permitted users can update contact_submissions"
-ON public.contact_submissions
-FOR UPDATE TO authenticated
-USING (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_messages'))
-WITH CHECK (has_role(auth.uid(),'admin') OR has_permission(auth.uid(),'can_manage_messages'));
+CREATE OR REPLACE FUNCTION public.generate_receipt_number()
+RETURNS text LANGUAGE sql VOLATILE SET search_path TO 'public' AS $$
+  SELECT 'BR-RC-' || to_char(now(),'YYYY') || '-' ||
+         lpad(nextval('public.receipt_number_seq')::text, 4, '0');
+$$;
 ```
 
-This unblocks managers and staff who hold the right permission flag — fixing the silent-failure root cause behind "Convert to Booking leaves quote In Progress", "Confirm doesn't change status", etc.
+No change to `create_receipt` itself — it already references the function name.
 
 ---
 
-## Part 2 — Apply the safe-update pattern to **every** `.update()` call
+## Frontend work — make the app go through the RPCs
 
-Rule applied uniformly:
+Audit of the codebase shows the app currently bypasses the safe RPCs in two places:
 
-```ts
-const { data, error } = await supabase
-  .from("table").update({...}).eq("id", id)
-  .select("id").maybeSingle();
-if (error) throw error;
-if (!data) throw new Error("Update blocked by permissions or RLS");
-```
+1. **`src/lib/createInvoiceFromBooking.ts`** — does its own `INSERT INTO invoices` with recalculated totals from `quote_drafts`. This violates the "never recalculate" rule.
+2. **QuotesAdmin convert-to-booking flow** — uses direct `.insert()` on `bookings`.
 
-Audit found **25 `.update()` call sites** across 16 files. All will be upgraded:
+### Changes (4 files, all minimal):
 
-| File | Lines | Notes |
+| File | Change |
+|---|---|
+| `src/lib/createInvoiceFromBooking.ts` | Replace the entire body with a single call to `supabase.rpc('create_invoice_from_booking', { p_booking_id: booking.id })`. Preserves the existing function signature so callers don't change. |
+| `src/pages/admin/QuotesAdmin.tsx` (`convertToBooking`) | Replace direct insert with `supabase.rpc('convert_quote_to_booking', { p_quote_id: quoteId })`. The RPC already returns the existing booking if one exists — no client-side existence check needed. |
+| `src/pages/admin/InvoicesAdmin.tsx` (`applyPayment` / mark-paid) | When payment is fully applied, call `supabase.rpc('mark_invoice_paid', { p_invoice_id: invoiceId })` instead of the current direct UPDATE. This guarantees receipt auto-creation. |
+| `src/pages/admin/BookingsAdmin.tsx` | Conditionally hide the "Generate Invoice" button when `booking.source = 'quote'` or `booking.quote_id IS NOT NULL`. Show the spec'd button set instead: View Invoice / Send Invoice / Mark as Paid / Generate Receipt. Manual bookings keep all buttons. |
+
+**No prop, route, layout, or naming changes.** Only handler bodies and one piece of conditional rendering.
+
+---
+
+## RLS hardening (security audit follow-up — same scope)
+
+The audit flagged three public read leaks that are unrelated to safe-mode but should be closed in the same migration since we're already touching policies:
+
+| Table | Current problem | Fix |
 |---|---|---|
-| `src/pages/admin/QuotesAdmin.tsx` | 189, 204, 349 | mark in-progress, close, convert→converted |
-| `src/pages/admin/BookingsAdmin.tsx` | 93, 110, 145 | confirm, complete, cancel |
-| `src/pages/admin/MessagesAdmin.tsx` | 57 | status updates |
-| `src/pages/admin/InvoicesAdmin.tsx` | 160 | applyPayment |
-| `src/pages/admin/UserManagement.tsx` | 90, 141 | role, permissions |
-| `src/pages/admin/PermissionsAdmin.tsx` | 46 | registry edits |
-| `src/pages/admin/ServicesAdmin.tsx` | 56 | service edits |
-| `src/pages/admin/TestimonialsAdmin.tsx` | 49 | testimonial edits |
-| `src/pages/admin/GalleryAdmin.tsx` | 127 | gallery edits |
-| `src/pages/admin/HomepageImagesAdmin.tsx` | 38 | image url |
-| `src/pages/admin/LegalAdmin.tsx` | 42 | legal body |
-| `src/pages/admin/TermsAdmin.tsx` | 38 | terms body |
-| `src/pages/admin/PrivacyPolicyAdmin.tsx` | 43 | privacy body |
-| `src/components/admin/SocialLinksSettings.tsx` | 61 | social link edit |
-| `src/components/admin/PricingSettings.tsx` | 123, 142, 161, 218 | base/unit/surcharge/multi-field |
-| `src/components/admin/NotificationBell.tsx` | 40, 51 | mark single read, mark many read (uses `.in(...)` — pattern adapted to `.select("id")` array length check; throw if zero rows returned) |
+| `quote_requests` | `Admin can view quotes` policy uses `auth.role() = 'authenticated'` → any logged-in user can read all quotes | Drop that policy. Keep the role/permission-gated one. |
+| `contact_submissions` | Same `auth.role() = 'authenticated'` leak | Drop that policy. Keep the role/permission-gated one. |
+| `bookings` | Same `auth.role() = 'authenticated'` leak + duplicate `Admin full access bookings` with `USING true` | Drop both leaky policies. Keep `Admins have full control` + `Permitted users can update/view`. |
+| `faqs` | RLS not enabled on table | `ALTER TABLE faqs ENABLE ROW LEVEL SECURITY;` (existing public SELECT policy already in place) |
 
-Multi-row updates (`NotificationBell` `markAllRead`) use `.select("id")` and throw if the returned array is empty rather than `maybeSingle()`.
-
-No function names, button labels, or UI flow change — only the await-chain inside each mutation gets `.select("id").maybeSingle()` plus the empty-row guard.
+These are pure policy drops/enables — no data is touched.
 
 ---
 
-## Part 3 — Idempotency softening
+## What this plan deliberately does NOT do
 
-Two existing guard sites currently throw when a record already exists. Switch to safe return so retries don't surface false errors:
-
-| File | Current | Change |
-|---|---|---|
-| `src/pages/admin/QuotesAdmin.tsx` `convertToBooking` | throws when booking exists for `quote_id` | return existing booking |
-| `src/lib/createInvoiceFromBooking.ts` | already returns existing — verify only | (no change needed; already safe) |
-
-After Part 1's RLS fix, the convert flow will also succeed in flipping the quote status to `converted`, so the button no longer lingers.
+- ❌ No new triggers (existing flow uses RPCs, not triggers — adding triggers would create the exact "duplicate automation" risk the spec warns about)
+- ❌ No changes to `generate_invoice_number()` or invoice-number format
+- ❌ No schema migration on `bookings`, `invoices`, `receipts` columns — all required snapshot columns (`line_items`, `subtotal`, `tax_amount`, `total_amount`, `source`, `paid_at`) **already exist**
+- ❌ No edits to `quote_drafts` flow — drafts remain the prep workspace; once the quote is approved and converted, the snapshot is frozen on the booking row by the RPC
+- ❌ No backfill of historical data
+- ❌ No renames, no removed columns, no UI restructure
 
 ---
 
-## Compatibility guarantees
+## Order of execution (single migration + 4 file edits)
 
-- **No schema changes.** No new tables, no new columns, no renames.
-- **Additive RLS.** Existing admin-only policies untouched; new policies grant the same operation to permitted non-admins.
-- **No UI / layout / naming changes.** Only the body of each `.update()` await chain changes.
-- **No new mutations or duplicate flows.** Same buttons, same handlers, same toasts.
-- **Error surfacing.** Silent RLS denials now produce a visible toast instead of fake success.
-- **Idempotency.** Convert-to-booking becomes safe to click twice; returns the existing booking row.
+1. **Migration (DB):**
+   - Create `receipt_number_seq` + `generate_receipt_number()` function
+   - Drop the 3 leaky RLS policies on `quote_requests`, `contact_submissions`, `bookings`
+   - Enable RLS on `faqs`
+2. **Code:**
+   - `createInvoiceFromBooking.ts` → RPC call
+   - `QuotesAdmin.tsx` `convertToBooking` → RPC call
+   - `InvoicesAdmin.tsx` mark-paid path → `mark_invoice_paid` RPC
+   - `BookingsAdmin.tsx` → hide "Generate Invoice" when `source='quote'`
+
+All idempotent. Safe to re-run. No data migration. No downtime.
 
 ---
 
-## Files touched
+## Verification after deploy
 
-- New migration: 3 `CREATE POLICY` statements (Part 1)
-- 16 source files: `.update()` chains upgraded to safe pattern (Part 2)
-- `src/pages/admin/QuotesAdmin.tsx`: `convertToBooking` early-return on existing booking (Part 3)
-
-All changes deploy in a single pass.
+- Convert an existing quote twice → second click returns the same booking (no duplicate)
+- Click "Generate Invoice" twice on a manual booking → second click returns the same invoice
+- Mark an invoice paid → receipt row appears with `BR-RC-YYYY-####` number; clicking again returns the same receipt
+- Quote-sourced booking detail page → "Generate Invoice" button is hidden; "View Invoice" shown instead
+- Logged-in non-admin without permissions → cannot read other users' quotes/bookings/messages
