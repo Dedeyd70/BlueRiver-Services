@@ -128,13 +128,21 @@ const BookingsAdmin = () => {
 
   const { getRef } = useFocusHighlight(!isLoading && !!bookings);
 
-  const activeBookings = (bookings ?? []).filter((b) => {
-    if (statusFilter === "pending") {
-      return b.status === "pending";
+  // Lifecycle rule: a booking is "Active" until the workflow is finished —
+  // cancelled OR (completed AND linked invoice fully paid). Otherwise it stays Active.
+  const isArchived = (b: any) => {
+    if (b.status === "cancelled") return true;
+    if (b.status === "completed") {
+      const inv = invoiceByBooking?.[b.id];
+      return inv?.payment_status === "paid";
     }
-    return b.status === "pending" || b.status === "confirmed";
+    return false;
+  };
+  const activeBookings = (bookings ?? []).filter((b) => {
+    if (statusFilter === "pending") return b.status === "pending";
+    return !isArchived(b);
   });
-  const archivedBookings = (bookings ?? []).filter((b) => b.status === "completed" || b.status === "cancelled");
+  const archivedBookings = (bookings ?? []).filter(isArchived);
 
   // (status updates are written directly within handlers below so we can also log activity)
 
