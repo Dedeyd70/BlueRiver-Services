@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -12,9 +13,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
-import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon } from "lucide-react";
-import HasPermission from "@/components/HasPermission";
+import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon, CalendarClock } from "lucide-react";
+import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
+import { friendlyRpcError } from "@/lib/friendlyRpcError";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
