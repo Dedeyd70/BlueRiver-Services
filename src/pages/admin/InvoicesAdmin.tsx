@@ -180,7 +180,7 @@ const InvoicesAdmin = () => {
 
       const { data, error } = await supabase
         .from("invoices")
-        .update(metaPatch)
+        .update(metaPatch as any)
         .eq("id", args.id)
         .select("id")
         .maybeSingle();
