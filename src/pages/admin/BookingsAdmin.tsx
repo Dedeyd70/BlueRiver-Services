@@ -250,7 +250,7 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
       toast({ title: `Invoice ${invoice?.invoice_number ?? ""} created.` });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
     }
   };
 
@@ -263,7 +263,6 @@ const BookingsAdmin = () => {
   };
 
   const handleSendInvoice = (inv: any) => {
-    // Opens the user's mail client with the invoice number pre-filled.
     const subject = encodeURIComponent(`Invoice ${inv.invoice_number ?? ""}`);
     const body = encodeURIComponent(
       `Hello,\n\nPlease find your invoice ${inv.invoice_number ?? ""} attached.\n\nThank you.`
@@ -280,7 +279,44 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-receipts"] });
       toast({ title: "Invoice marked as paid. Receipt generated." });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
+    }
+  };
+
+  const openReschedule = (b: any) => {
+    setRescheduleTarget(b);
+    setRescheduleDate(b.booking_date ?? "");
+    setRescheduleSlot(b.time_slot ?? "");
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!rescheduleTarget || !rescheduleDate || !rescheduleSlot) return;
+    try {
+      // Collision check via existing RPC
+      const { data: bookedSlots } = await (supabase as any).rpc("get_booked_slots", { p_date: rescheduleDate });
+      const taken = (bookedSlots ?? []).map((s: any) => s.time_slot);
+      const isSameSlot = rescheduleTarget.booking_date === rescheduleDate && rescheduleTarget.time_slot === rescheduleSlot;
+      if (taken.includes(rescheduleSlot) && !isSameSlot) {
+        toast({ title: "That time slot is already booked.", variant: "destructive" });
+        return;
+      }
+      const { data, error } = await supabase
+        .from("bookings")
+        .update({ booking_date: rescheduleDate, time_slot: rescheduleSlot } as any)
+        .eq("id", rescheduleTarget.id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
+      await logBookingActivity(rescheduleTarget.id, "rescheduled", {
+        details: `From ${rescheduleTarget.booking_date} ${rescheduleTarget.time_slot} → ${rescheduleDate} ${rescheduleSlot}`,
+      });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      toast({ title: "Booking rescheduled." });
+      setRescheduleTarget(null);
+    } catch (e: any) {
+      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
     }
   };
 
