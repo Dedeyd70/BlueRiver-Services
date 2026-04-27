@@ -110,8 +110,11 @@ export type Database = {
           has_pets: boolean | null
           id: string
           is_empty_property: boolean | null
+          line_items: Json | null
           name: string
           notes: string | null
+          paid_at: string | null
+          payment_status: string | null
           pet_count: number | null
           phone: string | null
           preferred_contact: string | null
@@ -120,9 +123,13 @@ export type Database = {
           selected_addons: Json | null
           service_type: string | null
           service_type_id: string | null
+          source: string | null
           square_footage: string | null
           status: string
+          subtotal: number | null
+          tax_amount: number | null
           time_slot: string
+          total_amount: number | null
           total_price: number | null
           updated_at: string
         }
@@ -143,8 +150,11 @@ export type Database = {
           has_pets?: boolean | null
           id?: string
           is_empty_property?: boolean | null
+          line_items?: Json | null
           name: string
           notes?: string | null
+          paid_at?: string | null
+          payment_status?: string | null
           pet_count?: number | null
           phone?: string | null
           preferred_contact?: string | null
@@ -153,9 +163,13 @@ export type Database = {
           selected_addons?: Json | null
           service_type?: string | null
           service_type_id?: string | null
+          source?: string | null
           square_footage?: string | null
           status?: string
+          subtotal?: number | null
+          tax_amount?: number | null
           time_slot: string
+          total_amount?: number | null
           total_price?: number | null
           updated_at?: string
         }
@@ -176,8 +190,11 @@ export type Database = {
           has_pets?: boolean | null
           id?: string
           is_empty_property?: boolean | null
+          line_items?: Json | null
           name?: string
           notes?: string | null
+          paid_at?: string | null
+          payment_status?: string | null
           pet_count?: number | null
           phone?: string | null
           preferred_contact?: string | null
@@ -186,9 +203,13 @@ export type Database = {
           selected_addons?: Json | null
           service_type?: string | null
           service_type_id?: string | null
+          source?: string | null
           square_footage?: string | null
           status?: string
+          subtotal?: number | null
+          tax_amount?: number | null
           time_slot?: string
+          total_amount?: number | null
           total_price?: number | null
           updated_at?: string
         }
@@ -196,7 +217,7 @@ export type Database = {
           {
             foreignKeyName: "bookings_quote_id_fkey"
             columns: ["quote_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "quote_requests"
             referencedColumns: ["id"]
           },
@@ -401,7 +422,9 @@ export type Database = {
           id: string
           invoice_number: string | null
           issued_date: string
+          line_items: Json | null
           notes: string | null
+          paid_at: string | null
           payment_date: string | null
           payment_method: string | null
           payment_reference: string | null
@@ -410,8 +433,10 @@ export type Database = {
           service_type_id: string | null
           services: Json
           subtotal: number
+          tax: number | null
           tax_amount: number
           tax_rate: number
+          total: number | null
           total_amount: number
           updated_at: string
         }
@@ -426,7 +451,9 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           issued_date?: string
+          line_items?: Json | null
           notes?: string | null
+          paid_at?: string | null
           payment_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
@@ -435,8 +462,10 @@ export type Database = {
           service_type_id?: string | null
           services?: Json
           subtotal?: number
+          tax?: number | null
           tax_amount?: number
           tax_rate?: number
+          total?: number | null
           total_amount?: number
           updated_at?: string
         }
@@ -451,7 +480,9 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           issued_date?: string
+          line_items?: Json | null
           notes?: string | null
+          paid_at?: string | null
           payment_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
@@ -460,8 +491,10 @@ export type Database = {
           service_type_id?: string | null
           services?: Json
           subtotal?: number
+          tax?: number | null
           tax_amount?: number
           tax_rate?: number
+          total?: number | null
           total_amount?: number
           updated_at?: string
         }
@@ -469,7 +502,7 @@ export type Database = {
           {
             foreignKeyName: "invoices_booking_id_fkey"
             columns: ["booking_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
@@ -714,6 +747,7 @@ export type Database = {
           preferred_contact: string | null
           property_size: string | null
           property_type: string | null
+          quote_number: string | null
           selected_addons: Json | null
           service_type: string | null
           service_type_id: string | null
@@ -751,6 +785,7 @@ export type Database = {
           preferred_contact?: string | null
           property_size?: string | null
           property_type?: string | null
+          quote_number?: string | null
           selected_addons?: Json | null
           service_type?: string | null
           service_type_id?: string | null
@@ -788,6 +823,7 @@ export type Database = {
           preferred_contact?: string | null
           property_size?: string | null
           property_type?: string | null
+          quote_number?: string | null
           selected_addons?: Json | null
           service_type?: string | null
           service_type_id?: string | null
@@ -801,6 +837,44 @@ export type Database = {
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receipts: {
+        Row: {
+          amount_paid: number | null
+          created_at: string | null
+          id: string
+          invoice_id: string | null
+          line_items: Json | null
+          payment_date: string | null
+          receipt_number: string | null
+        }
+        Insert: {
+          amount_paid?: number | null
+          created_at?: string | null
+          id?: string
+          invoice_id?: string | null
+          line_items?: Json | null
+          payment_date?: string | null
+          receipt_number?: string | null
+        }
+        Update: {
+          amount_paid?: number | null
+          created_at?: string | null
+          id?: string
+          invoice_id?: string | null
+          line_items?: Json | null
+          payment_date?: string | null
+          receipt_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: true
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -1076,6 +1150,13 @@ export type Database = {
         Args: { p_email: string; p_table: string }
         Returns: boolean
       }
+      convert_quote_to_booking: { Args: { p_quote_id: string }; Returns: Json }
+      create_invoice_from_booking: {
+        Args: { p_booking_id: string }
+        Returns: Json
+      }
+      create_receipt: { Args: { p_invoice_id: string }; Returns: Json }
+      generate_receipt_number: { Args: never; Returns: string }
       get_booked_slots: {
         Args: { p_date: string }
         Returns: {
@@ -1093,6 +1174,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_invoice_paid: { Args: { p_invoice_id: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user" | "manager" | "staff"

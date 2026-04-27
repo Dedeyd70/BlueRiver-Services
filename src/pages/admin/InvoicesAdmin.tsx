@@ -153,8 +153,10 @@ const InvoicesAdmin = () => {
 
       const newPaid = +(Number(inv.amount_paid) + args.amount).toFixed(2);
       const total = Number(inv.total_amount);
-      const newStatus = newPaid >= total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+      const isFullyPaid = newPaid >= total;
+      const newStatus = isFullyPaid ? "paid" : newPaid > 0 ? "partial" : "unpaid";
 
+      // Always record the payment metadata (method/date/reference + running total).
       const { data, error } = await supabase
         .from("invoices")
         .update({
@@ -169,6 +171,15 @@ const InvoicesAdmin = () => {
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Update blocked by permissions or RLS");
+
+      // SAFE-MODE: when fully paid, route through the DB RPC. It sets paid_at,
+      // flips status, and auto-creates the receipt (idempotent — reused if exists).
+      if (isFullyPaid) {
+        const { error: paidError } = await (supabase as any).rpc("mark_invoice_paid", {
+          p_invoice_id: args.id,
+        });
+        if (paidError) throw paidError;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
