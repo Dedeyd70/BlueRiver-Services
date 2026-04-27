@@ -673,7 +673,12 @@ const BookingsAdmin = () => {
             {activeBookings.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center italic">No active bookings found.</p>
             ) : (
-              <div className="space-y-3">{activeBookings.map(renderBookingCard)}</div>
+              <>
+                <div className="space-y-3">
+                  {usePagedSlice(activeBookings, activePage).map(renderBookingCard)}
+                </div>
+                <Paginator page={activePage} pageSize={PAGE_SIZE} total={activeBookings.length} onChange={setActivePage} />
+              </>
             )}
           </TabsContent>
 
@@ -681,7 +686,12 @@ const BookingsAdmin = () => {
             {archivedBookings.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center italic">No archived bookings found.</p>
             ) : (
-              <div className="space-y-3">{archivedBookings.map(renderBookingCard)}</div>
+              <>
+                <div className="space-y-3">
+                  {usePagedSlice(archivedBookings, archivePage).map(renderBookingCard)}
+                </div>
+                <Paginator page={archivePage} pageSize={PAGE_SIZE} total={archivedBookings.length} onChange={setArchivePage} />
+              </>
             )}
           </TabsContent>
         </Tabs>
