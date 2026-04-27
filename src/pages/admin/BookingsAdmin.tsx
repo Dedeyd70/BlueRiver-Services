@@ -218,6 +218,48 @@ const BookingsAdmin = () => {
   const getActivityFor = (bookingId: string) =>
     (activityLogs ?? []).filter((l) => l.booking_id === bookingId);
 
+  // ---- Invoice action handlers (UI-only triggers; RPC owns the writes) ----
+
+  const handleGenerateInvoice = async (b: any) => {
+    try {
+      const invoice = await createInvoiceFromBooking(b, user?.id);
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      toast({ title: `Invoice ${invoice?.invoice_number ?? ""} created.` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleViewInvoice = (inv: any) => {
+    if (!branding || !pdfSettings) {
+      toast({ title: "Loading branding…", description: "Please try again in a moment." });
+      return;
+    }
+    generateInvoicePdf(inv, branding, pdfSettings);
+  };
+
+  const handleSendInvoice = (inv: any) => {
+    // Opens the user's mail client with the invoice number pre-filled.
+    const subject = encodeURIComponent(`Invoice ${inv.invoice_number ?? ""}`);
+    const body = encodeURIComponent(
+      `Hello,\n\nPlease find your invoice ${inv.invoice_number ?? ""} attached.\n\nThank you.`
+    );
+    window.location.href = `mailto:${inv.customer_email ?? ""}?subject=${subject}&body=${body}`;
+  };
+
+  const handleMarkPaid = async (inv: any) => {
+    try {
+      const { error } = await (supabase as any).rpc("mark_invoice_paid", { p_invoice_id: inv.id });
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      toast({ title: "Invoice marked as paid. Receipt generated." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
   const renderBookingCard = (b: any) => {
     const addons = parseAddons((b as any).selected_addons);
     const totalPrice = (b as any).total_price;
