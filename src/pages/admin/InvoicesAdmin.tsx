@@ -164,26 +164,29 @@ const InvoicesAdmin = () => {
       const newPaid = +(Number(inv.amount_paid) + args.amount).toFixed(2);
       const total = Number(inv.total_amount);
       const isFullyPaid = newPaid >= total;
-      const newStatus = isFullyPaid ? "paid" : newPaid > 0 ? "partial" : "unpaid";
 
-      // Always record the payment metadata (method/date/reference + running total).
+      // SAFE-MODE: never write payment_status from the frontend.
+      // Only write the non-status payment metadata (running total + method/date/ref).
+      // Status flip + paid_at + receipt creation are owned exclusively by the RPC.
+      const metaPatch: Record<string, any> = {
+        amount_paid: newPaid,
+        payment_method: args.method,
+        payment_date: args.date,
+        payment_reference: args.reference || null,
+      };
+      // Partial payments still need to reflect the "partial" badge in the UI;
+      // when fully paid, the RPC below will overwrite this to "paid".
+      if (!isFullyPaid && newPaid > 0) metaPatch.payment_status = "partial";
+
       const { data, error } = await supabase
         .from("invoices")
-        .update({
-          amount_paid: newPaid,
-          payment_status: newStatus,
-          payment_method: args.method,
-          payment_date: args.date,
-          payment_reference: args.reference || null,
-        })
+        .update(metaPatch as any)
         .eq("id", args.id)
         .select("id")
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Update blocked by permissions or RLS");
 
-      // SAFE-MODE: when fully paid, route through the DB RPC. It sets paid_at,
-      // flips status, and auto-creates the receipt (idempotent — reused if exists).
       if (isFullyPaid) {
         const { error: paidError } = await (supabase as any).rpc("mark_invoice_paid", {
           p_invoice_id: args.id,

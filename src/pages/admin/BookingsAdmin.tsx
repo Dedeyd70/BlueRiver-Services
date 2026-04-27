@@ -254,6 +254,7 @@ const BookingsAdmin = () => {
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-receipts"] });
       toast({ title: "Invoice marked as paid. Receipt generated." });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
