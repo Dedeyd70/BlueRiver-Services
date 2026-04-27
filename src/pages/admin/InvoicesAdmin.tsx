@@ -262,57 +262,48 @@ const InvoicesAdmin = () => {
               </DialogHeader>
               <div className="space-y-4 mt-2">
                 <p className="text-xs text-muted-foreground">
-                  Invoices are normally generated automatically when a booking is marked Completed. Use this only for manual adjustments.
+                  Invoices are generated from a booking. Pricing is taken from the booking's
+                  immutable snapshot — totals and tax are never recalculated here.
                 </p>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Service Type *</label>
+                  <label className="text-sm font-medium mb-1 block">Booking *</label>
                   <select
                     className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={form.service_type_id}
-                    onChange={(e) => setForm({ ...form, service_type_id: e.target.value })}
+                    value={form.booking_id}
+                    onChange={(e) => setForm({ ...form, booking_id: e.target.value })}
                   >
-                    <option value="">Select a service…</option>
-                    {serviceTypes?.map((st) => (
-                      <option key={st.id} value={st.id}>{st.name}</option>
+                    <option value="">Select a booking…</option>
+                    {invoiceableBookings?.map((b: any) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} — {b.service_type ?? "—"} — {b.booking_date}
+                        {b.total_price != null ? ` ($${Number(b.total_price).toFixed(2)})` : ""}
+                      </option>
                     ))}
                   </select>
+                  {invoiceableBookings && invoiceableBookings.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      All bookings already have invoices.
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Customer Name *</label>
-                    <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Customer Email *</label>
-                    <Input value={form.customer_email} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Subtotal ($)</label>
-                    <Input type="number" min={0} step={0.01} value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Tax (%)</label>
-                    <Input type="number" min={0} step={0.01} value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: Number(e.target.value) })} />
-                  </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Due Date</label>
                     <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
                   </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Payment Method</label>
-                  <select
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    value={form.payment_method}
-                    onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
-                  >
-                    <option value="">— None —</option>
-                    {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Payment Method</label>
+                    <select
+                      className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      value={form.payment_method}
+                      onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
+                    >
+                      <option value="">— None —</option>
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Notes</label>
@@ -321,7 +312,7 @@ const InvoicesAdmin = () => {
                 <Button
                   className="w-full"
                   onClick={() => createInvoice.mutate()}
-                  disabled={!form.service_type_id || !form.customer_name || !form.customer_email || createInvoice.isPending}
+                  disabled={!form.booking_id || createInvoice.isPending}
                 >
                   Create Invoice
                 </Button>
