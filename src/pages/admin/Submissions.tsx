@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ExternalLink } from "lucide-react";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 
 type TabType = "all" | "bookings" | "quotes" | "contact";
 
