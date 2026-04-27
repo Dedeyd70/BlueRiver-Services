@@ -245,10 +245,8 @@ const BookService = () => {
         return;
       }
     } catch { /* proceed if check fails */ }
-    // Determine initial status based on auto-approve setting
-    const autoApprove = siteSettings?.auto_approve_bookings === "true"
-      || siteSettings?.booking_approval_mode === "auto";
-    const initialStatus = autoApprove ? "confirmed" : "pending";
+    // Manual confirmation: every public booking starts as Pending. Auto-approve removed.
+    const initialStatus = "pending";
 
     // Split dynamic values into typed columns vs custom_fields
     const typedPayload: Record<string, any> = {};
