@@ -34,7 +34,7 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   { label: "Submissions", path: "/admin/submissions", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_messages" },
 
   // Finance
-  { label: "Invoices", path: "/admin/invoices", roles: ["admin", "manager"], group: "finance" },
+  { label: "Invoices", path: "/admin/invoices", roles: ["admin", "manager"], group: "finance", permission: "can_manage_invoices" },
 
   // Website
   { label: "Services", path: "/admin/services", roles: ["admin", "manager"], group: "website" },

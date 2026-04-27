@@ -33,10 +33,13 @@ const statusColors: Record<string, string> = {
   read: "bg-blue-100 text-blue-800",
 };
 
-const linkForType = (type: UnifiedEntry["type"]) => {
-  if (type === "Booking") return "/admin/bookings";
-  if (type === "Quote") return "/admin/quotes";
-  return "/admin/messages";
+const linkForEntry = (entry: UnifiedEntry) => {
+  const base =
+    entry.type === "Booking" ? "/admin/bookings" :
+    entry.type === "Quote"   ? "/admin/quotes"   :
+                               "/admin/messages";
+  // ?focus= triggers scroll-to + ring highlight + auto-expand on the target page
+  return `${base}?focus=${entry.id}`;
 };
 
 const Submissions = () => {
@@ -187,7 +190,7 @@ const Submissions = () => {
                     {e.status.replace("_", " ")}
                   </span>
                   <Link
-                    to={linkForType(e.type)}
+                    to={linkForEntry(e)}
                     className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                   >
                     Open <ExternalLink className="w-3 h-3" />
