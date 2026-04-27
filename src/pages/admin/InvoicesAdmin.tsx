@@ -136,7 +136,7 @@ const InvoicesAdmin = () => {
       if (Object.keys(metaPatch).length > 0 && inv?.id) {
         const { error: patchErr } = await supabase
           .from("invoices")
-          .update(metaPatch)
+          .update(metaPatch as any)
           .eq("id", inv.id)
           .select("id")
           .maybeSingle();
