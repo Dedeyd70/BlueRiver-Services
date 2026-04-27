@@ -55,9 +55,21 @@ const BookingsAdmin = () => {
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
+  const focusId = searchParams.get("focus");
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [rescheduleTarget, setRescheduleTarget] = useState<any>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleSlot, setRescheduleSlot] = useState("");
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState(1);
+  const [archivePage, setArchivePage] = useState(1);
+
+  // Auto-expand the focused card so deep-linked records open immediately.
+  useEffect(() => {
+    if (focusId) setExpandedId(focusId);
+  }, [focusId]);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
