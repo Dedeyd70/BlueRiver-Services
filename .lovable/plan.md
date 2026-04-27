@@ -1,115 +1,70 @@
-## Goal
-Make the database trigger `set_invoice_number` the **single source of truth** for `invoice_number`. Remove the conflicting manual call from the RPC. Confirm frontend never sets it.
+## Frontend-Only Safe-Mode Refactor
 
-## Audit results (current state)
+**Scope:** UI/frontend only. No DB, RPC, RLS, or schema changes.
 
-**✅ Database trigger exists and is enabled**
-- `set_invoice_number` BEFORE INSERT on `public.invoices` → calls `generate_invoice_number()`
-- Function format: `BR-YYYY-####` from `invoice_number_seq`
-- Column `invoice_number text UNIQUE` already on the table
-- **Will not be touched.**
+---
 
-**❌ RPC `create_invoice_from_booking` violates the rule**
-The current function body contains:
-```sql
-INSERT INTO invoices (id, invoice_number, booking_id, ...)
-VALUES (gen_random_uuid(), generate_invoice_number(), ...)
-```
-This is broken on two counts:
-1. It **manually computes** `invoice_number` (rule violation).
-2. `generate_invoice_number()` is a **trigger function** (returns `trigger`, references `NEW`). Calling it as a scalar function will raise an error at runtime — this is why "Mark Completed" has been failing.
+### Audit findings (current direct inserts / business logic in UI)
 
-**✅ Frontend is already clean**
-Confirmed by `rg`:
-- `src/lib/createInvoiceFromBooking.ts` — only calls the RPC, no `invoice_number` in payload.
-- `src/pages/admin/InvoicesAdmin.tsx` — manual invoice insert payload does **not** include `invoice_number`. It only reads it for display.
-- `src/pages/admin/BookingsAdmin.tsx` — only reads `invoice.invoice_number` for toasts/notifications.
-- `src/lib/invoicePdf.ts` — only reads it for the PDF.
-- `src/integrations/supabase/types.ts` — auto-generated; not edited.
+| File | Line | Issue |
+|------|------|-------|
+| `src/pages/admin/QuotesAdmin.tsx` | 314 | Direct `bookings.insert` from "Convert Quote → Booking". Recalculates subtotal/tax/total in JS. |
+| `src/pages/admin/InvoicesAdmin.tsx` | 120 | Direct `invoices.insert` for manual invoice creation. Recalculates `tax_amount` and `total_amount` in JS. |
+| `src/pages/admin/InvoicesAdmin.tsx` | 160 | Direct `invoices.update` for payments — acceptable for *partial* payments (no RPC exists), but full payment must go through `mark_invoice_paid` (already does ✅). |
+| `src/pages/BookService.tsx` | 274 | Public customer-facing booking form direct insert. **No RPC equivalent exists.** |
+| `src/pages/admin/BookingsAdmin.tsx` | — | Already correct: uses `createInvoiceFromBooking` (RPC wrapper) on "Mark Completed". Missing source-based button conditioning. |
 
-No frontend changes are required.
+---
 
-## Changes
+### Planned changes
 
-### 1. Database migration (single migration file)
+#### 1. `QuotesAdmin.tsx` — Quote→Booking via RPC
+- Replace the `supabase.from("bookings").insert(...)` block (lines ~289–354) with `supabase.rpc("convert_quote_to_booking", { p_quote_id: selectedQuote.id })`.
+- Remove all client-side snapshot math (`snapshotSubtotal`, `snapshotTaxAmount`, `snapshotTotal`) — the RPC already snapshots `line_items` + `total` from the quote.
+- ⚠️ **Caveat to flag to user:** the current RPC body (visible in db-functions context) only inserts `quote_id`, `service_type_id`, `line_items`, `total_price`. It does **not** copy `name/email/booking_date/time_slot/address/property snapshot/custom_fields/source='quote'`. Per the system-role rules, we **cannot modify the RPC**. After the RPC returns the new booking, the frontend will issue a follow-up `bookings.update` (allowed — not an insert) to populate the scheduling fields (`booking_date`, `time_slot`, `status`) and contact/property snapshot fields the RPC omits. This keeps creation through the RPC while still capturing user-selected scheduling data.
+- Keep the post-creation `quote_requests.update` (status→converted), `booking_activity_logs.insert`, and `notifyAdmins` calls — these are not financial-record creations.
 
-Replace the body of `create_invoice_from_booking` so the INSERT omits `invoice_number` entirely. The trigger will populate it.
+#### 2. `InvoicesAdmin.tsx` — Manual invoice creation
+- The "Create Invoice" form currently inserts directly. The available RPC is `create_invoice_from_booking(p_booking_id)` which **requires a booking**.
+- Change behavior: the manual create dialog will **require selecting a booking**, then call `supabase.rpc("create_invoice_from_booking", { p_booking_id })`. Remove client-side `tax_amount` / `total_amount` math.
+- Remove the standalone fields (`subtotal`, `tax_rate`, `services[]`, `customer_name/email`) from the create form, since they are now sourced from the booking snapshot by the RPC.
+- Notes / payment_method / due_date entered in the dialog will be applied via a follow-up `invoices.update` on the returned invoice id (non-financial fields, no recalculation).
 
-```sql
-CREATE OR REPLACE FUNCTION public.create_invoice_from_booking(p_booking_id uuid)
-RETURNS jsonb
-LANGUAGE plpgsql
-AS $function$
-DECLARE
-    existing_invoice invoices%ROWTYPE;
-    booking_record   bookings%ROWTYPE;
-    new_invoice_id   uuid;
-BEGIN
-    -- Idempotent: reuse existing invoice for this booking
-    SELECT * INTO existing_invoice FROM invoices WHERE booking_id = p_booking_id;
-    IF FOUND THEN
-        RETURN to_jsonb(existing_invoice);
-    END IF;
+#### 3. `InvoicesAdmin.tsx` — Payment flow
+- Already routes full payment through `mark_invoice_paid` ✅ — no change.
+- Partial-payment update (lines 160–172) stays as-is (no RPC exists for partial payments; this only writes `amount_paid` / `payment_status='partial'`, not totals).
 
-    SELECT * INTO booking_record FROM bookings WHERE id = p_booking_id;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Booking not found';
-    END IF;
+#### 4. `BookingsAdmin.tsx` — Source-based action buttons
+- Add conditional rendering for `b.source === 'quote'` vs manual:
+  - **Quote-sourced**: View Invoice, Send Invoice, Mark as Paid, Generate Receipt. **Hide "Generate Invoice"** (invoice was auto-created on completion, or will be reused via RPC).
+  - **Manual**: Generate Invoice, View Invoice, Send Invoice, Mark as Paid, Generate Receipt.
+- "View Invoice" / "Send Invoice" / "Mark as Paid" / "Generate Receipt" buttons will look up the invoice by `booking_id` and:
+  - View → open existing invoice (navigate / dialog).
+  - Send → call existing `generateInvoicePdf` + email handler (no DB writes).
+  - Mark as Paid → `supabase.rpc("mark_invoice_paid", { p_invoice_id })`.
+  - Generate Receipt → no-op confirmation (receipts auto-create on `mark_invoice_paid`); button only shown if invoice already paid and links to existing receipt.
 
-    -- NOTE: invoice_number is intentionally OMITTED.
-    -- The BEFORE INSERT trigger `set_invoice_number` populates it.
-    INSERT INTO invoices (
-        id, booking_id, quote_id,
-        customer_name, customer_email,
-        line_items, services,
-        subtotal, tax, tax_amount, total, total_amount,
-        payment_status, status,
-        invoice_date, issued_date, created_at
-    )
-    VALUES (
-        gen_random_uuid(),
-        booking_record.id,
-        booking_record.quote_id,
-        COALESCE(booking_record.name, 'Customer'),
-        COALESCE(booking_record.email, ''),
-        COALESCE(booking_record.line_items, '[]'::jsonb),
-        COALESCE(booking_record.line_items, '[]'::jsonb),
-        COALESCE(booking_record.subtotal, booking_record.total_price, 0),
-        COALESCE(booking_record.tax_amount, 0),
-        COALESCE(booking_record.tax_amount, 0),
-        COALESCE(booking_record.total_amount, booking_record.total_price, 0),
-        COALESCE(booking_record.total_amount, booking_record.total_price, 0),
-        'unpaid',
-        'draft',
-        CURRENT_DATE,
-        CURRENT_DATE,
-        now()
-    )
-    RETURNING id INTO new_invoice_id;
+#### 5. `BookService.tsx` (public booking form) — **out of scope, flagged**
+- This is a public anon-user insert with no RPC equivalent. Removing the insert would break customer bookings.
+- **Recommendation (not done in this pass):** add `source: 'manual'` to the insert payload so admin UI can branch correctly. This is a single-field addition, not new business logic. ✅ Will include this minimal change.
 
-    RETURN (SELECT to_jsonb(i) FROM invoices i WHERE id = new_invoice_id);
-END;
-$function$;
-```
+#### 6. Cleanup
+- Remove now-dead helpers in `QuotesAdmin.tsx`: `snapshotSubtotal`, `snapshotTaxAmount`, `snapshotTotal` calc block.
+- Remove `tax_rate`, `subtotal`, `services` fields from `InvoiceForm` interface and `emptyForm` in `InvoicesAdmin.tsx`.
 
-Why the extra columns (`customer_name`, `customer_email`, `services`, `issued_date`, etc.): these are `NOT NULL` on the `invoices` table per the schema audit. The previous RPC body would also fail RLS/NOT NULL checks even if the numbering bug were fixed. Including them is required for the INSERT to succeed and is **not** related to numbering.
+---
 
-### 2. No frontend changes
-Already compliant. No edits to:
-- `src/lib/createInvoiceFromBooking.ts`
+### Files touched
+- `src/pages/admin/QuotesAdmin.tsx`
 - `src/pages/admin/InvoicesAdmin.tsx`
 - `src/pages/admin/BookingsAdmin.tsx`
+- `src/pages/BookService.tsx` (one-line `source: 'manual'` only)
 
-## Verification after deploy
-1. Call `create_invoice_from_booking` for a booking with no existing invoice → returns invoice with `invoice_number = 'BR-YYYY-####'`.
-2. Call it again for the same booking → returns the **same** invoice (idempotent), no new number consumed.
-3. Insert a manual invoice via `InvoicesAdmin` → `invoice_number` is auto-populated by the trigger.
-4. `SELECT invoice_number, COUNT(*) FROM invoices GROUP BY 1 HAVING COUNT(*) > 1` → zero rows (UNIQUE enforced).
-5. `SELECT COUNT(*) FROM invoices WHERE invoice_number IS NULL` → zero.
+### Files NOT touched
+- All SQL migrations, RPCs, RLS, triggers (per instructions).
+- `src/lib/createInvoiceFromBooking.ts` (already a clean RPC wrapper).
 
-## Rules respected
-- ✅ Trigger untouched
-- ✅ Numbering format/sequence untouched
-- ✅ No `invoice_number` in any frontend INSERT
-- ✅ No `invoice_number` in the RPC INSERT
-- ✅ Single source of truth = `set_invoice_number` trigger
+---
+
+### Open question for your approval
+The `convert_quote_to_booking` RPC does not capture `booking_date`, `time_slot`, contact info, or `source='quote'`. My plan calls the RPC and then does a follow-up `bookings.update` (not an insert) to populate these. **Alternative:** ask you to extend the RPC server-side to accept these as parameters — but that violates the "frontend-only" constraint of this task. Confirm the follow-up-update approach is acceptable, or I can defer the Quote→Booking change until the RPC is extended.

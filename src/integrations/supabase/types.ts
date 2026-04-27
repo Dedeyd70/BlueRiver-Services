@@ -846,7 +846,7 @@ export type Database = {
           amount_paid: number | null
           created_at: string | null
           id: string
-          invoice_id: string | null
+          invoice_id: string
           line_items: Json | null
           payment_date: string | null
           receipt_number: string | null
@@ -855,7 +855,7 @@ export type Database = {
           amount_paid?: number | null
           created_at?: string | null
           id?: string
-          invoice_id?: string | null
+          invoice_id: string
           line_items?: Json | null
           payment_date?: string | null
           receipt_number?: string | null
@@ -864,7 +864,7 @@ export type Database = {
           amount_paid?: number | null
           created_at?: string | null
           id?: string
-          invoice_id?: string | null
+          invoice_id?: string
           line_items?: Json | null
           payment_date?: string | null
           receipt_number?: string | null

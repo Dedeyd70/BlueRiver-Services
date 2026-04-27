@@ -297,6 +297,7 @@ const BookService = () => {
         }),
         total_price: totalPrice > 0 ? totalPrice : null,
         custom_fields: customFields,
+        source: "manual",
         ...typedPayload,
       } as any).select("id").single();
 

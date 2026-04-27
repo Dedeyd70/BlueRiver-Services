@@ -12,8 +12,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
-import { ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon } from "lucide-react";
 import HasPermission from "@/components/HasPermission";
+import { generateInvoicePdf } from "@/lib/invoicePdf";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -73,6 +74,40 @@ const BookingsAdmin = () => {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as any[];
+    },
+  });
+
+  // Linked invoices, keyed by booking_id, used to drive the action buttons.
+  const { data: invoiceByBooking } = useQuery({
+    queryKey: ["admin-invoices-by-booking"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("invoices").select("*");
+      if (error) throw error;
+      const map: Record<string, any> = {};
+      (data ?? []).forEach((i: any) => {
+        if (i.booking_id) map[i.booking_id] = i;
+      });
+      return map;
+    },
+  });
+
+  const { data: branding } = useQuery({
+    queryKey: ["branding-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("branding_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+
+  const { data: pdfSettings } = useQuery({
+    queryKey: ["site-settings-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
     },
   });
 
@@ -182,6 +217,48 @@ const BookingsAdmin = () => {
 
   const getActivityFor = (bookingId: string) =>
     (activityLogs ?? []).filter((l) => l.booking_id === bookingId);
+
+  // ---- Invoice action handlers (UI-only triggers; RPC owns the writes) ----
+
+  const handleGenerateInvoice = async (b: any) => {
+    try {
+      const invoice = await createInvoiceFromBooking(b, user?.id);
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      toast({ title: `Invoice ${invoice?.invoice_number ?? ""} created.` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleViewInvoice = (inv: any) => {
+    if (!branding || !pdfSettings) {
+      toast({ title: "Loading branding…", description: "Please try again in a moment." });
+      return;
+    }
+    generateInvoicePdf(inv, branding, pdfSettings);
+  };
+
+  const handleSendInvoice = (inv: any) => {
+    // Opens the user's mail client with the invoice number pre-filled.
+    const subject = encodeURIComponent(`Invoice ${inv.invoice_number ?? ""}`);
+    const body = encodeURIComponent(
+      `Hello,\n\nPlease find your invoice ${inv.invoice_number ?? ""} attached.\n\nThank you.`
+    );
+    window.location.href = `mailto:${inv.customer_email ?? ""}?subject=${subject}&body=${body}`;
+  };
+
+  const handleMarkPaid = async (inv: any) => {
+    try {
+      const { error } = await (supabase as any).rpc("mark_invoice_paid", { p_invoice_id: inv.id });
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      toast({ title: "Invoice marked as paid. Receipt generated." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
 
   const renderBookingCard = (b: any) => {
     const addons = parseAddons((b as any).selected_addons);
@@ -346,40 +423,82 @@ const BookingsAdmin = () => {
           )}
         </div>
 
-        {!isCompleted && (
-          <div className="pt-3 border-t border-border/50">
-            {isCancelled ? (
-              <div className="py-1">
-                <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-                  This booking was cancelled and cannot be modified.
-                </p>
-              </div>
-            ) : (
-              <HasPermission permission="can_manage_bookings">
-                <div className="flex flex-wrap gap-2">
-                  {b.status === "pending" && (
-                    <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
-                      Confirm
-                    </Button>
-                  )}
-                  {b.status === "confirmed" && (
-                    <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
-                      Mark Completed
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                    onClick={() => setCancelTarget(b)}
-                  >
-                    Cancel
-                  </Button>
+        {/* Action buttons — source-aware. Quote-sourced bookings hide "Generate Invoice"
+            (the invoice is auto-created on Mark Completed and reused if it already exists). */}
+        {(() => {
+          const linkedInvoice = invoiceByBooking?.[b.id];
+          const isQuoteSourced = b.source === "quote" || !!b.quote_id;
+          const showLifecycle = !isCompleted && !isCancelled;
+          const showInvoiceActions = !isCancelled;
+          if (!showLifecycle && !showInvoiceActions) return null;
+
+          return (
+            <div className="pt-3 border-t border-border/50">
+              {isCancelled ? (
+                <div className="py-1">
+                  <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                    This booking was cancelled and cannot be modified.
+                  </p>
                 </div>
-              </HasPermission>
-            )}
-          </div>
-        )}
+              ) : (
+                <HasPermission permission="can_manage_bookings">
+                  <div className="flex flex-wrap gap-2">
+                    {/* Lifecycle */}
+                    {showLifecycle && b.status === "pending" && (
+                      <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
+                        Confirm
+                      </Button>
+                    )}
+                    {showLifecycle && b.status === "confirmed" && (
+                      <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
+                        Mark Completed
+                      </Button>
+                    )}
+
+                    {/* Invoice actions */}
+                    {!linkedInvoice && !isQuoteSourced && (
+                      <Button variant="outline" size="sm" onClick={() => handleGenerateInvoice(b)}>
+                        <FileText className="w-3 h-3 mr-1" /> Generate Invoice
+                      </Button>
+                    )}
+                    {linkedInvoice && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
+                          <FileText className="w-3 h-3 mr-1" /> View Invoice
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
+                          <Send className="w-3 h-3 mr-1" /> Send Invoice
+                        </Button>
+                        {linkedInvoice.payment_status !== "paid" && (
+                          <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
+                            <CheckCircle2 className="w-3 h-3 mr-1" /> Mark as Paid
+                          </Button>
+                        )}
+                        {linkedInvoice.payment_status === "paid" && (
+                          <Button variant="outline" size="sm" disabled>
+                            <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
+                          </Button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Cancel — only on non-completed bookings */}
+                    {showLifecycle && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={() => setCancelTarget(b)}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </HasPermission>
+              )}
+            </div>
+          );
+        })()}
       </div>
     );
   };

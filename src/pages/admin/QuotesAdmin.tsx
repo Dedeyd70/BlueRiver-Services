@@ -286,18 +286,15 @@ const QuotesAdmin = () => {
         .eq("setting_key", "auto_approve_bookings");
       const autoApprove = settingsRows?.[0]?.setting_value === "true";
 
-      // SAFE-MODE: snapshot pricing from the prepared draft. NEVER recalculate.
-      // line_items, subtotal, tax_amount and total are immutable financial records.
-      const draft = draftMap[selectedQuote.id];
-      const snapshotLineItems: any[] = Array.isArray(draft?.line_items) ? draft!.line_items : [];
-      const snapshotSubtotal = snapshotLineItems.reduce(
-        (s: number, it: any) => s + (Number(it?.total_price) || 0),
-        0,
+      // SAFE-MODE: creation goes through the RPC. The RPC snapshots
+      // line_items + total from the quote (no recalculation here).
+      const { data: rpcResult, error: rpcError } = await (supabase as any).rpc(
+        "convert_quote_to_booking",
+        { p_quote_id: selectedQuote.id },
       );
-      const snapshotTaxRate = Number(draft?.tax_rate ?? 0) || 0;
-      const snapshotTaxAmount = +(snapshotSubtotal * (snapshotTaxRate / 100)).toFixed(2);
-      const snapshotTotal = +(snapshotSubtotal + snapshotTaxAmount).toFixed(2);
-      const total: number | null = snapshotLineItems.length > 0 ? snapshotTotal : null;
+      if (rpcError) throw rpcError;
+      const newBooking = rpcResult as any;
+      if (!newBooking?.id) throw new Error("Booking creation failed");
 
       // Snapshot quote-only typed columns into custom_fields so nothing is lost
       const quoteOnlyTyped: Record<string, any> = {};
@@ -311,47 +308,41 @@ const QuotesAdmin = () => {
         ...quoteOnlyTyped,
       };
 
-      const { data: insertedBooking, error: bookingError } = await supabase.from("bookings").insert({
-        // Contact
-        name: selectedQuote.name,
-        email: selectedQuote.email,
-        phone: selectedQuote.phone,
-        address: selectedQuote.address || "",
-        // Service
-        service_type: selectedQuote.service_type,
-        service_type_id: selectedQuote.service_type_id ?? null,
-        booking_date: bookingDate,
-        time_slot: timeSlot,
-        // Notes & consent
-        notes: selectedQuote.description,
-        consent_given: selectedQuote.consent_given,
-        status: autoApprove ? "confirmed" : "pending",
-        // Property snapshot
-        property_type: selectedQuote.property_type ?? null,
-        square_footage: selectedQuote.square_footage ?? null,
-        floor_type: selectedQuote.floor_type ?? null,
-        condition_level: selectedQuote.condition_level ?? null,
-        is_empty_property: selectedQuote.is_empty_property ?? false,
-        has_pets: selectedQuote.has_pets ?? false,
-        pet_count: (selectedQuote as any).pet_count ?? null,
-        entry_codes: selectedQuote.entry_codes ?? null,
-        bedrooms: selectedQuote.bedrooms ?? null,
-        bathrooms: selectedQuote.bathrooms ?? null,
-        frequency: selectedQuote.frequency ?? null,
-        // Pricing snapshot (immutable — copied from quote draft, never recalculated downstream)
-        total_price: total,
-        line_items: snapshotLineItems,
-        subtotal: snapshotSubtotal,
-        tax_amount: snapshotTaxAmount,
-        total_amount: snapshotTotal,
-        source: "quote",
-        // Add-ons + custom fields snapshot
-        selected_addons: selectedQuote.selected_addons || [],
-        custom_fields: mergedCustom,
-        // Link back (kept nullable so booking survives quote deletion)
-        quote_id: selectedQuote.id,
-      } as any).select("id").single();
-      if (bookingError) throw bookingError;
+      // Follow-up update: populate scheduling, contact, and snapshot fields the RPC
+      // does not set. This is a non-financial update — no totals are recalculated.
+      const { data: patched, error: patchError } = await supabase
+        .from("bookings")
+        .update({
+          name: selectedQuote.name,
+          email: selectedQuote.email,
+          phone: selectedQuote.phone,
+          address: selectedQuote.address || "",
+          service_type: selectedQuote.service_type,
+          booking_date: bookingDate,
+          time_slot: timeSlot,
+          notes: selectedQuote.description,
+          consent_given: selectedQuote.consent_given,
+          status: autoApprove ? "confirmed" : "pending",
+          property_type: selectedQuote.property_type ?? null,
+          square_footage: selectedQuote.square_footage ?? null,
+          floor_type: selectedQuote.floor_type ?? null,
+          condition_level: selectedQuote.condition_level ?? null,
+          is_empty_property: selectedQuote.is_empty_property ?? false,
+          has_pets: selectedQuote.has_pets ?? false,
+          pet_count: (selectedQuote as any).pet_count ?? null,
+          entry_codes: selectedQuote.entry_codes ?? null,
+          bedrooms: selectedQuote.bedrooms ?? null,
+          bathrooms: selectedQuote.bathrooms ?? null,
+          frequency: selectedQuote.frequency ?? null,
+          selected_addons: selectedQuote.selected_addons || [],
+          custom_fields: mergedCustom,
+          source: "quote",
+        } as any)
+        .eq("id", newBooking.id)
+        .select("id")
+        .maybeSingle();
+      if (patchError) throw patchError;
+      if (!patched) throw new Error("Booking update blocked by permissions or RLS");
 
       const { data: updatedQuote, error: quoteError } = await supabase
         .from("quote_requests")
@@ -367,14 +358,14 @@ const QuotesAdmin = () => {
       // Booking activity log: created from quote
       const { data: { user } } = await supabase.auth.getUser();
       await (supabase as any).from("booking_activity_logs").insert({
-        booking_id: insertedBooking?.id,
+        booking_id: newBooking.id,
         action: "created",
         details: `Created from quote ${selectedQuote.id}`,
         new_status: autoApprove ? "confirmed" : "pending",
         actor_id: user?.id ?? null,
       });
 
-      await notifyAdmins("quote_converted", `Quote from ${selectedQuote.name} converted to booking`, insertedBooking?.id, "booking");
+      await notifyAdmins("quote_converted", `Quote from ${selectedQuote.name} converted to booking`, newBooking.id, "booking");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
