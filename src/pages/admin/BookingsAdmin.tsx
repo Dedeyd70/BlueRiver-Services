@@ -501,49 +501,66 @@ const BookingsAdmin = () => {
                   </p>
                 </div>
               ) : (
-                <HasPermission permission="can_manage_bookings">
-                  <div className="flex flex-wrap gap-2">
-                    {/* Lifecycle */}
-                    {showLifecycle && b.status === "pending" && (
+                <div className="flex flex-wrap gap-2">
+                  {/* Lifecycle */}
+                  {showLifecycle && b.status === "pending" && (
+                    <PermissionGate permission="can_manage_bookings">
                       <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
                         Confirm
                       </Button>
-                    )}
-                    {showLifecycle && b.status === "confirmed" && (
+                    </PermissionGate>
+                  )}
+                  {showLifecycle && b.status === "confirmed" && (
+                    <PermissionGate permission="can_manage_bookings">
                       <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
                         Mark Completed
                       </Button>
-                    )}
+                    </PermissionGate>
+                  )}
 
-                    {/* Invoice actions */}
-                    {!linkedInvoice && !isQuoteSourced && (
+                  {/* Reschedule — collision-checked via get_booked_slots RPC */}
+                  {showLifecycle && (
+                    <PermissionGate permission="can_manage_bookings">
+                      <Button variant="outline" size="sm" onClick={() => openReschedule(b)}>
+                        <CalendarClock className="w-3 h-3 mr-1" /> Reschedule
+                      </Button>
+                    </PermissionGate>
+                  )}
+
+                  {/* Invoice actions */}
+                  {!linkedInvoice && !isQuoteSourced && (
+                    <PermissionGate permission="can_manage_invoices">
                       <Button variant="outline" size="sm" onClick={() => handleGenerateInvoice(b)}>
                         <FileText className="w-3 h-3 mr-1" /> Generate Invoice
                       </Button>
-                    )}
-                    {linkedInvoice && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
-                          <FileText className="w-3 h-3 mr-1" /> View Invoice
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
-                          <Send className="w-3 h-3 mr-1" /> Send Invoice
-                        </Button>
-                        {linkedInvoice.payment_status !== "paid" && (
+                    </PermissionGate>
+                  )}
+                  {linkedInvoice && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
+                        <FileText className="w-3 h-3 mr-1" /> View Invoice
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
+                        <Send className="w-3 h-3 mr-1" /> Send Invoice
+                      </Button>
+                      {linkedInvoice.payment_status !== "paid" && (
+                        <PermissionGate permission="can_manage_invoices">
                           <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
                             <CheckCircle2 className="w-3 h-3 mr-1" /> Mark as Paid
                           </Button>
-                        )}
-                        {linkedInvoice.payment_status === "paid" && (
-                          <Button variant="outline" size="sm" disabled>
-                            <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
-                          </Button>
-                        )}
-                      </>
-                    )}
+                        </PermissionGate>
+                      )}
+                      {linkedInvoice.payment_status === "paid" && (
+                        <Button variant="outline" size="sm" disabled>
+                          <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
+                        </Button>
+                      )}
+                    </>
+                  )}
 
-                    {/* Cancel — only on non-completed bookings */}
-                    {showLifecycle && (
+                  {/* Cancel — only on non-completed bookings */}
+                  {showLifecycle && (
+                    <PermissionGate permission="can_manage_bookings">
                       <Button
                         variant="outline"
                         size="sm"
@@ -552,9 +569,9 @@ const BookingsAdmin = () => {
                       >
                         Cancel
                       </Button>
-                    )}
-                  </div>
-                </HasPermission>
+                    </PermissionGate>
+                  )}
+                </div>
               )}
             </div>
           );
