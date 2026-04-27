@@ -286,32 +286,18 @@ const QuotesAdmin = () => {
         .eq("setting_key", "auto_approve_bookings");
       const autoApprove = settingsRows?.[0]?.setting_value === "true";
 
-      // Resolve total price: prefer existing draft (subtotal+tax), else compute live
+      // SAFE-MODE: snapshot pricing from the prepared draft. NEVER recalculate.
+      // line_items, subtotal, tax_amount and total are immutable financial records.
       const draft = draftMap[selectedQuote.id];
-      let total: number | null = null;
-      if (draft) {
-        const items: LineItem[] = Array.isArray(draft.line_items) ? draft.line_items : [];
-        if (items.length > 0) {
-          const recomputed = recomputeFromLineItems(items, Number(draft.tax_rate) || 0);
-          total = recomputed.total;
-        } else {
-          total = (Number(draft.base_price) || 0) + (Number(draft.tax_rate) || 0);
-        }
-      } else {
-        try {
-          const computed = computeQuote(
-            selectedQuote,
-            pricingServiceTypes ?? [],
-            pricingRules ?? [],
-            conditionSettings ?? [],
-            Number(settings?.tax_rate ?? 0) || 0,
-            pricingFields ?? [],
-          );
-          total = computed.total;
-        } catch {
-          total = null;
-        }
-      }
+      const snapshotLineItems: any[] = Array.isArray(draft?.line_items) ? draft!.line_items : [];
+      const snapshotSubtotal = snapshotLineItems.reduce(
+        (s: number, it: any) => s + (Number(it?.total_price) || 0),
+        0,
+      );
+      const snapshotTaxRate = Number(draft?.tax_rate ?? 0) || 0;
+      const snapshotTaxAmount = +(snapshotSubtotal * (snapshotTaxRate / 100)).toFixed(2);
+      const snapshotTotal = +(snapshotSubtotal + snapshotTaxAmount).toFixed(2);
+      const total: number | null = snapshotLineItems.length > 0 ? snapshotTotal : null;
 
       // Snapshot quote-only typed columns into custom_fields so nothing is lost
       const quoteOnlyTyped: Record<string, any> = {};
@@ -352,8 +338,13 @@ const QuotesAdmin = () => {
         bedrooms: selectedQuote.bedrooms ?? null,
         bathrooms: selectedQuote.bathrooms ?? null,
         frequency: selectedQuote.frequency ?? null,
-        // Pricing snapshot
+        // Pricing snapshot (immutable — copied from quote draft, never recalculated downstream)
         total_price: total,
+        line_items: snapshotLineItems,
+        subtotal: snapshotSubtotal,
+        tax_amount: snapshotTaxAmount,
+        total_amount: snapshotTotal,
+        source: "quote",
         // Add-ons + custom fields snapshot
         selected_addons: selectedQuote.selected_addons || [],
         custom_fields: mergedCustom,
