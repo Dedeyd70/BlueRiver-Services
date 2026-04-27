@@ -12,8 +12,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
-import { ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon } from "lucide-react";
 import HasPermission from "@/components/HasPermission";
+import { generateInvoicePdf } from "@/lib/invoicePdf";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
