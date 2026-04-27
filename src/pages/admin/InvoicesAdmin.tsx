@@ -22,29 +22,17 @@ const statusColors: Record<string, string> = {
 const PAYMENT_METHODS = ["Cash", "Check", "Bank Transfer", "Square", "Zelle", "Other"] as const;
 
 interface InvoiceForm {
-  service_type_id: string;
-  customer_name: string;
-  customer_email: string;
-  services: { title: string; price: number }[];
-  subtotal: number;
-  tax_rate: number;
+  booking_id: string;
   payment_method: string;
   notes: string;
   due_date: string;
-  booking_id: string | null;
 }
 
 const emptyForm: InvoiceForm = {
-  service_type_id: "",
-  customer_name: "",
-  customer_email: "",
-  services: [],
-  subtotal: 0,
-  tax_rate: 0,
+  booking_id: "",
   payment_method: "",
   notes: "",
   due_date: "",
-  booking_id: null,
 };
 
 interface PaymentTarget {
@@ -91,6 +79,21 @@ const InvoicesAdmin = () => {
     },
   });
 
+  // Bookings available for manual invoicing — those without an invoice yet.
+  const { data: invoiceableBookings } = useQuery({
+    queryKey: ["bookings-without-invoice"],
+    queryFn: async () => {
+      const { data: bks, error } = await supabase
+        .from("bookings")
+        .select("id, name, email, booking_date, service_type, total_price, source")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const { data: invs } = await supabase.from("invoices").select("booking_id");
+      const taken = new Set((invs ?? []).map((i: any) => i.booking_id).filter(Boolean));
+      return (bks ?? []).filter((b: any) => !taken.has(b.id));
+    },
+  });
+
   // Branding + settings for PDF (mirrors QuotesAdmin)
   const { data: branding } = useQuery({
     queryKey: ["branding-for-pdf"],
@@ -112,30 +115,37 @@ const InvoicesAdmin = () => {
     },
   });
 
+  // SAFE-MODE: invoice creation is delegated to the database RPC.
+  // The RPC snapshots line_items + totals from the booking — no client-side math.
   const createInvoice = useMutation({
     mutationFn: async () => {
-      if (!form.service_type_id) throw new Error("Service type is required");
-      const taxAmount = +(form.subtotal * (form.tax_rate / 100)).toFixed(2);
-      const totalAmount = +(form.subtotal + taxAmount).toFixed(2);
-      const { error } = await supabase.from("invoices").insert({
-        service_type_id: form.service_type_id,
-        customer_name: form.customer_name,
-        customer_email: form.customer_email,
-        services: form.services as any,
-        subtotal: form.subtotal,
-        tax_rate: form.tax_rate,
-        tax_amount: taxAmount,
-        total_amount: totalAmount,
-        payment_method: form.payment_method || null,
-        notes: form.notes || null,
-        due_date: form.due_date || null,
-        booking_id: form.booking_id || null,
-        created_by: user?.id || null,
-      } as any);
+      if (!form.booking_id) throw new Error("Booking is required");
+      const { data: rpcResult, error } = await (supabase as any).rpc(
+        "create_invoice_from_booking",
+        { p_booking_id: form.booking_id },
+      );
       if (error) throw error;
+      const inv = rpcResult as any;
+
+      // Optional metadata from the dialog (notes / payment_method / due_date)
+      // are non-financial and applied via update — no totals are touched.
+      const metaPatch: Record<string, any> = {};
+      if (form.payment_method) metaPatch.payment_method = form.payment_method;
+      if (form.notes) metaPatch.notes = form.notes;
+      if (form.due_date) metaPatch.due_date = form.due_date;
+      if (Object.keys(metaPatch).length > 0 && inv?.id) {
+        const { error: patchErr } = await supabase
+          .from("invoices")
+          .update(metaPatch as any)
+          .eq("id", inv.id)
+          .select("id")
+          .maybeSingle();
+        if (patchErr) throw patchErr;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["bookings-without-invoice"] });
       setOpen(false);
       setForm({ ...emptyForm });
       toast({ title: "Invoice created" });
@@ -252,57 +262,48 @@ const InvoicesAdmin = () => {
               </DialogHeader>
               <div className="space-y-4 mt-2">
                 <p className="text-xs text-muted-foreground">
-                  Invoices are normally generated automatically when a booking is marked Completed. Use this only for manual adjustments.
+                  Invoices are generated from a booking. Pricing is taken from the booking's
+                  immutable snapshot — totals and tax are never recalculated here.
                 </p>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Service Type *</label>
+                  <label className="text-sm font-medium mb-1 block">Booking *</label>
                   <select
                     className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={form.service_type_id}
-                    onChange={(e) => setForm({ ...form, service_type_id: e.target.value })}
+                    value={form.booking_id}
+                    onChange={(e) => setForm({ ...form, booking_id: e.target.value })}
                   >
-                    <option value="">Select a service…</option>
-                    {serviceTypes?.map((st) => (
-                      <option key={st.id} value={st.id}>{st.name}</option>
+                    <option value="">Select a booking…</option>
+                    {invoiceableBookings?.map((b: any) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} — {b.service_type ?? "—"} — {b.booking_date}
+                        {b.total_price != null ? ` ($${Number(b.total_price).toFixed(2)})` : ""}
+                      </option>
                     ))}
                   </select>
+                  {invoiceableBookings && invoiceableBookings.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      All bookings already have invoices.
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Customer Name *</label>
-                    <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Customer Email *</label>
-                    <Input value={form.customer_email} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Subtotal ($)</label>
-                    <Input type="number" min={0} step={0.01} value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: Number(e.target.value) })} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Tax (%)</label>
-                    <Input type="number" min={0} step={0.01} value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: Number(e.target.value) })} />
-                  </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">Due Date</label>
                     <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
                   </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Payment Method</label>
-                  <select
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    value={form.payment_method}
-                    onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
-                  >
-                    <option value="">— None —</option>
-                    {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Payment Method</label>
+                    <select
+                      className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      value={form.payment_method}
+                      onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
+                    >
+                      <option value="">— None —</option>
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Notes</label>
@@ -311,7 +312,7 @@ const InvoicesAdmin = () => {
                 <Button
                   className="w-full"
                   onClick={() => createInvoice.mutate()}
-                  disabled={!form.service_type_id || !form.customer_name || !form.customer_email || createInvoice.isPending}
+                  disabled={!form.booking_id || createInvoice.isPending}
                 >
                   Create Invoice
                 </Button>
