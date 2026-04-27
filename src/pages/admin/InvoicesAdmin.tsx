@@ -22,29 +22,17 @@ const statusColors: Record<string, string> = {
 const PAYMENT_METHODS = ["Cash", "Check", "Bank Transfer", "Square", "Zelle", "Other"] as const;
 
 interface InvoiceForm {
-  service_type_id: string;
-  customer_name: string;
-  customer_email: string;
-  services: { title: string; price: number }[];
-  subtotal: number;
-  tax_rate: number;
+  booking_id: string;
   payment_method: string;
   notes: string;
   due_date: string;
-  booking_id: string | null;
 }
 
 const emptyForm: InvoiceForm = {
-  service_type_id: "",
-  customer_name: "",
-  customer_email: "",
-  services: [],
-  subtotal: 0,
-  tax_rate: 0,
+  booking_id: "",
   payment_method: "",
   notes: "",
   due_date: "",
-  booking_id: null,
 };
 
 interface PaymentTarget {
