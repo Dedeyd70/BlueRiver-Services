@@ -612,6 +612,43 @@ const BookingsAdmin = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!rescheduleTarget} onOpenChange={() => setRescheduleTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Booking</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">New date</label>
+              <Input
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">New time slot</label>
+              <Input
+                placeholder="e.g. 10:00 AM"
+                value={rescheduleSlot}
+                onChange={(e) => setRescheduleSlot(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Slot collisions are checked automatically before saving.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleTarget(null)}>
+              Back
+            </Button>
+            <Button onClick={handleRescheduleConfirm} disabled={!rescheduleDate || !rescheduleSlot}>
+              Confirm Reschedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
