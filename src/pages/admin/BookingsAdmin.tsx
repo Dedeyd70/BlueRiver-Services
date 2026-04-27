@@ -77,6 +77,40 @@ const BookingsAdmin = () => {
     },
   });
 
+  // Linked invoices, keyed by booking_id, used to drive the action buttons.
+  const { data: invoiceByBooking } = useQuery({
+    queryKey: ["admin-invoices-by-booking"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("invoices").select("*");
+      if (error) throw error;
+      const map: Record<string, any> = {};
+      (data ?? []).forEach((i: any) => {
+        if (i.booking_id) map[i.booking_id] = i;
+      });
+      return map;
+    },
+  });
+
+  const { data: branding } = useQuery({
+    queryKey: ["branding-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("branding_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+
+  const { data: pdfSettings } = useQuery({
+    queryKey: ["site-settings-for-pdf"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("setting_key, setting_value");
+      const map: Record<string, string> = {};
+      data?.forEach((r) => (map[r.setting_key] = r.setting_value));
+      return map;
+    },
+  });
+
   const { getRef } = useFocusHighlight(!isLoading && !!bookings);
 
   const activeBookings = (bookings ?? []).filter((b) => {
