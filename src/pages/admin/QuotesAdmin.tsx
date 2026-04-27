@@ -261,97 +261,21 @@ const QuotesAdmin = () => {
     mutationFn: async () => {
       if (!selectedQuote || !bookingDate || !timeSlot) throw new Error("Please select date and time");
 
-      // Idempotency: 1 quote → 1 booking. If one exists, ensure quote is marked converted and exit cleanly.
-      const { data: existingBooking } = await supabase
-        .from("bookings")
-        .select("id")
-        .eq("quote_id", selectedQuote.id)
-        .maybeSingle();
-      if (existingBooking) {
-        // Make sure the quote status reflects reality, then short-circuit safely.
-        if (selectedQuote.status !== "converted") {
-          await supabase
-            .from("quote_requests")
-            .update({ status: "converted" })
-            .eq("id", selectedQuote.id)
-            .select("id")
-            .maybeSingle();
-        }
-        return;
-      }
-
-      const { data: settingsRows } = await supabase
-        .from("site_settings")
-        .select("setting_key, setting_value")
-        .eq("setting_key", "auto_approve_bookings");
-      const autoApprove = settingsRows?.[0]?.setting_value === "true";
-
-      // SAFE-MODE: creation goes through the RPC. The RPC snapshots
-      // line_items + total from the quote (no recalculation here).
+      // The RPC handles everything: snapshots contact + scheduling + line items
+      // from quote_requests/quote_drafts, sets status='pending', and marks the
+      // quote as 'converted'. It is also idempotent (returns the existing
+      // booking if one already exists for this quote).
       const { data: rpcResult, error: rpcError } = await (supabase as any).rpc(
         "convert_quote_to_booking",
-        { p_quote_id: selectedQuote.id },
+        {
+          p_quote_id: selectedQuote.id,
+          p_booking_date: bookingDate,
+          p_time_slot: timeSlot,
+        },
       );
       if (rpcError) throw rpcError;
       const newBooking = rpcResult as any;
       if (!newBooking?.id) throw new Error("Booking creation failed");
-
-      // Snapshot quote-only typed columns into custom_fields so nothing is lost
-      const quoteOnlyTyped: Record<string, any> = {};
-      const carryKeys = ["kitchen_count", "living_rooms", "office_rooms", "full_bathrooms", "half_bathrooms", "has_cabinets", "floor_type"];
-      for (const k of carryKeys) {
-        const v = (selectedQuote as any)[k];
-        if (v !== null && v !== undefined && v !== "") quoteOnlyTyped[k] = v;
-      }
-      const mergedCustom = {
-        ...(selectedQuote.custom_fields && typeof selectedQuote.custom_fields === "object" ? selectedQuote.custom_fields : {}),
-        ...quoteOnlyTyped,
-      };
-
-      // Follow-up update: populate scheduling, contact, and snapshot fields the RPC
-      // does not set. This is a non-financial update — no totals are recalculated.
-      const { data: patched, error: patchError } = await supabase
-        .from("bookings")
-        .update({
-          name: selectedQuote.name,
-          email: selectedQuote.email,
-          phone: selectedQuote.phone,
-          address: selectedQuote.address || "",
-          service_type: selectedQuote.service_type,
-          booking_date: bookingDate,
-          time_slot: timeSlot,
-          notes: selectedQuote.description,
-          consent_given: selectedQuote.consent_given,
-          status: autoApprove ? "confirmed" : "pending",
-          property_type: selectedQuote.property_type ?? null,
-          square_footage: selectedQuote.square_footage ?? null,
-          floor_type: selectedQuote.floor_type ?? null,
-          condition_level: selectedQuote.condition_level ?? null,
-          is_empty_property: selectedQuote.is_empty_property ?? false,
-          has_pets: selectedQuote.has_pets ?? false,
-          pet_count: (selectedQuote as any).pet_count ?? null,
-          entry_codes: selectedQuote.entry_codes ?? null,
-          bedrooms: selectedQuote.bedrooms ?? null,
-          bathrooms: selectedQuote.bathrooms ?? null,
-          frequency: selectedQuote.frequency ?? null,
-          selected_addons: selectedQuote.selected_addons || [],
-          custom_fields: mergedCustom,
-          source: "quote",
-        } as any)
-        .eq("id", newBooking.id)
-        .select("id")
-        .maybeSingle();
-      if (patchError) throw patchError;
-      if (!patched) throw new Error("Booking update blocked by permissions or RLS");
-
-      const { data: updatedQuote, error: quoteError } = await supabase
-        .from("quote_requests")
-        .update({ status: "converted" })
-        .eq("id", selectedQuote.id)
-        .select("id")
-        .maybeSingle();
-      if (quoteError) throw quoteError;
-      if (!updatedQuote) throw new Error("Update blocked by permissions or RLS");
 
       await logActivity(selectedQuote.id, `Converted to booking on ${bookingDate} at ${timeSlot}`);
 
@@ -361,7 +285,7 @@ const QuotesAdmin = () => {
         booking_id: newBooking.id,
         action: "created",
         details: `Created from quote ${selectedQuote.id}`,
-        new_status: autoApprove ? "confirmed" : "pending",
+        new_status: "pending",
         actor_id: user?.id ?? null,
       });
 
