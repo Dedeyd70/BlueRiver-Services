@@ -79,6 +79,21 @@ const InvoicesAdmin = () => {
     },
   });
 
+  // Bookings available for manual invoicing — those without an invoice yet.
+  const { data: invoiceableBookings } = useQuery({
+    queryKey: ["bookings-without-invoice"],
+    queryFn: async () => {
+      const { data: bks, error } = await supabase
+        .from("bookings")
+        .select("id, name, email, booking_date, service_type, total_price, source")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const { data: invs } = await supabase.from("invoices").select("booking_id");
+      const taken = new Set((invs ?? []).map((i: any) => i.booking_id).filter(Boolean));
+      return (bks ?? []).filter((b: any) => !taken.has(b.id));
+    },
+  });
+
   // Branding + settings for PDF (mirrors QuotesAdmin)
   const { data: branding } = useQuery({
     queryKey: ["branding-for-pdf"],
@@ -100,30 +115,37 @@ const InvoicesAdmin = () => {
     },
   });
 
+  // SAFE-MODE: invoice creation is delegated to the database RPC.
+  // The RPC snapshots line_items + totals from the booking — no client-side math.
   const createInvoice = useMutation({
     mutationFn: async () => {
-      if (!form.service_type_id) throw new Error("Service type is required");
-      const taxAmount = +(form.subtotal * (form.tax_rate / 100)).toFixed(2);
-      const totalAmount = +(form.subtotal + taxAmount).toFixed(2);
-      const { error } = await supabase.from("invoices").insert({
-        service_type_id: form.service_type_id,
-        customer_name: form.customer_name,
-        customer_email: form.customer_email,
-        services: form.services as any,
-        subtotal: form.subtotal,
-        tax_rate: form.tax_rate,
-        tax_amount: taxAmount,
-        total_amount: totalAmount,
-        payment_method: form.payment_method || null,
-        notes: form.notes || null,
-        due_date: form.due_date || null,
-        booking_id: form.booking_id || null,
-        created_by: user?.id || null,
-      } as any);
+      if (!form.booking_id) throw new Error("Booking is required");
+      const { data: rpcResult, error } = await (supabase as any).rpc(
+        "create_invoice_from_booking",
+        { p_booking_id: form.booking_id },
+      );
       if (error) throw error;
+      const inv = rpcResult as any;
+
+      // Optional metadata from the dialog (notes / payment_method / due_date)
+      // are non-financial and applied via update — no totals are touched.
+      const metaPatch: Record<string, any> = {};
+      if (form.payment_method) metaPatch.payment_method = form.payment_method;
+      if (form.notes) metaPatch.notes = form.notes;
+      if (form.due_date) metaPatch.due_date = form.due_date;
+      if (Object.keys(metaPatch).length > 0 && inv?.id) {
+        const { error: patchErr } = await supabase
+          .from("invoices")
+          .update(metaPatch)
+          .eq("id", inv.id)
+          .select("id")
+          .maybeSingle();
+        if (patchErr) throw patchErr;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["bookings-without-invoice"] });
       setOpen(false);
       setForm({ ...emptyForm });
       toast({ title: "Invoice created" });
