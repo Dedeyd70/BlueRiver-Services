@@ -203,7 +203,10 @@ const RequestQuote = () => {
       } as any).select("id").maybeSingle();
 
       if (error) {
-        toast({ title: "Quote submission failed.", description: "Please try again later.", variant: "destructive" });
+        const anyErr = error as any;
+        const desc = `${anyErr.message ?? "Unknown error"}${anyErr.details ? ` — ${anyErr.details}` : ""}${anyErr.hint ? ` (hint: ${anyErr.hint})` : ""}${anyErr.code ? ` [code ${anyErr.code}]` : ""}`;
+        console.error("Quote insert failed:", error);
+        toast({ title: "Quote submission failed", description: desc, variant: "destructive" });
         return;
       }
 
@@ -214,8 +217,9 @@ const RequestQuote = () => {
 
       setSubmitted(true);
       toast({ title: "Quote received!", description: "Expect a reply within 24 hours." });
-    } catch {
-      toast({ title: "Quote submission failed.", description: "An unexpected error occurred.", variant: "destructive" });
+    } catch (e: any) {
+      console.error("Quote submit threw:", e);
+      toast({ title: "Quote submission failed", description: e?.message ?? String(e) ?? "An unexpected error occurred.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
