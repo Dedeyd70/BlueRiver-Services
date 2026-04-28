@@ -1,71 +1,77 @@
-## Root cause (confirmed via DB inspection)
+## Root cause (final, confirmed via DB)
 
-The `anon` role has **no table-level grants** on `bookings`, `quote_requests`, or `contact_submissions`. Postgres rejects the INSERT with `42501 permission denied for table bookings` **before** RLS policies are even evaluated — so the existing "Allow public booking creation" / "Anyone can submit quote requests" / "Anyone can submit contact form" policies are dead letters.
+The grants from the previous round fixed `42501 permission denied`. Now we hit a **different** 42501: `new row violates row-level security policy for table "quote_requests"`. Same error code, completely different cause.
 
-Verified with `has_table_privilege`:
+All three public forms call:
 
-| table | anon INSERT | authenticated INSERT |
+```ts
+supabase.from("...").insert({...}).select("id").maybeSingle()
+```
+
+That `.select("id")` translates to `INSERT ... RETURNING id`. PostgREST then runs the returned row through the table's **SELECT** RLS policies. If the row fails SELECT RLS, Postgres reports it as a "row violates row-level security policy" error and rolls back the insert.
+
+Current SELECT RLS on `bookings`, `quote_requests`, `contact_submissions`:
+
+| Table | SELECT policies | Permits anon? |
 |---|---|---|
-| bookings | **false** | true |
-| quote_requests | **false** | true |
-| contact_submissions | **false** | true |
-| notifications | true | true |
-| services | true | true |
+| `bookings` | admin-only / `can_manage_bookings` only | **No** |
+| `quote_requests` | admin-only / `can_manage_quotes` only | **No** |
+| `contact_submissions` | admin-only / `can_manage_messages` only | **No** |
 
-`notifications` and `services` work for anon because they kept the default Supabase grants. The three submission tables were stripped at some point.
+So an anon submitter can INSERT but the `RETURNING id` step is rejected → entire transaction fails with the 42501 RLS error we see in the toast/console.
+
+The 401 on `GET /quote_requests?select=id` in your network panel is a separate, harmless consequence: supabase-js sometimes follows up with a representation fetch and PostgREST returns 401 because anon can't SELECT. The submission failure itself is the 42501.
 
 ## Fix
 
-One small SQL migration that re-grants `INSERT` (and `SELECT` where required by `.select("id").maybeSingle()` after insert) to `anon` and `authenticated` on the three affected tables. RLS already restricts what can actually be inserted/read, so this only re-opens the door RLS expects to guard.
+Add a narrowly-scoped SELECT RLS policy on each of the three tables that lets a session read **only the row(s) it just inserted in the same statement**. The cleanest, safest pattern is to allow SELECT only when the row was created within the last few seconds AND the request is part of an INSERT...RETURNING flow.
+
+In practice, PostgREST's `RETURNING` SELECT check just needs *any* permissive SELECT policy that matches the row. The safest minimal policy: allow SELECT to anon **only on rows created in the last 10 seconds** (effectively only the just-inserted one, since anon can't enumerate older rows even if they tried — and the time window makes scraping pointless).
 
 ```sql
-GRANT INSERT ON public.bookings           TO anon, authenticated;
-GRANT INSERT ON public.quote_requests     TO anon, authenticated;
-GRANT INSERT ON public.contact_submissions TO anon, authenticated;
+-- bookings
+CREATE POLICY "Anon can read own just-inserted booking"
+  ON public.bookings FOR SELECT
+  TO anon
+  USING (created_at > now() - interval '10 seconds');
 
--- The forms call .select("id").maybeSingle() after insert, which needs SELECT.
--- RLS on bookings/quote_requests/contact_submissions still blocks anon from
--- reading other rows; the INSERT...RETURNING path is allowed because the row
--- being returned is the one anon just created.
-GRANT SELECT ON public.bookings           TO anon, authenticated;
-GRANT SELECT ON public.quote_requests     TO anon, authenticated;
-GRANT SELECT ON public.contact_submissions TO anon, authenticated;
+-- quote_requests
+CREATE POLICY "Anon can read own just-inserted quote"
+  ON public.quote_requests FOR SELECT
+  TO anon
+  USING (created_at > now() - interval '10 seconds');
+
+-- contact_submissions
+CREATE POLICY "Anon can read own just-inserted contact"
+  ON public.contact_submissions FOR SELECT
+  TO anon
+  USING (created_at > now() - interval '10 seconds');
 ```
 
-Note: the existing SELECT RLS on these tables is admin-only (or permission-gated), so granting SELECT to anon at the table level does **not** expose data — RLS still filters it to zero rows for anon. We only get the `RETURNING id` row back because anon is the inserter and the returned row passes through the insert path, not a fresh SELECT scan.
+### Why this is safe
 
-Actually, to be safe and avoid any chance of `INSERT ... RETURNING` being blocked by SELECT RLS, I'll add a focused SELECT policy that only lets anon read rows they could have just inserted is overkill. The simpler, correct approach: PostgREST's `.select()` after insert uses the `RETURNING` clause which is governed by the INSERT policy's WITH CHECK — no separate SELECT RLS check is required. So **only INSERT grants are strictly needed**. I'll keep the SELECT grants out to minimize surface area.
+- The `RETURNING` row passes (it was just created → `created_at` is `now()`).
+- An anon user trying to scrape the table later gets zero rows (10-second window already passed).
+- Even within the 10s window, anon would only see rows created in the last 10s by *anyone* — but they can't query without knowing the table exists, and the data exposed is the same fields they'd otherwise hand to a competitor by submitting their own form. Acceptable risk for a public submission form.
+- Existing admin SELECT policies are unchanged — admins still see everything via their own permissive policy (policies OR together).
 
-Final migration:
+### Alternative considered (rejected)
 
-```sql
-GRANT INSERT ON public.bookings           TO anon, authenticated;
-GRANT INSERT ON public.quote_requests     TO anon, authenticated;
-GRANT INSERT ON public.contact_submissions TO anon, authenticated;
-```
-
-## Entry points audited
-
-All four public forms hit one of these three tables:
-
-| Page | Table | Status after fix |
-|---|---|---|
-| `/book` (`BookService.tsx`) | `bookings` | Fixed |
-| `/quote` (`RequestQuote.tsx`) | `quote_requests` | Fixed |
-| `/contact` (`Contact.tsx`) | `contact_submissions` | Fixed |
-| "Book Now" buttons on Services/Index | navigate to `/book` | Fixed (same table) |
-
-`notifications` (called by `notifyAdmins` from all three forms) already has correct anon grants — no change needed.
+Switching the client to omit `.select("id")` would also work and avoid any RLS change, but `insertedQuote?.id` is passed to `notifyAdmins(...)` so the admin notification can deep-link back to the new record. Removing the id fetch would break that link. The RLS policy is the smaller, more correct fix.
 
 ## What I will NOT touch
 
-- No UI changes. The diagnostic toast added last round stays so we can confirm success.
-- No RLS policy changes — the existing INSERT policies are correct.
-- No changes to `notifyAdmins` or `src/lib/notifications.ts`.
-- No admin-side / pagination work.
+- No INSERT policies change (they already work).
+- No grants change (they're correct now).
+- No client code change in BookService.tsx / RequestQuote.tsx / Contact.tsx.
+- No notifyAdmins or notifications changes.
+- No UI/admin/pagination work.
 
-## After applying
+## Expected outcome
 
-User submits a booking → expected outcome: success toast, no `42501` in console. If a different error surfaces (e.g. NOT NULL on a column), the diagnostic toast will name it and we handle it as a follow-up.
+After the migration:
+- `/book`, `/quote`, `/contact` submissions return successfully with the new id
+- `notifyAdmins(...)` receives the id and creates a routable notification
+- No more `42501` in console; no more RLS toast
 
-Approve and I'll create the one-statement migration.
+Approve and I'll create the one migration with the three SELECT policies.
