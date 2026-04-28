@@ -300,7 +300,10 @@ const BookService = () => {
       } as any).select("id").single();
 
       if (error) {
-        toast({ title: "Booking failed.", description: "Please try again later.", variant: "destructive" });
+        const anyErr = error as any;
+        const desc = `${anyErr.message ?? "Unknown error"}${anyErr.details ? ` — ${anyErr.details}` : ""}${anyErr.hint ? ` (hint: ${anyErr.hint})` : ""}${anyErr.code ? ` [code ${anyErr.code}]` : ""}`;
+        console.error("Booking insert failed:", error);
+        toast({ title: "Booking failed", description: desc, variant: "destructive" });
         return;
       }
 
@@ -311,8 +314,9 @@ const BookService = () => {
 
       setSubmitted(true);
       toast({ title: "Booking confirmed!", description: "We'll be in touch within 24 hours." });
-    } catch {
-      toast({ title: "Booking failed.", description: "An unexpected error occurred. Please try again.", variant: "destructive" });
+    } catch (e: any) {
+      console.error("Booking submit threw:", e);
+      toast({ title: "Booking failed", description: e?.message ?? String(e) ?? "An unexpected error occurred.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
