@@ -1,45 +1,71 @@
+## Root cause (confirmed via DB inspection)
 
-# Implementation Plan (approved)
+The `anon` role has **no table-level grants** on `bookings`, `quote_requests`, or `contact_submissions`. Postgres rejects the INSERT with `42501 permission denied for table bookings` **before** RLS policies are even evaluated — so the existing "Allow public booking creation" / "Anyone can submit quote requests" / "Anyone can submit contact form" policies are dead letters.
 
-## 1. Submissions deep-link router
-`src/pages/admin/Submissions.tsx`: change "Open" link from `/admin/bookings` to `/admin/bookings?focus={id}` (and quotes/messages equivalents). The target pages already use `useFocusHighlight` (scroll + ring). They will additionally seed the local `expandedId` from `?focus=` so the card opens automatically.
+Verified with `has_table_privilege`:
 
-## 2. Permission UX
-- New `src/components/PermissionGate.tsx`: wraps a child element. If user lacks the permission, the child is rendered `disabled` with a tooltip "Requires '{label}' permission." (label pulled from `permission_registry`). Admin always passes through. Mode `hide` keeps current behaviour for sidebar-style cases.
-- Replace `<HasPermission>` around inline action rows in `BookingsAdmin`, `QuotesAdmin`, `MessagesAdmin`, `InvoicesAdmin` with the new gate (visible-but-disabled).
-- Sidebar siloing: add `can_manage_invoices` permission entry to `NAV_PERMISSIONS` in `src/lib/permissions.ts` so users without invoice perms don't see the tab.
-- `UserManagement.tsx`: group permission switches by module with a "Grant all {module}" master toggle. Permissions stay independent.
-- New `src/lib/friendlyRpcError.ts`: maps `NOT_AUTHORIZED:*` exceptions thrown by RPCs to a clean toast message.
+| table | anon INSERT | authenticated INSERT |
+|---|---|---|
+| bookings | **false** | true |
+| quote_requests | **false** | true |
+| contact_submissions | **false** | true |
+| notifications | true | true |
+| services | true | true |
 
-## 3. Collapsible "summary-first" cards + 10/page pagination
-- New `src/components/admin/CollapsibleRecordCard.tsx` (built on existing `@/components/ui/collapsible`): shows 4 summary fields (name / date / service / status). Click expands full details + actions.
-- New `src/components/admin/Paginator.tsx`: prev/next + page count, default page size 10.
-- Refactor row renderers in Bookings, Quotes, Messages, Submissions, Invoices to use both. Auto-expand when `useFocusHighlight` matches.
+`notifications` and `services` work for anon because they kept the default Supabase grants. The three submission tables were stripped at some point.
 
-## 4. Active / Archive tabs
-- Bookings: archive only when `cancelled` OR (`completed` AND linked invoice `payment_status='paid'`). Otherwise stays Active.
-- Quotes: Active = `requested|in_progress`; Archive = `converted|closed`.
-- Messages: Active = `pending|read`; Archive = `responded|converted`.
-- Archive cards render with `readOnly` flag → action buttons hidden or disabled with tooltip "Archived record — actions disabled."
+## Fix
 
-## 5. Operational fixes
-### 5a. Always Pending
-- `BookService.tsx` line 249: drop `auto_approve_bookings`, always `status:'pending'`.
-- `QuotesAdmin.tsx` convert flow: drop `autoApprove` lookup, hardcode `status:'pending'`.
+One small SQL migration that re-grants `INSERT` (and `SELECT` where required by `.select("id").maybeSingle()` after insert) to `anon` and `authenticated` on the three affected tables. RLS already restricts what can actually be inserted/read, so this only re-opens the door RLS expects to guard.
 
-### 5b. Reschedule
-Add Reschedule button + dialog in `BookingsAdmin` (date + time, reuses `get_booked_slots` for collision avoidance, logs `rescheduled` activity). Permission-gated by `can_manage_bookings`.
+```sql
+GRANT INSERT ON public.bookings           TO anon, authenticated;
+GRANT INSERT ON public.quote_requests     TO anon, authenticated;
+GRANT INSERT ON public.contact_submissions TO anon, authenticated;
 
-### 5c. RPC patches (priority — fixes 400/403)
-One migration:
-- `convert_quote_to_booking`: rewritten to read snapshot (line_items, subtotal, tax, total) from `quote_drafts` (real source — `quote_requests` has no such columns). Hardcodes `status='pending'` and `source='quote'`. Adds `SECURITY DEFINER`, `SET search_path = public`, and a permission gate that raises `'NOT_AUTHORIZED: You need Manage Quotes permission to convert this quote.'`.
-- `create_invoice_from_booking`: add `SECURITY DEFINER`, `SET search_path = public`, permission gate on `can_manage_invoices`.
-- `mark_invoice_paid`: same hardening.
-- Insert `can_manage_invoices` into `permission_registry` (idempotent).
+-- The forms call .select("id").maybeSingle() after insert, which needs SELECT.
+-- RLS on bookings/quote_requests/contact_submissions still blocks anon from
+-- reading other rows; the INSERT...RETURNING path is allowed because the row
+-- being returned is the one anon just created.
+GRANT SELECT ON public.bookings           TO anon, authenticated;
+GRANT SELECT ON public.quote_requests     TO anon, authenticated;
+GRANT SELECT ON public.contact_submissions TO anon, authenticated;
+```
 
-## 6. Cleanup
-- Remove any direct `bookings.insert` / `invoices.insert` paths still left.
-- Confirm `InvoicesAdmin.applyPayment` only patches metadata then calls RPC.
-- Invalidate `["admin-receipts"]` after `mark_invoice_paid` succeeds.
+Note: the existing SELECT RLS on these tables is admin-only (or permission-gated), so granting SELECT to anon at the table level does **not** expose data — RLS still filters it to zero rows for anon. We only get the `RETURNING id` row back because anon is the inserter and the returned row passes through the insert path, not a fresh SELECT scan.
 
-No table schema changes. No RLS changes. No drops.
+Actually, to be safe and avoid any chance of `INSERT ... RETURNING` being blocked by SELECT RLS, I'll add a focused SELECT policy that only lets anon read rows they could have just inserted is overkill. The simpler, correct approach: PostgREST's `.select()` after insert uses the `RETURNING` clause which is governed by the INSERT policy's WITH CHECK — no separate SELECT RLS check is required. So **only INSERT grants are strictly needed**. I'll keep the SELECT grants out to minimize surface area.
+
+Final migration:
+
+```sql
+GRANT INSERT ON public.bookings           TO anon, authenticated;
+GRANT INSERT ON public.quote_requests     TO anon, authenticated;
+GRANT INSERT ON public.contact_submissions TO anon, authenticated;
+```
+
+## Entry points audited
+
+All four public forms hit one of these three tables:
+
+| Page | Table | Status after fix |
+|---|---|---|
+| `/book` (`BookService.tsx`) | `bookings` | Fixed |
+| `/quote` (`RequestQuote.tsx`) | `quote_requests` | Fixed |
+| `/contact` (`Contact.tsx`) | `contact_submissions` | Fixed |
+| "Book Now" buttons on Services/Index | navigate to `/book` | Fixed (same table) |
+
+`notifications` (called by `notifyAdmins` from all three forms) already has correct anon grants — no change needed.
+
+## What I will NOT touch
+
+- No UI changes. The diagnostic toast added last round stays so we can confirm success.
+- No RLS policy changes — the existing INSERT policies are correct.
+- No changes to `notifyAdmins` or `src/lib/notifications.ts`.
+- No admin-side / pagination work.
+
+## After applying
+
+User submits a booking → expected outcome: success toast, no `42501` in console. If a different error surfaces (e.g. NOT NULL on a column), the diagnostic toast will name it and we handle it as a follow-up.
+
+Approve and I'll create the one-statement migration.
