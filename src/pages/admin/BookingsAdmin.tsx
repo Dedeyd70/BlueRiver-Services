@@ -597,7 +597,7 @@ const BookingsAdmin = () => {
   };
 
   return (
-    <div>
+    <div className="pb-24">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-display font-bold text-foreground">Bookings</h1>
       </div>

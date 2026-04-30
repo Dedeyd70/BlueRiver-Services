@@ -389,7 +389,7 @@ const QuotesAdmin = () => {
 
   return (
     <TooltipProvider>
-    <div className="p-6">
+    <div className="p-6 pb-24">
       <h1 className="text-2xl font-display font-bold text-foreground mb-6">Quote Requests</h1>
 
       <Tabs defaultValue="active">
