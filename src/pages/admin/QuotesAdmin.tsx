@@ -230,21 +230,28 @@ const QuotesAdmin = () => {
   };
 
   const markInProgress = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (q: any) => {
       const { data, error } = await supabase
         .from("quote_requests")
         .update({ status: "in_progress" })
-        .eq("id", id)
+        .eq("id", q.id)
         .select("id")
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Update blocked by permissions or RLS");
-      await logActivity(id, "Status changed to In Progress");
+      await logActivity(q.id, "Status changed to In Progress");
+      return q;
     },
-    onSuccess: () => {
+    onSuccess: (q: any) => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
       qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
       toast({ title: "Quote marked In Progress" });
+      openMailto({
+        to: q.email,
+        subject: MAIL_TEMPLATES.quoteInProgress.subject,
+        bodyTemplate: MAIL_TEMPLATES.quoteInProgress.body,
+        vars: { name: q.name, service: q.service_type || "your cleaning service" },
+      });
     },
   });
 
