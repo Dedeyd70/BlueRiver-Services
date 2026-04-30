@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { notifyAdmins } from "@/lib/notifications";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
+import { computeQuote } from "@/lib/pricingEngine";
 
 // Keys mapped to typed columns on bookings table; everything else → custom_fields JSON.
 const BOOKING_TYPED_KEYS = new Set([
@@ -75,7 +76,7 @@ const BookService = () => {
   const { data: serviceTypes } = useQuery({
     queryKey: ["public-service-types"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("service_types").select("id,name");
+      const { data, error } = await (supabase as any).from("service_types").select("id,name,base_price");
       if (error) throw error;
       return data ?? [];
     },
@@ -106,6 +107,40 @@ const BookService = () => {
   });
 
   const setDyn = (key: string, val: any) => setDynValues((p) => ({ ...p, [key]: val }));
+
+  // Pricing engine inputs — read-only, mirrors what admin sees
+  const { data: pricingRules } = useQuery({
+    queryKey: ["public-pricing-rules", matchedServiceType?.id],
+    queryFn: async () => {
+      if (!matchedServiceType?.id) return [];
+      const { data } = await (supabase as any)
+        .from("service_pricing_rules")
+        .select("id,service_type_id,category,unit_price")
+        .eq("service_type_id", matchedServiceType.id);
+      return data ?? [];
+    },
+    enabled: !!matchedServiceType?.id,
+  });
+
+  const { data: conditionSettings } = useQuery({
+    queryKey: ["public-condition-settings"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("condition_settings")
+        .select("id,name,surcharge_amount");
+      return data ?? [];
+    },
+  });
+
+  const { data: taxRate } = useQuery({
+    queryKey: ["public-tax-rate"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("site_settings").select("setting_value").eq("setting_key", "tax_rate").maybeSingle();
+      const n = parseFloat(data?.setting_value ?? "0");
+      return Number.isFinite(n) ? n : 0;
+    },
+  });
 
   const { data: availability } = useQuery({
     queryKey: ["availability-settings"],
@@ -179,17 +214,37 @@ const BookService = () => {
 
   const timeSlots = generateTimeSlots(selectedDate);
 
-  // Price calculation
-  const parsePrice = (p: string | null | undefined): number => {
-    if (!p) return 0;
-    const num = parseFloat(p.replace(/[^0-9.]/g, ""));
-    return isNaN(num) ? 0 : num;
-  };
+  // Authoritative pricing — same engine the admin/invoice path uses
+  const computed = useMemo(() => {
+    const selectedAddonObjects = addons
+      .filter((a) => selectedAddons.includes(a.title))
+      .map((a) => ({ title: a.title, price_starting: a.price_starting }));
 
-  const selectedMainService = mainServices.find((s) => s.title === form.service);
-  const mainPrice = parsePrice(selectedMainService?.price_starting);
-  const addonPrices = addons.filter((a) => selectedAddons.includes(a.title)).map((a) => ({ title: a.title, price: parsePrice(a.price_starting) }));
-  const totalPrice = mainPrice + addonPrices.reduce((sum, a) => sum + a.price, 0);
+    const pricingRequest = {
+      service_type_id: matchedServiceType?.id ?? null,
+      service_type: form.service || null,
+      condition_level: form.condition_level || null,
+      selected_addons: selectedAddonObjects,
+      custom_fields: dynValues,
+    };
+
+    const serviceTypesForEngine = matchedServiceType
+      ? [{
+          id: matchedServiceType.id,
+          name: matchedServiceType.name,
+          base_price: (matchedServiceType as any).base_price ?? 0,
+        }]
+      : [];
+
+    return computeQuote(
+      pricingRequest,
+      serviceTypesForEngine,
+      pricingRules ?? [],
+      conditionSettings ?? [],
+      taxRate ?? 0,
+      serviceFields ?? [],
+    );
+  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
@@ -291,9 +346,15 @@ const BookService = () => {
         entry_codes: form.entry_codes.trim() || null,
         selected_addons: selectedAddons.map((title) => {
           const addon = addons.find((a) => a.title === title);
-          return { title, price: parsePrice(addon?.price_starting) };
+          // Snapshot for display only; line_items below is the source of truth.
+          const raw = addon?.price_starting ?? "";
+          const n = parseInt(String(raw).replace(/[^0-9]/g, ""), 10);
+          return { title, price: Number.isFinite(n) ? n : 0 };
         }),
-        total_price: totalPrice > 0 ? totalPrice : null,
+        line_items: computed.lineItems,
+        subtotal: computed.subtotal,
+        tax_amount: computed.tax,
+        total_amount: computed.total,
         custom_fields: customFields,
         source: "manual",
         ...typedPayload,
@@ -347,7 +408,7 @@ const BookService = () => {
               </div>
               <h3 className="text-2xl font-display font-bold text-foreground mb-2">Booking Received!</h3>
               <p className="text-muted-foreground">We've received your booking for {selectedDate && format(selectedDate, "MMMM d, yyyy")} at {selectedSlot}.</p>
-              {totalPrice > 0 && <p className="text-primary font-semibold mt-2">Estimated Total: ${totalPrice.toFixed(2)}</p>}
+              {computed.total > 0 && <p className="text-primary font-semibold mt-2">Estimated Total: ${computed.total.toFixed(2)}</p>}
             </motion.div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-8">
@@ -431,6 +492,7 @@ const BookService = () => {
                             <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
                             <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                               <option value="">Select condition</option>
+                              <option value="Light">Light</option>
                               <option value="Standard">Standard</option>
                               <option value="Heavy">Heavy</option>
                               <option value="Post-Construction">Post-Construction</option>
@@ -497,25 +559,28 @@ const BookService = () => {
                     </div>
                   )}
 
-                  {/* Price summary */}
-                  {form.service && totalPrice > 0 && (
+                  {/* Price summary — driven by authoritative pricing engine */}
+                  {form.service && computed.total > 0 && (
                     <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{form.service}</span>
-                        <span className="text-foreground">${mainPrice.toFixed(2)}</span>
-                      </div>
-                      {addonPrices.filter((a) => a.price > 0).map((a) => (
-                        <div key={a.title} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{a.title}</span>
-                          <span className="text-foreground">${a.price.toFixed(2)}</span>
+                      {computed.lineItems.filter((i) => i.total_price > 0).map((i, idx) => (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ""}</span>
+                          <span className="text-foreground">${i.total_price.toFixed(2)}</span>
                         </div>
                       ))}
+                      {computed.tax > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Tax</span>
+                          <span className="text-foreground">${computed.tax.toFixed(2)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm font-semibold border-t border-border pt-2 mt-2">
                         <span className="text-foreground">Estimated Total</span>
-                        <span className="text-primary">${totalPrice.toFixed(2)}</span>
+                        <span className="text-primary">${computed.total.toFixed(2)}</span>
                       </div>
                     </div>
                   )}
+
 
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Additional Notes</label>

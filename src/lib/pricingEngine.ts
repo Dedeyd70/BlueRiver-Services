@@ -18,7 +18,7 @@ export interface ServiceType {
 export interface PricingRule {
   id: string;
   service_type_id: string;
-  category: string; // Bedroom | Bathroom | FullBath | HalfBath | Kitchen | LivingRoom | OfficeRoom
+  category: string; // snake_case field_key — must match service_fields.field_key (e.g. bedrooms, full_bathrooms, half_bathrooms, kitchen_count, living_rooms, office_rooms, dishes)
   unit_price: number;
 }
 
