@@ -426,23 +426,18 @@ const QuotesAdmin = () => {
         ) : (
           <>
             <TabsContent value="active">
-              <div className="space-y-4">
-                {activeQuotes.map((q) => {
-                  const notes = getNotesForQuote(q.id);
-                  const isExpanded = expandedNotes === q.id;
-                  const addons = parseAddons((q as any).selected_addons);
-                  const hasDraft = !!draftMap[q.id];
-                  const canConvert = q.status === "in_progress" && notes.length > 0;
+              {activeQuotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center italic">No active quote requests.</p>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {usePagedSlice(activeQuotes, activePage).map((q) => {
+                      const notes = getNotesForQuote(q.id);
+                      const addons = parseAddons((q as any).selected_addons);
+                      const hasDraft = !!draftMap[q.id];
+                      const canConvert = q.status === "in_progress" && notes.length > 0;
 
-                  return (
-                    <div ref={getRef(q.id)} key={q.id} className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-medium text-foreground">{q.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {q.email} {q.phone && `• ${q.phone}`}
-                          </p>
-                        </div>
+                      const statusBadge = (
                         <div className="flex items-center gap-2">
                           {hasDraft && (
                             <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-medium">
@@ -455,214 +450,204 @@ const QuotesAdmin = () => {
                             {statusLabel(q.status)}
                           </span>
                         </div>
-                      </div>
+                      );
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Service:</span>
-                          <p className="font-medium text-foreground">{q.service_type || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Contact via:</span>
-                          <p className="font-medium text-foreground capitalize">{q.preferred_contact}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Submitted:</span>
-                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
-                        </div>
-                      </div>
-
-                      {addons.length > 0 && (
-                        <div className="text-sm">
-                          <span className="text-foreground font-medium">Requested Add-Ons:</span>
-                          <div className="flex flex-wrap gap-1.5 mt-1">
-                            {addons.map((a, i) => (
-                              <span
-                                key={i}
-                                className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
-                              >
-                                {a.title}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {q.address && (
-                        <p className="text-sm text-muted-foreground">
-                          <span className="text-foreground font-medium">Address:</span> {q.address}
-                        </p>
-                      )}
-                      <p className="text-sm text-muted-foreground">
-                        <span className="text-foreground font-medium">Description:</span> {q.description}
-                      </p>
-
-                      {q.attachment_url && (
-                        <a
-                          href={q.attachment_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                      return (
+                        <CollapsibleRecordCard
+                          key={q.id}
+                          innerRef={getRef(q.id)}
+                          title={q.name}
+                          subtitle={`${q.email}${q.phone ? ` • ${q.phone}` : ""}`}
+                          statusBadge={statusBadge}
+                          expanded={expandedId === q.id}
+                          onToggle={() => setExpandedId(expandedId === q.id ? null : q.id)}
+                          summary={[
+                            { label: "Service", value: q.service_type || "—" },
+                            { label: "Contact via", value: <span className="capitalize">{q.preferred_contact}</span> },
+                            { label: "Submitted", value: format(new Date(q.created_at), "MMM d, yyyy") },
+                            { label: "Notes", value: String(notes.length) },
+                          ]}
                         >
-                          <ExternalLink className="w-3 h-3" /> View Attachment
-                        </a>
-                      )}
-
-                      {/* Activity Log */}
-                      <div className="border-t border-border pt-3">
-                        <button
-                          onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
-                          className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
-                        </button>
-
-                        {isExpanded && (
-                          <div className="mt-3 space-y-2">
-                            {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
-                            {notes.map((n) => (
-                              <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                                <p className="text-foreground">{n.note}</p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
-                                </p>
+                          {addons.length > 0 && (
+                            <div className="text-sm">
+                              <span className="text-foreground font-medium">Requested Add-Ons:</span>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {addons.map((a, i) => (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
+                                  >
+                                    {a.title}
+                                  </span>
+                                ))}
                               </div>
-                            ))}
-                            <div className="flex gap-2">
-                              <Input
-                                value={newNote}
-                                onChange={(e) => setNewNote(e.target.value)}
-                                placeholder="Add a note..."
-                                className="flex-1 h-8 text-sm"
-                              />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => addNote.mutate({ quoteId: q.id, note: newNote })}
-                                className="h-8"
-                                disabled={!newNote.trim()}
-                              >
-                                <Send className="w-3 h-3" />
-                              </Button>
+                            </div>
+                          )}
+
+                          {q.address && (
+                            <p className="text-sm text-muted-foreground">
+                              <span className="text-foreground font-medium">Address:</span> {q.address}
+                            </p>
+                          )}
+                          <p className="text-sm text-muted-foreground">
+                            <span className="text-foreground font-medium">Description:</span> {q.description}
+                          </p>
+
+                          {q.attachment_url && (
+                            <a
+                              href={q.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                            >
+                              <ExternalLink className="w-3 h-3" /> View Attachment
+                            </a>
+                          )}
+
+                          {/* Activity Log — always visible inside the expanded card */}
+                          <div className="border-t border-border pt-3">
+                            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                              <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
+                              {notes.map((n) => (
+                                <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                                  <p className="text-foreground">{n.note}</p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
+                                  </p>
+                                </div>
+                              ))}
+                              <div className="flex gap-2">
+                                <Input
+                                  value={newNote}
+                                  onChange={(e) => setNewNote(e.target.value)}
+                                  placeholder="Add a note..."
+                                  className="flex-1 h-8 text-sm"
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => addNote.mutate({ quoteId: q.id, note: newNote })}
+                                  className="h-8"
+                                  disabled={!newNote.trim()}
+                                >
+                                  <Send className="w-3 h-3" />
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        <HasPermission permission="can_manage_quotes">
-                          {q.status === "requested" && (
-                            <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q.id)} className="gap-1">
-                              <PlayCircle className="w-3 h-3" /> Mark In Progress
-                            </Button>
-                          )}
-
-                          {q.status === "in_progress" && (
-                            <Button variant="outline" size="sm" onClick={() => openPrepare(q)} className="gap-1">
-                              <FileEdit className="w-3 h-3" /> {hasDraft ? "Edit Quote" : "Prepare Quote"}
-                            </Button>
-                          )}
-                        </HasPermission>
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDownloadPdf(q)}
-                                className="gap-1"
-                                aria-disabled={!hasDraft}
-                                disabled={!hasDraft}
-                              >
-                                <Download className="w-3 h-3" /> Generate Quote PDF
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          {!hasDraft && (
-                            <TooltipContent>Please prepare quote before generating PDF</TooltipContent>
-                          )}
-                        </Tooltip>
-
-                        <HasPermission permission="can_manage_quotes">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Button variant="outline" size="sm" disabled className="gap-1">
-                                  <Mail className="w-3 h-3" /> Send Quote
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <HasPermission permission="can_manage_quotes">
+                              {q.status === "requested" && (
+                                <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q.id)} className="gap-1">
+                                  <PlayCircle className="w-3 h-3" /> Mark In Progress
                                 </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>Email integration coming soon</TooltipContent>
-                          </Tooltip>
+                              )}
 
-                          {q.status === "in_progress" && (
+                              {q.status === "in_progress" && (
+                                <Button variant="outline" size="sm" onClick={() => openPrepare(q)} className="gap-1">
+                                  <FileEdit className="w-3 h-3" /> {hasDraft ? "Edit Quote" : "Prepare Quote"}
+                                </Button>
+                              )}
+                            </HasPermission>
+
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span>
                                   <Button
-                                    variant="default"
+                                    variant="outline"
                                     size="sm"
-                                    onClick={() => {
-                                      if (!canConvert) {
-                                        toast({
-                                          title: "Activity log required",
-                                          description: "Please add at least one interaction before converting this quote",
-                                          variant: "destructive",
-                                        });
-                                        return;
-                                      }
-                                      openConvert(q);
-                                    }}
+                                    onClick={() => handleDownloadPdf(q)}
                                     className="gap-1"
-                                    aria-disabled={!canConvert}
+                                    aria-disabled={!hasDraft}
+                                    disabled={!hasDraft}
                                   >
-                                    <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                                    <Download className="w-3 h-3" /> Generate Quote PDF
                                   </Button>
                                 </span>
                               </TooltipTrigger>
-                              {!canConvert && (
-                                <TooltipContent>Add at least one activity log note before converting.</TooltipContent>
+                              {!hasDraft && (
+                                <TooltipContent>Please prepare quote before generating PDF</TooltipContent>
                               )}
                             </Tooltip>
-                          )}
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCloseTarget(q)}
-                            className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
-                          >
-                            <XCircle className="w-3 h-3" /> Close
-                          </Button>
-                        </HasPermission>
-                      </div>
-                    </div>
-                  );
-                })}
-                {activeQuotes.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-8 text-center italic">No active quote requests.</p>
-                )}
-              </div>
+                            <HasPermission permission="can_manage_quotes">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Button variant="outline" size="sm" disabled className="gap-1">
+                                      <Mail className="w-3 h-3" /> Send Quote
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Email integration coming soon</TooltipContent>
+                              </Tooltip>
+
+                              {q.status === "in_progress" && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>
+                                      <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={() => {
+                                          if (!canConvert) {
+                                            toast({
+                                              title: "Activity log required",
+                                              description: "Please add at least one interaction before converting this quote",
+                                              variant: "destructive",
+                                            });
+                                            return;
+                                          }
+                                          openConvert(q);
+                                        }}
+                                        className="gap-1"
+                                        aria-disabled={!canConvert}
+                                      >
+                                        <ArrowRightLeft className="w-3 h-3" /> Convert to Booking
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  {!canConvert && (
+                                    <TooltipContent>Add at least one activity log note before converting.</TooltipContent>
+                                  )}
+                                </Tooltip>
+                              )}
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCloseTarget(q)}
+                                className="gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                              >
+                                <XCircle className="w-3 h-3" /> Close
+                              </Button>
+                            </HasPermission>
+                          </div>
+                        </CollapsibleRecordCard>
+                      );
+                    })}
+                  </div>
+                  <Paginator page={activePage} pageSize={PAGE_SIZE} total={activeQuotes.length} onChange={setActivePage} />
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="archived">
-              <div className="space-y-4">
-                {archivedQuotes.map((q) => {
-                  const addons = parseAddons(q.selected_addons);
-                  const notes = getNotesForQuote(q.id);
-                  const isExpanded = expandedNotes === q.id;
+              {archivedQuotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center italic">No archived quotes.</p>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {usePagedSlice(archivedQuotes, archivePage).map((q) => {
+                      const addons = parseAddons(q.selected_addons);
+                      const notes = getNotesForQuote(q.id);
 
-                  return (
-                    <div ref={getRef(q.id)} key={q.id} className="bg-card border border-border rounded-xl p-6 space-y-4 relative scroll-mt-24">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium text-xl text-foreground">{q.name}</h3>
-                          <p className="text-muted-foreground">
-                            {q.email} <span className="mx-1">•</span> {q.phone}
-                          </p>
-                        </div>
+                      const statusBadge = (
                         <span
                           className={`px-3 py-1 rounded-full text-sm border capitalize ${
                             q.status === "closed"
@@ -672,90 +657,84 @@ const QuotesAdmin = () => {
                         >
                           {statusLabel(q.status)}
                         </span>
-                      </div>
+                      );
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-2">
-                        <div>
-                          <p className="text-muted-foreground mb-1">Date:</p>
-                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d, yyyy")}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground mb-1">Service:</p>
-                          <p className="font-medium text-foreground leading-tight">
-                            {q.service_type || "General Inquiry"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground mb-1">Submitted:</p>
-                          <p className="font-medium text-foreground">{format(new Date(q.created_at), "MMM d")}</p>
-                        </div>
-                      </div>
-
-                      {addons.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-foreground">Add-Ons:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {addons.map((a, i) => (
-                              <span
-                                key={i}
-                                className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
-                              >
-                                {a.title}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-1 text-sm">
-                        <p className="text-muted-foreground">
-                          <span className="text-foreground font-medium">Address:</span> {q.address || "N/A"}
-                        </p>
-                        <p className="text-muted-foreground">
-                          <span className="text-foreground font-medium">Notes:</span> {q.description}
-                        </p>
-                        {(q as any).close_reason && (
-                          <p className="text-destructive">
-                            <span className="font-medium">Close reason:</span> {(q as any).close_reason}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="border-t border-border pt-3">
-                        <button
-                          onClick={() => setExpandedNotes(isExpanded ? null : q.id)}
-                          className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                      return (
+                        <CollapsibleRecordCard
+                          key={q.id}
+                          innerRef={getRef(q.id)}
+                          title={q.name}
+                          subtitle={`${q.email}${q.phone ? ` • ${q.phone}` : ""}`}
+                          statusBadge={statusBadge}
+                          readOnly
+                          expanded={expandedId === q.id}
+                          onToggle={() => setExpandedId(expandedId === q.id ? null : q.id)}
+                          summary={[
+                            { label: "Service", value: q.service_type || "General Inquiry" },
+                            { label: "Date", value: format(new Date(q.created_at), "MMM d, yyyy") },
+                            { label: "Notes", value: String(notes.length) },
+                            { label: "Status", value: <span className="capitalize">{statusLabel(q.status)}</span> },
+                          ]}
                         >
-                          <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
-                        </button>
-
-                        {isExpanded && (
-                          <div className="mt-3 space-y-2">
-                            {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
-                            {notes.map((n) => (
-                              <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                                <p className="text-foreground">{n.note}</p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
-                                </p>
+                          {addons.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-foreground">Add-Ons:</p>
+                              <div className="flex flex-wrap gap-2">
+                                {addons.map((a, i) => (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky text-sky-foreground text-xs font-medium"
+                                  >
+                                    {a.title}
+                                  </span>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                            </div>
+                          )}
 
-                      <div className="pt-2">
-                        <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-                          This record is finalized and cannot be modified.
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-                {archivedQuotes.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-8 text-center italic">No archived quotes.</p>
-                )}
-              </div>
+                          <div className="space-y-1 text-sm">
+                            <p className="text-muted-foreground">
+                              <span className="text-foreground font-medium">Address:</span> {q.address || "N/A"}
+                            </p>
+                            <p className="text-muted-foreground">
+                              <span className="text-foreground font-medium">Notes:</span> {q.description}
+                            </p>
+                            {(q as any).close_reason && (
+                              <p className="text-destructive">
+                                <span className="font-medium">Close reason:</span> {(q as any).close_reason}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="border-t border-border pt-3">
+                            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                              <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
+                              {notes.map((n) => (
+                                <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                                  <p className="text-foreground">{n.note}</p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="pt-2">
+                            <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                              This record is finalized and cannot be modified.
+                            </p>
+                          </div>
+                        </CollapsibleRecordCard>
+                      );
+                    })}
+                  </div>
+                  <Paginator page={archivePage} pageSize={PAGE_SIZE} total={archivedQuotes.length} onChange={setArchivePage} />
+                </>
+              )}
             </TabsContent>
           </>
         )}
