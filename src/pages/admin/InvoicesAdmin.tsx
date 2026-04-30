@@ -256,7 +256,7 @@ const InvoicesAdmin = () => {
   };
 
   return (
-    <div>
+    <div className="pb-24">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <FileText className="w-5 h-5 text-primary" />
@@ -336,88 +336,125 @@ const InvoicesAdmin = () => {
       </div>
       <p className="text-sm text-muted-foreground mb-6">Invoices are automatically generated when a booking is marked as Completed.</p>
 
-      {isLoading ? (
-        <p className="text-muted-foreground">Loading...</p>
-      ) : !invoices?.length ? (
-        <p className="text-muted-foreground">No invoices yet. Complete a booking to generate one.</p>
-      ) : (
-        <div className="space-y-3">
-          {invoices.map((inv) => (
-            <div
-              key={inv.id}
-              ref={getRef(inv.id)}
-              className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-foreground">{inv.customer_name}</h3>
-                    {(inv as any).invoice_number && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
-                        {(inv as any).invoice_number}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">{inv.customer_email}</p>
+      {(() => {
+        const renderInvoiceCard = (inv: any) => (
+          <div
+            key={inv.id}
+            ref={getRef(inv.id)}
+            className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-foreground">{inv.customer_name}</h3>
+                  {(inv as any).invoice_number && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                      {(inv as any).invoice_number}
+                    </span>
+                  )}
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[inv.payment_status] || "bg-muted text-muted-foreground"}`}>
-                  {inv.payment_status}
-                </span>
+                <p className="text-sm text-muted-foreground">{inv.customer_email}</p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Subtotal:</span>
-                  <p className="font-medium text-foreground">${Number((inv as any).subtotal || 0).toFixed(2)}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Tax:</span>
-                  <p className="font-medium text-foreground">${Number((inv as any).tax_amount || 0).toFixed(2)}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Total:</span>
-                  <p className="font-medium text-foreground">${Number(inv.total_amount).toFixed(2)}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Paid:</span>
-                  <p className="font-medium text-foreground">${Number(inv.amount_paid).toFixed(2)}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Issued:</span>
-                  <p className="font-medium text-foreground">{format(new Date(inv.issued_date), "MMM d, yyyy")}</p>
-                </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[inv.payment_status] || "bg-muted text-muted-foreground"}`}>
+                {inv.payment_status}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Subtotal:</span>
+                <p className="font-medium text-foreground">${Number((inv as any).subtotal || 0).toFixed(2)}</p>
               </div>
-              {inv.payment_status !== "unpaid" && (inv.payment_method || (inv as any).payment_date || (inv as any).payment_reference) && (
-                <p className="text-sm text-muted-foreground">
-                  <span className="text-foreground font-medium">Payment:</span>{" "}
-                  {[
-                    inv.payment_method,
-                    (inv as any).payment_date ? format(new Date((inv as any).payment_date), "MMM d, yyyy") : null,
-                    (inv as any).payment_reference ? `Ref ${(inv as any).payment_reference}` : null,
-                  ].filter(Boolean).join(" · ")}
-                </p>
-              )}
-              {inv.notes && (
-                <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {inv.notes}</p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)}>
-                  <Download className="w-3 h-3 mr-1" /> Download PDF
-                </Button>
-                {inv.payment_status !== "paid" && (
-                  <HasPermission permission="can_manage_bookings">
-                    <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "full")}>
-                      <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Paid
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "partial")}>
-                      <DollarSign className="w-3 h-3 mr-1" /> Add Payment
-                    </Button>
-                  </HasPermission>
-                )}
+              <div>
+                <span className="text-muted-foreground">Tax:</span>
+                <p className="font-medium text-foreground">${Number((inv as any).tax_amount || 0).toFixed(2)}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Total:</span>
+                <p className="font-medium text-foreground">${Number(inv.total_amount).toFixed(2)}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Paid:</span>
+                <p className="font-medium text-foreground">${Number(inv.amount_paid).toFixed(2)}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Issued:</span>
+                <p className="font-medium text-foreground">{format(new Date(inv.issued_date), "MMM d, yyyy")}</p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            {inv.payment_status !== "unpaid" && (inv.payment_method || (inv as any).payment_date || (inv as any).payment_reference) && (
+              <p className="text-sm text-muted-foreground">
+                <span className="text-foreground font-medium">Payment:</span>{" "}
+                {[
+                  inv.payment_method,
+                  (inv as any).payment_date ? format(new Date((inv as any).payment_date), "MMM d, yyyy") : null,
+                  (inv as any).payment_reference ? `Ref ${(inv as any).payment_reference}` : null,
+                ].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            {inv.notes && (
+              <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {inv.notes}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)}>
+                <Download className="w-3 h-3 mr-1" /> Download PDF
+              </Button>
+              {inv.payment_status !== "paid" && (
+                <HasPermission permission="can_manage_bookings">
+                  <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "full")}>
+                    <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Paid
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "partial")}>
+                    <DollarSign className="w-3 h-3 mr-1" /> Add Payment
+                  </Button>
+                </HasPermission>
+              )}
+            </div>
+          </div>
+        );
+
+        if (isLoading) return <p className="text-muted-foreground">Loading...</p>;
+        if (!invoices?.length) {
+          return <p className="text-muted-foreground">No invoices yet. Complete a booking to generate one.</p>;
+        }
+
+        const activeInvoices = invoices.filter((i: any) => i.payment_status !== "paid");
+        const archivedInvoices = invoices.filter((i: any) => i.payment_status === "paid");
+
+        return (
+          <Tabs defaultValue="active">
+            <TabsList className="mb-4">
+              <TabsTrigger value="active">Active ({activeInvoices.length})</TabsTrigger>
+              <TabsTrigger value="archived">Archived ({archivedInvoices.length})</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="active">
+              {activeInvoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center italic">No active invoices.</p>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {usePagedSlice(activeInvoices, activePage).map(renderInvoiceCard)}
+                  </div>
+                  <Paginator page={activePage} pageSize={PAGE_SIZE} total={activeInvoices.length} onChange={setActivePage} />
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="archived">
+              {archivedInvoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center italic">No archived invoices.</p>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {usePagedSlice(archivedInvoices, archivePage).map(renderInvoiceCard)}
+                  </div>
+                  <Paginator page={archivePage} pageSize={PAGE_SIZE} total={archivedInvoices.length} onChange={setArchivePage} />
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
+        );
+      })()}
 
       {/* Single PaymentDialog — handles both Mark Paid (full) and Add Payment (partial) */}
       <Dialog open={!!paymentTarget} onOpenChange={(o) => !o && closePaymentDialog()}>
