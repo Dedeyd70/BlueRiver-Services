@@ -572,7 +572,7 @@ const QuotesAdmin = () => {
                           <div className="flex flex-wrap gap-2 pt-1">
                             <HasPermission permission="can_manage_quotes">
                               {q.status === "requested" && (
-                                <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q.id)} className="gap-1">
+                                <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q)} className="gap-1">
                                   <PlayCircle className="w-3 h-3" /> Mark In Progress
                                 </Button>
                               )}
