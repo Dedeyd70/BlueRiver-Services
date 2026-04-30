@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { FileText, Plus, DollarSign, Download, CheckCircle2 } from "lucide-react";
@@ -12,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import HasPermission from "@/components/HasPermission";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 
 const statusColors: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-800",
@@ -52,6 +54,8 @@ const InvoicesAdmin = () => {
   const [payRef, setPayRef] = useState<string>("");
   const [payAmount, setPayAmount] = useState<string>("");
   const [form, setForm] = useState<InvoiceForm>({ ...emptyForm });
+  const [activePage, setActivePage] = useState(1);
+  const [archivePage, setArchivePage] = useState(1);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["admin-invoices"],
