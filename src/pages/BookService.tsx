@@ -108,6 +108,40 @@ const BookService = () => {
 
   const setDyn = (key: string, val: any) => setDynValues((p) => ({ ...p, [key]: val }));
 
+  // Pricing engine inputs — read-only, mirrors what admin sees
+  const { data: pricingRules } = useQuery({
+    queryKey: ["public-pricing-rules", matchedServiceType?.id],
+    queryFn: async () => {
+      if (!matchedServiceType?.id) return [];
+      const { data } = await (supabase as any)
+        .from("service_pricing_rules")
+        .select("id,service_type_id,category,unit_price")
+        .eq("service_type_id", matchedServiceType.id);
+      return data ?? [];
+    },
+    enabled: !!matchedServiceType?.id,
+  });
+
+  const { data: conditionSettings } = useQuery({
+    queryKey: ["public-condition-settings"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("condition_settings")
+        .select("id,name,surcharge_amount");
+      return data ?? [];
+    },
+  });
+
+  const { data: taxRate } = useQuery({
+    queryKey: ["public-tax-rate"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("site_settings").select("setting_value").eq("setting_key", "tax_rate").maybeSingle();
+      const n = parseFloat(data?.setting_value ?? "0");
+      return Number.isFinite(n) ? n : 0;
+    },
+  });
+
   const { data: availability } = useQuery({
     queryKey: ["availability-settings"],
     queryFn: async () => {
@@ -180,17 +214,37 @@ const BookService = () => {
 
   const timeSlots = generateTimeSlots(selectedDate);
 
-  // Price calculation
-  const parsePrice = (p: string | null | undefined): number => {
-    if (!p) return 0;
-    const num = parseFloat(p.replace(/[^0-9.]/g, ""));
-    return isNaN(num) ? 0 : num;
-  };
+  // Authoritative pricing — same engine the admin/invoice path uses
+  const computed = useMemo(() => {
+    const selectedAddonObjects = addons
+      .filter((a) => selectedAddons.includes(a.title))
+      .map((a) => ({ title: a.title, price_starting: a.price_starting }));
 
-  const selectedMainService = mainServices.find((s) => s.title === form.service);
-  const mainPrice = parsePrice(selectedMainService?.price_starting);
-  const addonPrices = addons.filter((a) => selectedAddons.includes(a.title)).map((a) => ({ title: a.title, price: parsePrice(a.price_starting) }));
-  const totalPrice = mainPrice + addonPrices.reduce((sum, a) => sum + a.price, 0);
+    const pricingRequest = {
+      service_type_id: matchedServiceType?.id ?? null,
+      service_type: form.service || null,
+      condition_level: form.condition_level || null,
+      selected_addons: selectedAddonObjects,
+      custom_fields: dynValues,
+    };
+
+    const serviceTypesForEngine = matchedServiceType
+      ? [{
+          id: matchedServiceType.id,
+          name: matchedServiceType.name,
+          base_price: (matchedServiceType as any).base_price ?? 0,
+        }]
+      : [];
+
+    return computeQuote(
+      pricingRequest,
+      serviceTypesForEngine,
+      pricingRules ?? [],
+      conditionSettings ?? [],
+      taxRate ?? 0,
+      serviceFields ?? [],
+    );
+  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
