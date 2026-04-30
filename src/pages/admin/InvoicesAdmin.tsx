@@ -149,6 +149,8 @@ const InvoicesAdmin = () => {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
       qc.invalidateQueries({ queryKey: ["bookings-without-invoice"] });
       setOpen(false);
       setForm({ ...emptyForm });
@@ -200,6 +202,10 @@ const InvoicesAdmin = () => {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
+      qc.invalidateQueries({ queryKey: ["bookings-without-invoice"] });
+      qc.invalidateQueries({ queryKey: ["admin-receipts"] });
       closePaymentDialog();
       toast({ title: "Payment recorded" });
     },
