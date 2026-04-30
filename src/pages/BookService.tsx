@@ -492,6 +492,7 @@ const BookService = () => {
                             <label className="text-sm font-medium text-foreground mb-1.5 block">Condition Level</label>
                             <select value={form.condition_level} onChange={update("condition_level")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                               <option value="">Select condition</option>
+                              <option value="Light">Light</option>
                               <option value="Standard">Standard</option>
                               <option value="Heavy">Heavy</option>
                               <option value="Post-Construction">Post-Construction</option>
