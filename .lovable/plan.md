@@ -1,201 +1,112 @@
+## Professionalism & Parity + Mailto Email Workflows
 
-# Phase 1 — Pricing Sync (DB rename, UI sync, Booking → engine handshake)
-
-Strictly aligned to the audit. No new tables. No UI redesign. No invoice/receipt RPC changes (still paused for Phase 1A).
+Four areas in one pass: branded PDFs + line-item label fix; expanded card visibility + activity-log notes; quote-sourced action parity, archived-state safeguards, Modify Items, and Prepare-Quote add-on price autopopulation; standardized mailto templates for confirm / in-progress / send-quote / send-invoice.
 
 ---
 
-## 1. Database standardization
+### 1. Unified Branding & PDF Fixes
 
-### 1a. Rename `condition_settings`
-Data update (insert tool):
+**`src/lib/invoicePdf.ts` & `src/lib/quotePdf.ts`**
+- Letterhead band: navy fill (`#0F172A`), white business name + slate-300 tagline + contact line, plus a navy/blue rounded "BR" badge as logo placeholder (no asset upload required; later swap-in via `branding_settings.logo_url`).
+- Theme accents: section headings + total row in primary blue (`#1E3A8A`); table rules in `#CBD5E1`; total row gets a subtle slate-100 fill.
+- All math unchanged — still reads from the persisted invoice / quote draft row.
+- **Item-label bug fix**: line-item reader becomes `String(s.name || s.title || "Item")` (engine writes `name`; old rows used `title`). Same change for `quotePdf.ts`.
+
+---
+
+### 2. Admin UI Visibility & Activity Log
+
+**Itemized breakdown table on expand**
+- BookingsAdmin: read-only `Item · Qty · Unit · Total` table from `b.line_items`, sorted base → room → addon → condition. Falls back to "No itemized data" for legacy bookings without `line_items`.
+- QuotesAdmin: same table from `draft.line_items` (or "Quote not yet prepared").
+- Existing add-on chip row stays as a compact summary above the table.
+
+**Activity Log — admin notes + actor name**
+- Migration: `ALTER TABLE public.booking_activity_logs ADD COLUMN IF NOT EXISTS notes text;` (existing RLS already covers it; `details` stays system-generated, `notes` is admin-authored).
+- BookingsAdmin Activity section: a `Textarea` + "Add note" button below the entry list inserts `{ booking_id, action: 'note', notes, actor_id: auth.uid() }`.
+- QuotesAdmin keeps `quote_notes` (existing) but uses the same admin-name resolver.
+- Each entry header: `[Action label] by [Admin Name] · [timestamp]`, plus the system `details` line and (when present) the admin `notes` line.
+- Admin name lookup: one cached `useQuery(['admin-users'])` calling `supabase.functions.invoke("list-admin-users")`, building `Record<userId, full_name | email>`. Fallbacks: `null actor` → "System", unknown id → "Unknown user".
+
+---
+
+### 3. Parity, Safeguards, Modify Items, Add-on Pricing
+
+**Quote-sourced parity**
+- BookingsAdmin: drop the `!isQuoteSourced` gate so every active booking shows `Generate Invoice` (when no invoice), then `View Invoice`, `Send Invoice`, `Mark as Paid` once an invoice exists. Same `can_manage_invoices` permission gating.
+
+**Disable destructive buttons on archive/paid**
+- When `archived === true` (cancelled OR completed+paid):
+  - `Send Invoice` → rendered `disabled` with muted styling and tooltip "Booking archived — invoice already settled".
+  - `Mark Completed` is already only shown for `confirmed`; confirm it stays hidden after completion.
+  - Add a small "Archived" chip near the status pill.
+
+**Modify Booking Items dialog**
+- New `Modify Items` button (only when `!archived && status !== 'cancelled'` and `can_manage_bookings`).
+- Dialog seeded from `b.line_items` with the same editable table pattern as QuotesAdmin: name / qty / unit / Total (auto), "Add line", trash to remove.
+- On save: `recomputeFromLineItems(items, taxRate)` from `pricingEngine.ts`, then `update bookings set line_items, subtotal, tax_amount, total_amount, total_price=<total_amount>`. Write a `booking_activity_logs` row with `action='items_modified'` and `details` summarizing the delta (e.g. "Total: $420 → $480").
+- Invalidate `['admin-bookings']`, `['admin-invoices-by-booking']`, `['admin-invoices']`.
+- Guard: if a linked invoice exists AND `payment_status !== 'unpaid'`, block save with toast "Invoice already has payments — modify the invoice instead."
+
+**Auto-populate add-on prices in Prepare Quote**
+- Today: `openPrepare` only seeds `addons` from `selected_addons` when no draft exists, and even then add-ons land at `$0` because the public-form payload lacks price metadata.
+- Fix:
+  1. Cached `useQuery(['services-addons'])` selecting from `services` where `service_category='addon' AND is_active=true`. Build `Map<lowercase title, parseInt(price_starting)>`.
+  2. When seeding line items, resolve each `selected_addons[i]` price by lookup; if not found, keep $0 and tag it `(price TBD)`.
+  3. Even when a draft exists, merge any `selected_addons` from the request not yet represented as `addon`-type line items (idempotent by lowercased title).
+- Keep legacy `draftForm.addons` array in sync with the merged add-ons (for the non-line-item PDF fallback path).
+
+---
+
+### 4. Mailto Email Workflows (exact templates)
+
+A single helper `src/lib/mailto.ts` builds `mailto:` URLs and opens them via `window.location.href = ...`:
+
+```
+buildMailto({ to, subject, bodyTemplate, vars })
+```
+
+Each template uses the user's literal `%0D%0A` newlines as specified. Vars: `[Name]`, `[Service]`, `[Date]`. Service falls back to `service_type || 'cleaning service'`. Date is `format(booking_date, 'MMMM d, yyyy')`.
+
+**BookingsAdmin — Confirm button** (`status='pending' → 'confirmed'`)
+- After successful update, open:
+  - Subject: `Booking Confirmed - BlueRiver Services`
+  - Body: `Hi [Name],%0D%0A%0D%0AWe are thrilled to confirm your booking for [Service] on [Date]. We look forward to providing you with excellent service!%0D%0A%0D%0AThank you,%0D%0ABlueRiver Team`
+
+**QuotesAdmin — Mark In Progress** (`status='requested' → 'in_progress'`)
+- After successful update:
+  - Subject: `Quote Request Received - BlueRiver Services`
+  - Body: `Hi [Name],%0D%0A%0D%0AWe have received your quote request for [Service]. Our team is currently reviewing your details and will get back to you with a customized quote within 24 hours.%0D%0A%0D%0AThank you,%0D%0ABlueRiver Team`
+
+**QuotesAdmin — Send Quote button** (new button next to "Download PDF" inside the prepared-quote section; visible only when a draft exists)
+- Subject: `Your Quote from BlueRiver Services`
+- Body: `Hi [Name],%0D%0A%0D%0AThank you for considering BlueRiver Services. Please find your detailed quote attached to this email.%0D%0A%0D%0ALet us know if you have any questions!%0D%0A%0D%0ABest,%0D%0ABlueRiver Team`
+- We do not auto-attach (mail clients can't accept attachments via `mailto:`); the prior "Download PDF" button stays so admins can attach manually.
+
+**BookingsAdmin — Send Invoice** (standardize existing)
+- Subject: `Invoice from BlueRiver Services`
+- Body: `Hi [Name],%0D%0A%0D%0AThank you for choosing BlueRiver. Please find your invoice for the completed service attached.%0D%0A%0D%0ABest,%0D%0ABlueRiver Team`
+
+In every case the admin's mail client opens with To/Subject/Body prefilled. The action that triggered the mail (status update or DB write) still happens regardless of whether the admin actually sends the email.
+
+---
+
+### Files Edited
+- `src/lib/invoicePdf.ts` — letterhead, theme colors, `name || title` fix.
+- `src/lib/quotePdf.ts` — letterhead, theme colors, `name || title` fix.
+- `src/lib/mailto.ts` — new helper for `buildMailto({...})` + the four template constants.
+- `src/pages/admin/BookingsAdmin.tsx` — itemized table; remove `!isQuoteSourced` gate; archived disables + chip; Modify Items dialog (uses `recomputeFromLineItems`); activity-log textarea + admin-name rendering; mailto on Confirm and standardized Send Invoice.
+- `src/pages/admin/QuotesAdmin.tsx` — itemized table; admin-name rendering on `quote_notes`; fix `openPrepare` add-on seeding (services-table price lookup + merge with existing draft); mailto on Mark In Progress; new Send Quote button.
+- `src/pages/admin/InvoicesAdmin.tsx` — small itemized breakdown block in invoice card so admins see real names without opening the PDF.
+
+### Migration
 ```sql
-UPDATE condition_settings SET name = 'Post-Construction' WHERE name = 'Post-Renovation';
+ALTER TABLE public.booking_activity_logs
+  ADD COLUMN IF NOT EXISTS notes text;
 ```
-No existing `bookings` or `quote_requests` rows reference `'Post-Renovation'` (verified: 0 rows). UI already sends `'Post-Construction'`, so the surcharge starts applying immediately.
+No RLS changes — existing insert/select policies cover the new column.
 
-### 1b. Rename `Reccuring Cleaning` → `Recurring Cleaning`
-Two name-keyed tables plus historical rows that use the old name as a fallback matcher in `pricingEngine.computeQuote` (matches by `service_type` text when `service_type_id` is null). Verified counts: 2 bookings, 3 quote_requests still reference the typo.
-
-Single insert-tool transaction:
-```sql
-UPDATE service_types SET name = 'Recurring Cleaning' WHERE name = 'Reccuring Cleaning';
-UPDATE services      SET title = 'Recurring Cleaning' WHERE title = 'Reccuring Cleaning';
-UPDATE bookings        SET service_type = 'Recurring Cleaning' WHERE service_type = 'Reccuring Cleaning';
-UPDATE quote_requests  SET service_type = 'Recurring Cleaning' WHERE service_type = 'Reccuring Cleaning';
-```
-`service_pricing_rules` and `service_fields` link by `service_type_id` (uuid), so they need no update.
-
-### 1c. Delete dead capitalized rules
-35 rows confirmed. Insert tool:
-```sql
-DELETE FROM service_pricing_rules
- WHERE category IN ('Bedroom','Bathroom','FullBath','HalfBath','Kitchen','LivingRoom','OfficeRoom')
-   AND unit_price = 0;
-```
-`pricingEngine.ts` resolves rules by strict `category === field_key` (snake_case), so these rows are unreachable today — safe to drop. The legacy `category` comment in `pricingEngine.ts` (L20) gets a one-line cleanup to reflect snake_case-only.
-
----
-
-## 2. UI condition dropdown sync
-
-Add `Light` option (mirrors DB), keep order: `Light, Standard, Heavy, Post-Construction`.
-
-- `src/pages/BookService.tsx` L432–437 — add `<option value="Light">Light</option>` as the first option.
-- `src/pages/RequestQuote.tsx` L344–348 — same change, identical wording and order.
-
-No state, validation, or schema change. Both forms stay byte-identical to each other for these options.
-
----
-
-## 3. BookService → pricingEngine handshake
-
-Goal: the form's "Estimated Total" and the row written to `bookings` must come from the same authoritative engine the admin uses. Stop writing legacy `total_price`; populate `line_items / subtotal / tax_amount / total_amount` instead.
-
-### 3a. Load engine inputs in `BookService.tsx`
-Add three react-query hooks alongside existing `serviceFields`:
-
-```ts
-const { data: pricingRules } = useQuery({
-  queryKey: ["public-pricing-rules", matchedServiceType?.id],
-  queryFn: async () => {
-    if (!matchedServiceType?.id) return [];
-    const { data } = await (supabase as any)
-      .from("service_pricing_rules")
-      .select("id,service_type_id,category,unit_price")
-      .eq("service_type_id", matchedServiceType.id);
-    return data ?? [];
-  },
-  enabled: !!matchedServiceType?.id,
-});
-
-const { data: conditionSettings } = useQuery({
-  queryKey: ["public-condition-settings"],
-  queryFn: async () => {
-    const { data } = await (supabase as any)
-      .from("condition_settings")
-      .select("id,name,surcharge_amount");
-    return data ?? [];
-  },
-});
-
-const { data: taxRate } = useQuery({
-  queryKey: ["public-tax-rate"],
-  queryFn: async () => {
-    const { data } = await (supabase as any)
-      .from("site_settings").select("setting_value").eq("setting_key", "tax_rate").maybeSingle();
-    const n = parseFloat(data?.setting_value ?? "0");
-    return Number.isFinite(n) ? n : 0;
-  },
-});
-```
-(`tax_rate` lookup is read-only and falls back to 0 if the setting doesn't exist — matches the engine's existing default.)
-
-### 3b. Replace `parsePrice`-based estimate (L182–192)
-Build the request object the engine expects, then call `computeQuote`:
-
-```ts
-const selectedAddonObjects = addons
-  .filter(a => selectedAddons.includes(a.title))
-  .map(a => ({ title: a.title, price_starting: a.price_starting }));
-
-const pricingRequest = {
-  service_type_id: matchedServiceType?.id ?? null,
-  service_type: form.service || null,
-  bedrooms: null, bathrooms: null,           // legacy; engine uses dynamic field_keys
-  condition_level: form.condition_level || null,
-  selected_addons: selectedAddonObjects,
-  custom_fields: dynValues,                   // engine reads field_key from here
-};
-
-const computed = useMemo(() => computeQuote(
-  pricingRequest,
-  matchedServiceType ? [{ id: matchedServiceType.id, name: matchedServiceType.name, base_price: (matchedServiceType as any).base_price ?? 0 }] : [],
-  pricingRules ?? [],
-  conditionSettings ?? [],
-  taxRate ?? 0,
-  serviceFields ?? [],
-), [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.condition_level]);
-```
-
-Note: `service_types` query (L75–82) currently selects only `id,name`. Update its SELECT to `id,name,base_price` so the engine receives the real base price.
-
-### 3c. Replace the "Estimated Total" UI block (L500–518)
-Render directly from `computed`:
-
-```tsx
-{form.service && computed.total > 0 && (
-  <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-    {computed.lineItems.filter(i => i.total_price > 0).map((i, idx) => (
-      <div key={idx} className="flex justify-between text-sm">
-        <span className="text-muted-foreground">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ""}</span>
-        <span className="text-foreground">${i.total_price.toFixed(2)}</span>
-      </div>
-    ))}
-    {computed.tax > 0 && (
-      <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground">Tax</span>
-        <span className="text-foreground">${computed.tax.toFixed(2)}</span>
-      </div>
-    )}
-    <div className="flex justify-between text-sm font-semibold border-t border-border pt-2 mt-2">
-      <span className="text-foreground">Estimated Total</span>
-      <span className="text-primary">${computed.total.toFixed(2)}</span>
-    </div>
-  </div>
-)}
-```
-Visually equivalent — no layout/redesign.
-
-The success screen (L350) switches `${totalPrice.toFixed(2)}` → `${computed.total.toFixed(2)}`.
-
-### 3d. Booking insert payload (L272–300)
-Stop writing legacy `total_price`. Write the modern columns from the engine:
-
-```ts
-// removed: total_price: totalPrice > 0 ? totalPrice : null,
-line_items:  computed.lineItems,
-subtotal:    computed.subtotal,
-tax_amount:  computed.tax,
-total_amount: computed.total,
-```
-
-`selected_addons` keeps its existing `{ title, price }` shape (parsed from `price_starting`) so the booking detail UI doesn't change. The engine ignores this field except for re-computation; the source of truth is `line_items`.
-
-### 3e. Remove now-unused locals
-Delete `parsePrice`, `selectedMainService`, `mainPrice`, `addonPrices`, `totalPrice` from `BookService.tsx` (L183–192). All references are replaced by `computed`.
-
----
-
-## 4. Downstream impact (verified, no changes needed)
-
-- `create_invoice_from_booking` RPC reads `COALESCE(booking_record.subtotal, booking_record.total_price, 0)` and `COALESCE(booking_record.total_amount, booking_record.total_price, 0)`. Once Phase 1 is live, new bookings supply `subtotal/total_amount` directly — the `total_price` fallback simply becomes dormant for new rows. Historical bookings with only `total_price` still work via the COALESCE.
-- `convert_quote_to_booking` writes both `total_amount` and the legacy `total_price` from quote drafts — left untouched (quote→booking path is out of scope for this phase).
-- Receipts / `mark_invoice_paid` / `create_receipt` — untouched (Phase 1A backend remains paused per earlier instructions).
-- `bookings.total_price` column itself is **not dropped**. Schema unchanged.
-
----
-
-## 5. Files & operations
-
-| Op | Target | Change |
-|---|---|---|
-| insert tool SQL | `condition_settings` | rename Post-Renovation → Post-Construction |
-| insert tool SQL | `service_types`, `services`, `bookings`, `quote_requests` | rename Reccuring → Recurring Cleaning |
-| insert tool SQL | `service_pricing_rules` | DELETE 35 dead capitalized $0 rows |
-| code | `src/pages/BookService.tsx` | add `Light` option; add 3 queries; switch to `computeQuote`; rewrite estimate block; rewrite insert payload; remove dead helpers |
-| code | `src/pages/RequestQuote.tsx` | add `Light` option only |
-| code | `src/lib/pricingEngine.ts` | one-line comment cleanup on `PricingRule.category` doc (snake_case only) |
-
-No new files. No schema migration. No RLS change. No edge function. No table deletion.
-
----
-
-## 6. Verification after apply
-
-1. `service_pricing_rules` row count drops by 35; only snake_case rows remain.
-2. Selecting `Post-Construction` on a booking adds a `$100` surcharge line in the estimate.
-3. Selecting `Light` on either form is accepted and adds a `$10` surcharge line in BookService.
-4. Submitting a public booking writes `line_items`, `subtotal`, `tax_amount`, `total_amount` and leaves `total_price` NULL.
-5. Generating an invoice from that booking copies the same `subtotal`/`total_amount` (verified through existing RPC's COALESCE behavior).
-6. Estimate shown to the customer matches the totals an admin sees on the invoice.
+### Out of scope (deferred)
+- Editing line items on an invoice that already has payments — guarded with a toast.
+- True transactional email send (would need an edge function + verified domain) — current pass uses mailto only.
+- Logo upload UI — letterhead supports `branding_settings.logo_url` in a later pass; this pass uses the navy "BR" badge placeholder.
