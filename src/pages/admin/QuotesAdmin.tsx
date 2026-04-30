@@ -608,12 +608,27 @@ const QuotesAdmin = () => {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>
-                                    <Button variant="outline" size="sm" disabled className="gap-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-1"
+                                      disabled={!hasDraft}
+                                      onClick={() =>
+                                        openMailto({
+                                          to: q.email,
+                                          subject: MAIL_TEMPLATES.quoteSend.subject,
+                                          bodyTemplate: MAIL_TEMPLATES.quoteSend.body,
+                                          vars: { name: q.name, service: q.service_type },
+                                        })
+                                      }
+                                    >
                                       <Mail className="w-3 h-3" /> Send Quote
                                     </Button>
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>Email integration coming soon</TooltipContent>
+                                {!hasDraft && (
+                                  <TooltipContent>Prepare the quote first, then download the PDF to attach.</TooltipContent>
+                                )}
                               </Tooltip>
 
                               {q.status === "in_progress" && (
