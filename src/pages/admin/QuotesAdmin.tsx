@@ -167,6 +167,19 @@ const QuotesAdmin = () => {
 
   const archivedQuotes = (quotes ?? []).filter((q) => q.status === "converted" || q.status === "closed");
 
+  // Jump to the page containing the focused item so the ref can mount and scroll.
+  useEffect(() => {
+    if (!focusId || !quotes) return;
+    const idx = activeQuotes.findIndex((q: any) => q.id === focusId);
+    if (idx >= 0) {
+      setActivePage(Math.floor(idx / PAGE_SIZE) + 1);
+      return;
+    }
+    const archIdx = archivedQuotes.findIndex((q: any) => q.id === focusId);
+    if (archIdx >= 0) setArchivePage(Math.floor(archIdx / PAGE_SIZE) + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, quotes]);
+
   const { data: allNotes } = useQuery({
     queryKey: ["admin-quote-notes"],
     queryFn: async () => {
