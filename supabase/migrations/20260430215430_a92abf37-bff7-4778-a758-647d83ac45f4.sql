@@ -1,0 +1,1 @@
+ALTER TABLE public.booking_activity_logs ADD COLUMN IF NOT EXISTS notes text;
