@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { notifyAdmins } from "@/lib/notifications";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
+import { computeQuote } from "@/lib/pricingEngine";
 
 // Keys mapped to typed columns on bookings table; everything else → custom_fields JSON.
 const BOOKING_TYPED_KEYS = new Set([
@@ -75,7 +76,7 @@ const BookService = () => {
   const { data: serviceTypes } = useQuery({
     queryKey: ["public-service-types"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("service_types").select("id,name");
+      const { data, error } = await (supabase as any).from("service_types").select("id,name,base_price");
       if (error) throw error;
       return data ?? [];
     },
