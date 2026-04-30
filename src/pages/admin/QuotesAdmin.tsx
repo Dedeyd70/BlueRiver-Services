@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +17,8 @@ import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEng
 import DynamicQuoteSummary from "@/components/admin/DynamicQuoteSummary";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import HasPermission from "@/components/HasPermission";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
+import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -61,16 +63,24 @@ const QuotesAdmin = () => {
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
+  const focusId = searchParams.get("focus");
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<any>(null);
   const [bookingDate, setBookingDate] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
-  const [expandedNotes, setExpandedNotes] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
   const [closeTarget, setCloseTarget] = useState<any>(null);
   const [closeReason, setCloseReason] = useState("");
   const [prepareTarget, setPrepareTarget] = useState<any>(null);
   const [draftForm, setDraftForm] = useState<DraftForm>(emptyDraft);
+  const [activePage, setActivePage] = useState(1);
+  const [archivePage, setArchivePage] = useState(1);
+
+  // Auto-expand the focused card so deep-linked records open immediately.
+  useEffect(() => {
+    if (focusId) setExpandedId(focusId);
+  }, [focusId]);
 
   const { data: quotes, isLoading } = useQuery({
     queryKey: ["admin-quotes"],
