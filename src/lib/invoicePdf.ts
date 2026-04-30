@@ -4,11 +4,60 @@ import { format } from "date-fns";
 interface BrandingMap { [key: string]: string }
 interface SettingsMap { [key: string]: string }
 
+// ---- BlueRiver theme ----
+const NAVY: [number, number, number] = [15, 23, 42];       // #0F172A
+const PRIMARY: [number, number, number] = [30, 58, 138];   // #1E3A8A
+const SLATE_300: [number, number, number] = [203, 213, 225];
+const SLATE_500: [number, number, number] = [100, 116, 139];
+const SLATE_100: [number, number, number] = [241, 245, 249];
+
+const drawLetterhead = (
+  doc: jsPDF,
+  pageW: number,
+  branding: BrandingMap,
+  settings: SettingsMap
+): number => {
+  const bandH = 28;
+  // Navy band
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, pageW, bandH, "F");
+
+  // Logo placeholder badge ("BR")
+  const badgeX = 14;
+  const badgeY = 6;
+  const badgeSize = 16;
+  doc.setFillColor(...PRIMARY);
+  doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 3, 3, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("BR", badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 1.5, { align: "center" });
+
+  // Business name
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(255, 255, 255);
+  doc.text(branding.business_name || "BlueRiver Services LLC", badgeX + badgeSize + 6, 13);
+
+  // Tagline + contact in slate-300
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...SLATE_300);
+  const tagline = settings.footer_tagline || "Professional cleaning services";
+  doc.text(tagline, badgeX + badgeSize + 6, 18.5);
+  const contactLine = [settings.phone, settings.email].filter(Boolean).join("  ·  ");
+  if (contactLine) {
+    doc.text(contactLine, badgeX + badgeSize + 6, 23);
+  }
+
+  // Reset text color for body
+  doc.setTextColor(0, 0, 0);
+  return bandH + 8; // y position for body content
+};
+
 /**
  * Branded invoice PDF. Reads only from the persisted `invoices` row —
- * never recalculates pricing. Mirrors `quotePdf.ts` layout/spacing.
- *
- * Adds a translucent "PAID" watermark when payment_status === "paid".
+ * never recalculates pricing.
  */
 export const generateInvoicePdf = (
   inv: any,
@@ -19,29 +68,7 @@ export const generateInvoicePdf = (
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 20;
-  let y = 20;
-
-  // Header — same as quote PDF
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text(branding.business_name || "BlueRiver Services LLC", margin, y);
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100);
-  const tagline = settings.footer_tagline || "Professional cleaning services";
-  doc.text(tagline, margin, y);
-  y += 5;
-  const contactLine = [settings.phone, settings.email].filter(Boolean).join(" · ");
-  if (contactLine) {
-    doc.text(contactLine, margin, y);
-    y += 6;
-  }
-  doc.setTextColor(0);
-
-  doc.setDrawColor(200);
-  doc.line(margin, y, pageW - margin, y);
-  y += 10;
+  let y = drawLetterhead(doc, pageW, branding, settings);
 
   // Invoice header
   const invoiceNum = inv.invoice_number || `BR-${inv.id?.slice(0, 8).toUpperCase()}`;
@@ -52,7 +79,9 @@ export const generateInvoicePdf = (
 
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(...PRIMARY);
   doc.text(`INVOICE  #${invoiceNum}`, margin, y);
+  doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.text(`Issued: ${issued}`, pageW - margin, y - 4, { align: "right" });
@@ -72,10 +101,18 @@ export const generateInvoicePdf = (
   doc.text(inv.customer_email || "", margin, y);
   y += 10;
 
-  // Itemized table
-  const services = Array.isArray(inv.services) ? inv.services : [];
+  // Itemized table — read from line_items first, fall back to legacy services
+  const services: any[] =
+    Array.isArray(inv.line_items) && inv.line_items.length > 0
+      ? inv.line_items
+      : Array.isArray(inv.services)
+      ? inv.services
+      : [];
+
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(...PRIMARY);
   doc.text("Itemized Breakdown", margin, y);
+  doc.setTextColor(0, 0, 0);
   y += 6;
 
   const colItem = margin;
@@ -84,26 +121,28 @@ export const generateInvoicePdf = (
   const colTotal = pageW - margin;
 
   doc.setFontSize(9);
-  doc.setTextColor(100);
+  doc.setTextColor(...SLATE_500);
   doc.text("Item", colItem, y);
   doc.text("Qty", colQty, y, { align: "right" });
   doc.text("Unit", colUnit, y, { align: "right" });
   doc.text("Total", colTotal, y, { align: "right" });
   y += 2;
-  doc.setDrawColor(220);
+  doc.setDrawColor(...SLATE_300);
   doc.line(margin, y, pageW - margin, y);
   y += 4;
-  doc.setTextColor(0);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
 
   services.forEach((s: any) => {
     const qty = Number(s.quantity) || 1;
-    const unit = Number(s.unit_price) != null && !isNaN(Number(s.unit_price))
-      ? Number(s.unit_price)
-      : Number(s.price) || 0;
-    const total = Number(s.price) || qty * unit;
-    const name = String(s.title || "Item");
+    const unit =
+      s.unit_price != null && !isNaN(Number(s.unit_price))
+        ? Number(s.unit_price)
+        : Number(s.price) || 0;
+    const total = Number(s.total_price) || Number(s.price) || qty * unit;
+    // FIX: line items written by pricing engine use `name`. Legacy rows use `title`.
+    const name = String(s.name || s.title || "Item");
     const nameLines = doc.splitTextToSize(name, colQty - colItem - 4);
     doc.text(nameLines[0], colItem, y);
     doc.text(String(qty), colQty, y, { align: "right" });
@@ -116,7 +155,7 @@ export const generateInvoicePdf = (
     }
   });
 
-  doc.setDrawColor(200);
+  doc.setDrawColor(...SLATE_300);
   doc.line(margin, y, pageW - margin, y);
   y += 5;
 
@@ -138,12 +177,17 @@ export const generateInvoicePdf = (
     y += 5;
   }
 
-  doc.line(margin, y, pageW - margin, y);
-  y += 5;
+  // Total row — slate-100 fill behind navy bold text
+  const totalRowY = y;
+  doc.setFillColor(...SLATE_100);
+  doc.rect(margin, totalRowY - 4, pageW - margin * 2, 8, "F");
   doc.setFont("helvetica", "bold");
-  doc.text("Total", margin + 2, y);
-  doc.text(`$${totalAmount.toFixed(2)}`, colTotal, y, { align: "right" });
-  y += 6;
+  doc.setTextColor(...PRIMARY);
+  doc.text("Total", margin + 2, y + 1);
+  doc.text(`$${totalAmount.toFixed(2)}`, colTotal, y + 1, { align: "right" });
+  doc.setTextColor(0, 0, 0);
+  y += 8;
+
   doc.setFont("helvetica", "normal");
   doc.text("Paid", margin + 2, y);
   doc.text(`$${amountPaid.toFixed(2)}`, colTotal, y, { align: "right" });
@@ -157,7 +201,9 @@ export const generateInvoicePdf = (
   // Payment details (when any payment recorded)
   if (inv.payment_status && inv.payment_status !== "unpaid") {
     doc.setFont("helvetica", "bold");
+    doc.setTextColor(...PRIMARY);
     doc.text("Payment Details", margin, y);
+    doc.setTextColor(0, 0, 0);
     y += 5;
     doc.setFont("helvetica", "normal");
     if (inv.payment_method) {
@@ -178,7 +224,9 @@ export const generateInvoicePdf = (
   // Notes
   if (inv.notes) {
     doc.setFont("helvetica", "bold");
+    doc.setTextColor(...PRIMARY);
     doc.text("Notes", margin, y);
+    doc.setTextColor(0, 0, 0);
     y += 5;
     doc.setFont("helvetica", "normal");
     const lines = doc.splitTextToSize(String(inv.notes), pageW - margin * 2);
@@ -189,10 +237,11 @@ export const generateInvoicePdf = (
     y += 5;
   }
 
-  // Footer thank-you (mirrors quote PDF closing)
-  doc.setTextColor(0);
+  // Footer thank-you
+  doc.setTextColor(...PRIMARY);
   doc.setFont("helvetica", "bold");
   doc.text("Thank you for choosing BlueRiver Services.", margin, Math.min(y + 4, pageH - 20));
+  doc.setTextColor(0, 0, 0);
 
   // PAID watermark — applied LAST so it overlays content with low opacity
   if (inv.payment_status === "paid") {

@@ -19,6 +19,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import HasPermission from "@/components/HasPermission";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -157,6 +158,27 @@ const QuotesAdmin = () => {
     },
   });
 
+  // Add-on price lookup, used to auto-populate prices in Prepare Quote.
+  const { data: addonServices } = useQuery({
+    queryKey: ["services-addons"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("services")
+        .select("title, price_starting")
+        .eq("service_category", "addon")
+        .eq("is_active", true);
+      return (data ?? []) as any[];
+    },
+  });
+  const addonPriceMap = (() => {
+    const map = new Map<string, number>();
+    (addonServices ?? []).forEach((s: any) => {
+      const n = parseInt(String(s.price_starting ?? "").replace(/[^0-9]/g, ""), 10);
+      if (s.title) map.set(String(s.title).toLowerCase().trim(), Number.isFinite(n) ? n : 0);
+    });
+    return map;
+  })();
+
   const draftMap: Record<string, any> = {};
   (drafts ?? []).forEach((d) => (draftMap[d.quote_id] = d));
 
@@ -208,21 +230,28 @@ const QuotesAdmin = () => {
   };
 
   const markInProgress = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (q: any) => {
       const { data, error } = await supabase
         .from("quote_requests")
         .update({ status: "in_progress" })
-        .eq("id", id)
+        .eq("id", q.id)
         .select("id")
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Update blocked by permissions or RLS");
-      await logActivity(id, "Status changed to In Progress");
+      await logActivity(q.id, "Status changed to In Progress");
+      return q;
     },
-    onSuccess: () => {
+    onSuccess: (q: any) => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
       qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
       toast({ title: "Quote marked In Progress" });
+      openMailto({
+        to: q.email,
+        subject: MAIL_TEMPLATES.quoteInProgress.subject,
+        bodyTemplate: MAIL_TEMPLATES.quoteInProgress.body,
+        vars: { name: q.name, service: q.service_type || "your cleaning service" },
+      });
     },
   });
 
@@ -355,14 +384,32 @@ const QuotesAdmin = () => {
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
       const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? []);
       const baseItem = computed.lineItems.find((i) => i.type === "base");
+      // Resolve add-on prices from the services table when the public form
+      // didn't carry pricing through (which is the common case).
+      const resolvedAddons = submittedAddons.map((a: any) => {
+        const title = a?.title || "Add-on";
+        const submitted = Number(a?.price) || 0;
+        const looked = addonPriceMap.get(String(title).toLowerCase().trim()) || 0;
+        return { title, price: submitted > 0 ? submitted : looked };
+      });
+      // Merge resolved add-on prices into computed line items (engine seeded $0 add-ons from request).
+      const mergedItems = computed.lineItems.map((it) => {
+        if (it.type !== "addon") return it;
+        const cleanName = it.name.replace(/^Add-on:\s*/i, "").toLowerCase().trim();
+        const match = resolvedAddons.find((a) => a.title.toLowerCase().trim() === cleanName);
+        if (match && match.price > 0 && it.unit_price === 0) {
+          return { ...it, unit_price: match.price, total_price: match.price };
+        }
+        return it;
+      });
       setDraftForm({
         ...emptyDraft,
         service_type: q.service_type ?? "",
         scope: q.description ?? "",
-        addons: submittedAddons.map((a: any) => ({ title: a.title || "Add-on", price: Number(a.price) || 0 })),
+        addons: resolvedAddons,
         tax_rate: defaultTax,
         base_price: baseItem ? baseItem.unit_price : 0,
-        line_items: computed.lineItems,
+        line_items: mergedItems,
       });
     }
     setPrepareTarget(q);
@@ -543,7 +590,7 @@ const QuotesAdmin = () => {
                           <div className="flex flex-wrap gap-2 pt-1">
                             <HasPermission permission="can_manage_quotes">
                               {q.status === "requested" && (
-                                <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q.id)} className="gap-1">
+                                <Button variant="outline" size="sm" onClick={() => markInProgress.mutate(q)} className="gap-1">
                                   <PlayCircle className="w-3 h-3" /> Mark In Progress
                                 </Button>
                               )}
@@ -579,12 +626,27 @@ const QuotesAdmin = () => {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>
-                                    <Button variant="outline" size="sm" disabled className="gap-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-1"
+                                      disabled={!hasDraft}
+                                      onClick={() =>
+                                        openMailto({
+                                          to: q.email,
+                                          subject: MAIL_TEMPLATES.quoteSend.subject,
+                                          bodyTemplate: MAIL_TEMPLATES.quoteSend.body,
+                                          vars: { name: q.name, service: q.service_type },
+                                        })
+                                      }
+                                    >
                                       <Mail className="w-3 h-3" /> Send Quote
                                     </Button>
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>Email integration coming soon</TooltipContent>
+                                {!hasDraft && (
+                                  <TooltipContent>Prepare the quote first, then download the PDF to attach.</TooltipContent>
+                                )}
                               </Tooltip>
 
                               {q.status === "in_progress" && (
