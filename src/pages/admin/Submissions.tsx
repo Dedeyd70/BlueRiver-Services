@@ -132,7 +132,7 @@ const Submissions = () => {
   ];
 
   return (
-    <div>
+    <div className="pb-24">
       <h1 className="text-2xl font-display font-bold text-foreground mb-1">Submissions</h1>
       <p className="text-sm text-muted-foreground mb-4">
         View-only inbox. Take actions in the dedicated Bookings, Quotes, or Messages pages.
