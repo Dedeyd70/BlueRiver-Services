@@ -1,158 +1,201 @@
-# UI & Pagination Refinements (Phase 1A backend work paused for now)
 
-Focused, surgical pass. No pricing/RPC work in this plan.
+# Phase 1 — Pricing Sync (DB rename, UI sync, Booking → engine handshake)
 
----
-
-## Pre-flight: what's already done (skip)
-
-After reading the current code:
-
-
-| Asked for                                                                                | Status                                                                                             |
-| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `pb-24` on **BookingsAdmin / QuotesAdmin / MessagesAdmin / Submissions** list containers | Not yet — will add                                                                                 |
-| Pagination (10/page) in BookingsAdmin                                                    | ✅ already wired with `usePagedSlice` + `Paginator` (lines 693–710)                                 |
-| Pagination in MessagesAdmin                                                              | ✅ already wired (lines for active/archived)                                                        |
-| Pagination in Submissions                                                                | ✅ already wired (line 214)                                                                         |
-| Active/Archived tabs in QuotesAdmin                                                      | ✅ already present (lines 395–399)                                                                  |
-| `?focus=` deep-link → expand + scroll/highlight in Bookings                              | ✅ already wired via `useFocusHighlight` + `expandedId` (lines 56–72, 151–161)                      |
-| `?focus=` deep-link in MessagesAdmin                                                     | ✅ already wired                                                                                    |
-| `mark_invoice_paid` invalidates `['admin-invoices']` and `['admin-bookings']`            | Partial — invalidates `admin-invoices` from InvoicesAdmin, but **not** `admin-bookings`. Will add. |
-
-
-So the real work is narrower than the brief implies. Here's exactly what changes.
+Strictly aligned to the audit. No new tables. No UI redesign. No invoice/receipt RPC changes (still paused for Phase 1A).
 
 ---
 
-## 1. BackToTop z-index (1 file)
+## 1. Database standardization
 
-`**src/components/BackToTop.tsx**` — change `z-40` → `z-30` so it sits below the BackToTop's own dropdowns/toaster (which use `z-50`) and crucially below the bottom-of-list paginator margin guards.
+### 1a. Rename `condition_settings`
+Data update (insert tool):
+```sql
+UPDATE condition_settings SET name = 'Post-Construction' WHERE name = 'Post-Renovation';
+```
+No existing `bookings` or `quote_requests` rows reference `'Post-Renovation'` (verified: 0 rows). UI already sends `'Post-Construction'`, so the surcharge starts applying immediately.
+
+### 1b. Rename `Reccuring Cleaning` → `Recurring Cleaning`
+Two name-keyed tables plus historical rows that use the old name as a fallback matcher in `pricingEngine.computeQuote` (matches by `service_type` text when `service_type_id` is null). Verified counts: 2 bookings, 3 quote_requests still reference the typo.
+
+Single insert-tool transaction:
+```sql
+UPDATE service_types SET name = 'Recurring Cleaning' WHERE name = 'Reccuring Cleaning';
+UPDATE services      SET title = 'Recurring Cleaning' WHERE title = 'Reccuring Cleaning';
+UPDATE bookings        SET service_type = 'Recurring Cleaning' WHERE service_type = 'Reccuring Cleaning';
+UPDATE quote_requests  SET service_type = 'Recurring Cleaning' WHERE service_type = 'Reccuring Cleaning';
+```
+`service_pricing_rules` and `service_fields` link by `service_type_id` (uuid), so they need no update.
+
+### 1c. Delete dead capitalized rules
+35 rows confirmed. Insert tool:
+```sql
+DELETE FROM service_pricing_rules
+ WHERE category IN ('Bedroom','Bathroom','FullBath','HalfBath','Kitchen','LivingRoom','OfficeRoom')
+   AND unit_price = 0;
+```
+`pricingEngine.ts` resolves rules by strict `category === field_key` (snake_case), so these rows are unreachable today — safe to drop. The legacy `category` comment in `pricingEngine.ts` (L20) gets a one-line cleanup to reflect snake_case-only.
 
 ---
 
-## 2. Add `pb-24` to admin list containers (4 files)
+## 2. UI condition dropdown sync
 
-Add bottom padding so the Paginator doesn't get visually clipped under the floating BackToTop on short viewports.
+Add `Light` option (mirrors DB), keep order: `Light, Standard, Heavy, Post-Construction`.
 
-- `**BookingsAdmin.tsx**` — wrap the outer `<div>` (line 600) with `pb-24` OR add it to that div's className.
-- `**QuotesAdmin.tsx**` — add `pb-24` to the outer `<div className="p-6">` (line 392).
-- `**MessagesAdmin.tsx**` — add `pb-24` to `<div className="max-w-5xl mx-auto p-4">`.
-- `**InvoicesAdmin.tsx**` — add `pb-24` to the root `<div>` (line 249).
-- `**Submissions.tsx**` — add `pb-24` to the root `<div>` (line 135).
+- `src/pages/BookService.tsx` L432–437 — add `<option value="Light">Light</option>` as the first option.
+- `src/pages/RequestQuote.tsx` L344–348 — same change, identical wording and order.
 
-Single-class change per file. No layout restructure.
+No state, validation, or schema change. Both forms stay byte-identical to each other for these options.
 
 ---
 
-## 3. Pagination + Tabs in InvoicesAdmin (the only real refactor)
+## 3. BookService → pricingEngine handshake
 
-`**src/pages/admin/InvoicesAdmin.tsx**`:
+Goal: the form's "Estimated Total" and the row written to `bookings` must come from the same authoritative engine the admin uses. Stop writing legacy `total_price`; populate `line_items / subtotal / tax_amount / total_amount` instead.
 
-a) Import `Tabs, TabsList, TabsTrigger, TabsContent` and `Paginator, PAGE_SIZE, usePagedSlice`.
-
-b) Add state:
+### 3a. Load engine inputs in `BookService.tsx`
+Add three react-query hooks alongside existing `serviceFields`:
 
 ```ts
-const [activePage, setActivePage] = useState(1);
-const [archivePage, setArchivePage] = useState(1);
-```
+const { data: pricingRules } = useQuery({
+  queryKey: ["public-pricing-rules", matchedServiceType?.id],
+  queryFn: async () => {
+    if (!matchedServiceType?.id) return [];
+    const { data } = await (supabase as any)
+      .from("service_pricing_rules")
+      .select("id,service_type_id,category,unit_price")
+      .eq("service_type_id", matchedServiceType.id);
+    return data ?? [];
+  },
+  enabled: !!matchedServiceType?.id,
+});
 
-c) Derive lists (Active = not paid OR has remaining balance; Archived = paid). Cancelled bookings have no invoice, so the rule is simply `payment_status === "paid"` → archived:
+const { data: conditionSettings } = useQuery({
+  queryKey: ["public-condition-settings"],
+  queryFn: async () => {
+    const { data } = await (supabase as any)
+      .from("condition_settings")
+      .select("id,name,surcharge_amount");
+    return data ?? [];
+  },
+});
+
+const { data: taxRate } = useQuery({
+  queryKey: ["public-tax-rate"],
+  queryFn: async () => {
+    const { data } = await (supabase as any)
+      .from("site_settings").select("setting_value").eq("setting_key", "tax_rate").maybeSingle();
+    const n = parseFloat(data?.setting_value ?? "0");
+    return Number.isFinite(n) ? n : 0;
+  },
+});
+```
+(`tax_rate` lookup is read-only and falls back to 0 if the setting doesn't exist — matches the engine's existing default.)
+
+### 3b. Replace `parsePrice`-based estimate (L182–192)
+Build the request object the engine expects, then call `computeQuote`:
 
 ```ts
-const activeInvoices  = (invoices ?? []).filter(i => i.payment_status !== "paid");
-const archivedInvoices = (invoices ?? []).filter(i => i.payment_status === "paid");
+const selectedAddonObjects = addons
+  .filter(a => selectedAddons.includes(a.title))
+  .map(a => ({ title: a.title, price_starting: a.price_starting }));
+
+const pricingRequest = {
+  service_type_id: matchedServiceType?.id ?? null,
+  service_type: form.service || null,
+  bedrooms: null, bathrooms: null,           // legacy; engine uses dynamic field_keys
+  condition_level: form.condition_level || null,
+  selected_addons: selectedAddonObjects,
+  custom_fields: dynValues,                   // engine reads field_key from here
+};
+
+const computed = useMemo(() => computeQuote(
+  pricingRequest,
+  matchedServiceType ? [{ id: matchedServiceType.id, name: matchedServiceType.name, base_price: (matchedServiceType as any).base_price ?? 0 }] : [],
+  pricingRules ?? [],
+  conditionSettings ?? [],
+  taxRate ?? 0,
+  serviceFields ?? [],
+), [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.condition_level]);
 ```
 
-d) Replace the current single `{invoices.map(...)}` block (lines 334–409) with a `<Tabs defaultValue="active">` containing two `TabsContent` sections, each rendering `usePagedSlice(list, page).map(renderInvoiceCard)` + `<Paginator …/>`.
+Note: `service_types` query (L75–82) currently selects only `id,name`. Update its SELECT to `id,name,base_price` so the engine receives the real base price.
 
-e) Extract the existing card JSX (lines 336–407) into a local `renderInvoiceCard(inv)` function — no visual change to the card itself.
+### 3c. Replace the "Estimated Total" UI block (L500–518)
+Render directly from `computed`:
 
-f) **Cross-query invalidation fix** (`applyPayment.onSuccess`, line 197 + `mark_invoice_paid` flow):
+```tsx
+{form.service && computed.total > 0 && (
+  <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+    {computed.lineItems.filter(i => i.total_price > 0).map((i, idx) => (
+      <div key={idx} className="flex justify-between text-sm">
+        <span className="text-muted-foreground">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ""}</span>
+        <span className="text-foreground">${i.total_price.toFixed(2)}</span>
+      </div>
+    ))}
+    {computed.tax > 0 && (
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">Tax</span>
+        <span className="text-foreground">${computed.tax.toFixed(2)}</span>
+      </div>
+    )}
+    <div className="flex justify-between text-sm font-semibold border-t border-border pt-2 mt-2">
+      <span className="text-foreground">Estimated Total</span>
+      <span className="text-primary">${computed.total.toFixed(2)}</span>
+    </div>
+  </div>
+)}
+```
+Visually equivalent — no layout/redesign.
+
+The success screen (L350) switches `${totalPrice.toFixed(2)}` → `${computed.total.toFixed(2)}`.
+
+### 3d. Booking insert payload (L272–300)
+Stop writing legacy `total_price`. Write the modern columns from the engine:
 
 ```ts
-onSuccess: () => {
-  qc.invalidateQueries({ queryKey: ["admin-invoices"] });
-  qc.invalidateQueries({ queryKey: ["admin-bookings"] });           // booking list refresh
-  qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] }); // BookingsAdmin's linked-invoice map
-  qc.invalidateQueries({ queryKey: ["bookings-without-invoice"] });
-  closePaymentDialog();
-  toast({ title: "Payment recorded" });
-},
+// removed: total_price: totalPrice > 0 ? totalPrice : null,
+line_items:  computed.lineItems,
+subtotal:    computed.subtotal,
+tax_amount:  computed.tax,
+total_amount: computed.total,
 ```
 
-Same additions on `createInvoice.onSuccess`. This is what makes a paid invoice immediately move into the Archive tab AND make the corresponding booking jump to its own Archive tab (BookingsAdmin's `isArchived` already keys off `invoiceByBooking[id].payment_status === "paid"`).
+`selected_addons` keeps its existing `{ title, price }` shape (parsed from `price_starting`) so the booking detail UI doesn't change. The engine ignores this field except for re-computation; the source of truth is `line_items`.
+
+### 3e. Remove now-unused locals
+Delete `parsePrice`, `selectedMainService`, `mainPrice`, `addonPrices`, `totalPrice` from `BookService.tsx` (L183–192). All references are replaced by `computed`.
 
 ---
 
-## 4. Card refactor — BookingsAdmin & QuotesAdmin → CollapsibleRecordCard
+## 4. Downstream impact (verified, no changes needed)
 
-**Re-read of the brief vs reality:** Both pages already have `?focus=` deep-link expansion working (BookingsAdmin via `expandedId`/`setExpandedId` + `useFocusHighlight`; QuotesAdmin via `useFocusHighlight` only). The remaining ask is to **convert the row visual into the `CollapsibleRecordCard` shell** so all admin lists feel uniform with MessagesAdmin.
-
-**BookingsAdmin** (`renderBookingCard`, lines 339–597):
-
-- Wrap the existing details + actions in `<CollapsibleRecordCard>` with:
-  - `summary` = the existing 4 fields (Date / Time / Service / Submitted)
-  - `title` = `b.name`, `subtitle` = email/phone
-  - `statusBadge` = current status pill
-  - `expanded` = `expandedId === b.id`, `onToggle` = setExpandedId toggle
-  - `innerRef` = `getRef(b.id)` (already wired)
-  - `readOnly` = `isArchived(b)`
-- Move everything from line 386 onward (property block, addons, totals, address, notes, cancellation reason, activity log, action buttons) into the `children` slot.
-- Remove the now-redundant outer `<div>` and inline header (lines 348–384).
-
-**QuotesAdmin** active list (lines 407–620):
-
-- Same conversion. `summary` = Service / Contact via / Submitted (existing 3 fields, pad with one more or use 3-field grid).
-- `title` = `q.name`, `subtitle` = email/phone
-- `statusBadge` = status pill (+ optional "Quote prepared" chip stays inside `statusBadge` as a second pill)
-- `expanded` driven by `expandedNotes === q.id` (reuse existing state — the toggle button currently lives on the activity-log button, but for the wrapper we'll add a dedicated card-level expand toggle and keep the activity-log section always visible inside `children`). To avoid double-state, **rename the existing `expandedNotes` to control card expansion** and let the activity log render unconditionally inside the expanded body.
-- `innerRef` = `getRef(q.id)`
-- `readOnly` = false for active, true for archived list.
-
-Archived QuotesAdmin list (lines 627–735): same wrapping, `readOnly={true}`.
-
-c) **Auto-expand on focus + page-jump** for QuotesAdmin (mirror BookingsAdmin pattern; this is the one place the brief is right that something is missing):
-
-```ts
-const [expandedId, setExpandedId] = useState<string | null>(null);
-useEffect(() => { if (focusId) setExpandedId(focusId); }, [focusId]);
-```
-
-And add the page-jump effect (mirroring lines 151–161 of BookingsAdmin) once active/archive paginators exist. **Note:** QuotesAdmin doesn't currently have pagination — adding it now matches the other admin pages and is needed for the page-jump-on-focus to work correctly. Same `usePagedSlice` + `Paginator` pattern as BookingsAdmin.
+- `create_invoice_from_booking` RPC reads `COALESCE(booking_record.subtotal, booking_record.total_price, 0)` and `COALESCE(booking_record.total_amount, booking_record.total_price, 0)`. Once Phase 1 is live, new bookings supply `subtotal/total_amount` directly — the `total_price` fallback simply becomes dormant for new rows. Historical bookings with only `total_price` still work via the COALESCE.
+- `convert_quote_to_booking` writes both `total_amount` and the legacy `total_price` from quote drafts — left untouched (quote→booking path is out of scope for this phase).
+- Receipts / `mark_invoice_paid` / `create_receipt` — untouched (Phase 1A backend remains paused per earlier instructions).
+- `bookings.total_price` column itself is **not dropped**. Schema unchanged.
 
 ---
 
-## 5. Files touched (summary)
+## 5. Files & operations
 
+| Op | Target | Change |
+|---|---|---|
+| insert tool SQL | `condition_settings` | rename Post-Renovation → Post-Construction |
+| insert tool SQL | `service_types`, `services`, `bookings`, `quote_requests` | rename Reccuring → Recurring Cleaning |
+| insert tool SQL | `service_pricing_rules` | DELETE 35 dead capitalized $0 rows |
+| code | `src/pages/BookService.tsx` | add `Light` option; add 3 queries; switch to `computeQuote`; rewrite estimate block; rewrite insert payload; remove dead helpers |
+| code | `src/pages/RequestQuote.tsx` | add `Light` option only |
+| code | `src/lib/pricingEngine.ts` | one-line comment cleanup on `PricingRule.category` doc (snake_case only) |
 
-| File                                | Change                                                                                                                                                                                                                                                |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/components/BackToTop.tsx`      | `z-40` → `z-30`                                                                                                                                                                                                                                       |
-| `src/pages/admin/BookingsAdmin.tsx` | `pb-24` on root; convert `renderBookingCard` to `CollapsibleRecordCard`                                                                                                                                                                               |
-| `src/pages/admin/QuotesAdmin.tsx`   | `pb-24` on root; convert active+archived cards to `CollapsibleRecordCard`; add `expandedId` + focus auto-expand; add `usePagedSlice` + `Paginator` for both tabs; page-jump-on-focus effect                                                           |
-| `src/pages/admin/MessagesAdmin.tsx` | `pb-24` on root                                                                                                                                                                                                                                       |
-| `src/pages/admin/InvoicesAdmin.tsx` | `pb-24` on root; Active/Archived tabs; pagination on both; extract `renderInvoiceCard`; expand `applyPayment.onSuccess` to invalidate `admin-bookings` + `admin-invoices-by-booking` + `bookings-without-invoice` (also on `createInvoice.onSuccess`) |
-| `src/pages/admin/Submissions.tsx`   | `pb-24` on root                                                                                                                                                                                                                                       |
-
-
-No backend, no schema, no RPC changes. The Phase 1A receipt/`mark_invoice_paid` SQL work is paused as instructed and will be picked up after this UI pass.
-
-&nbsp;
-
-### **1. The "Mobile" Check**
-
-> *"Ensure the* `Paginator` *component is **centered** and responsive on mobile devices."* Sometimes, when moving from a table to a card view, the page numbers can look a bit cramped on a phone screen.
-
-### **2. The "Focus" Highlight Color**
-
-Since the plan implements a "Deep Link" (`?focus=`) which expands a card automatically, it's helpful if that specific card "flashes" or has a slight border color change so your eye catches it immediately. You could add:
-
-&nbsp;
-
-> *"When a card is focused via* `?focus=`*, give it a temporary subtle highlight border (e.g., primary color) so I can see exactly which one opened."*
+No new files. No schema migration. No RLS change. No edge function. No table deletion.
 
 ---
 
-Awaiting approval to apply these changes.
+## 6. Verification after apply
+
+1. `service_pricing_rules` row count drops by 35; only snake_case rows remain.
+2. Selecting `Post-Construction` on a booking adds a `$100` surcharge line in the estimate.
+3. Selecting `Light` on either form is accepted and adds a `$10` surcharge line in BookService.
+4. Submitting a public booking writes `line_items`, `subtotal`, `tax_amount`, `total_amount` and leaves `total_price` NULL.
+5. Generating an invoice from that booking copies the same `subtotal`/`total_amount` (verified through existing RPC's COALESCE behavior).
+6. Estimate shown to the customer matches the totals an admin sees on the invoice.
