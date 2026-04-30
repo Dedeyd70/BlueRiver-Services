@@ -346,9 +346,15 @@ const BookService = () => {
         entry_codes: form.entry_codes.trim() || null,
         selected_addons: selectedAddons.map((title) => {
           const addon = addons.find((a) => a.title === title);
-          return { title, price: parsePrice(addon?.price_starting) };
+          // Snapshot for display only; line_items below is the source of truth.
+          const raw = addon?.price_starting ?? "";
+          const n = parseInt(String(raw).replace(/[^0-9]/g, ""), 10);
+          return { title, price: Number.isFinite(n) ? n : 0 };
         }),
-        total_price: totalPrice > 0 ? totalPrice : null,
+        line_items: computed.lineItems,
+        subtotal: computed.subtotal,
+        tax_amount: computed.tax,
+        total_amount: computed.total,
         custom_fields: customFields,
         source: "manual",
         ...typedPayload,
@@ -402,7 +408,7 @@ const BookService = () => {
               </div>
               <h3 className="text-2xl font-display font-bold text-foreground mb-2">Booking Received!</h3>
               <p className="text-muted-foreground">We've received your booking for {selectedDate && format(selectedDate, "MMMM d, yyyy")} at {selectedSlot}.</p>
-              {totalPrice > 0 && <p className="text-primary font-semibold mt-2">Estimated Total: ${totalPrice.toFixed(2)}</p>}
+              {computed.total > 0 && <p className="text-primary font-semibold mt-2">Estimated Total: ${computed.total.toFixed(2)}</p>}
             </motion.div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-8">
