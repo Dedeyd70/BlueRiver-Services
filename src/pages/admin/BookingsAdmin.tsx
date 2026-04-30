@@ -18,6 +18,7 @@ import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import { friendlyRpcError } from "@/lib/friendlyRpcError";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
+import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -341,48 +342,43 @@ const BookingsAdmin = () => {
     const totalPrice = (b as any).total_price;
     const isCancelled = b.status === "cancelled";
     const isCompleted = b.status === "completed";
+    const archived = isArchived(b);
     const activity = getActivityFor(b.id);
     const isActivityOpen = expandedActivity === b.id;
+    const linkedInvoice = invoiceByBooking?.[b.id];
+    const isQuoteSourced = b.source === "quote" || !!b.quote_id;
+    const showLifecycle = !isCompleted && !isCancelled;
+    const showInvoiceActions = !isCancelled;
+
+    const statusBadge = (
+      <span
+        className={`text-xs px-2 py-1 rounded-full font-medium ${
+          isCancelled
+            ? "bg-red-50 text-red-500 border-red-100"
+            : statusColors[b.status] || "bg-muted text-muted-foreground"
+        }`}
+      >
+        {b.status}
+      </span>
+    );
 
     return (
-      <div ref={getRef(b.id)} key={b.id} className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-medium text-foreground">{b.name}</h3>
-            <p className="text-sm text-muted-foreground">
-              {b.email} {b.phone && `• ${b.phone}`}
-            </p>
-          </div>
-          <span
-            className={`text-xs px-2 py-1 rounded-full font-medium ${
-              isCancelled
-                ? "bg-red-50 text-red-500 border-red-100"
-                : statusColors[b.status] || "bg-muted text-muted-foreground"
-            }`}
-          >
-            {b.status}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-          <div>
-            <span className="text-muted-foreground">Date:</span>
-            <p className="font-medium text-foreground">{format(new Date(b.booking_date), "MMM d, yyyy")}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Time:</span>
-            <p className="font-medium text-foreground">{b.time_slot}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Service:</span>
-            <p className="font-medium text-foreground">{b.service_type || "—"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Submitted:</span>
-            <p className="font-medium text-foreground">{format(new Date(b.created_at), "MMM d")}</p>
-          </div>
-        </div>
-
+      <CollapsibleRecordCard
+        key={b.id}
+        innerRef={getRef(b.id)}
+        title={b.name}
+        subtitle={`${b.email}${b.phone ? ` • ${b.phone}` : ""}`}
+        statusBadge={statusBadge}
+        readOnly={archived}
+        expanded={expandedId === b.id}
+        onToggle={() => setExpandedId(expandedId === b.id ? null : b.id)}
+        summary={[
+          { label: "Date", value: format(new Date(b.booking_date), "MMM d, yyyy") },
+          { label: "Time", value: b.time_slot },
+          { label: "Service", value: b.service_type || "—" },
+          { label: "Submitted", value: format(new Date(b.created_at), "MMM d") },
+        ]}
+      >
         {b.property_type && (
           <p className="text-sm text-muted-foreground">
             <span className="text-foreground font-medium">Property:</span> {b.property_type}
@@ -499,100 +495,87 @@ const BookingsAdmin = () => {
           )}
         </div>
 
-        {/* Action buttons — source-aware. Quote-sourced bookings hide "Generate Invoice"
-            (the invoice is auto-created on Mark Completed and reused if it already exists). */}
-        {(() => {
-          const linkedInvoice = invoiceByBooking?.[b.id];
-          const isQuoteSourced = b.source === "quote" || !!b.quote_id;
-          const showLifecycle = !isCompleted && !isCancelled;
-          const showInvoiceActions = !isCancelled;
-          if (!showLifecycle && !showInvoiceActions) return null;
+        {/* Action buttons */}
+        {(showLifecycle || showInvoiceActions) && (
+          <div className="pt-3 border-t border-border/50">
+            {isCancelled ? (
+              <div className="py-1">
+                <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+                  This booking was cancelled and cannot be modified.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {showLifecycle && b.status === "pending" && (
+                  <PermissionGate permission="can_manage_bookings">
+                    <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
+                      Confirm
+                    </Button>
+                  </PermissionGate>
+                )}
+                {showLifecycle && b.status === "confirmed" && (
+                  <PermissionGate permission="can_manage_bookings">
+                    <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
+                      Mark Completed
+                    </Button>
+                  </PermissionGate>
+                )}
 
-          return (
-            <div className="pt-3 border-t border-border/50">
-              {isCancelled ? (
-                <div className="py-1">
-                  <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-                    This booking was cancelled and cannot be modified.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {/* Lifecycle */}
-                  {showLifecycle && b.status === "pending" && (
-                    <PermissionGate permission="can_manage_bookings">
-                      <Button variant="default" size="sm" onClick={() => handleConfirm(b)}>
-                        Confirm
-                      </Button>
-                    </PermissionGate>
-                  )}
-                  {showLifecycle && b.status === "confirmed" && (
-                    <PermissionGate permission="can_manage_bookings">
-                      <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
-                        Mark Completed
-                      </Button>
-                    </PermissionGate>
-                  )}
+                {showLifecycle && (
+                  <PermissionGate permission="can_manage_bookings">
+                    <Button variant="outline" size="sm" onClick={() => openReschedule(b)}>
+                      <CalendarClock className="w-3 h-3 mr-1" /> Reschedule
+                    </Button>
+                  </PermissionGate>
+                )}
 
-                  {/* Reschedule — collision-checked via get_booked_slots RPC */}
-                  {showLifecycle && (
-                    <PermissionGate permission="can_manage_bookings">
-                      <Button variant="outline" size="sm" onClick={() => openReschedule(b)}>
-                        <CalendarClock className="w-3 h-3 mr-1" /> Reschedule
-                      </Button>
-                    </PermissionGate>
-                  )}
-
-                  {/* Invoice actions */}
-                  {!linkedInvoice && !isQuoteSourced && (
-                    <PermissionGate permission="can_manage_invoices">
-                      <Button variant="outline" size="sm" onClick={() => handleGenerateInvoice(b)}>
-                        <FileText className="w-3 h-3 mr-1" /> Generate Invoice
-                      </Button>
-                    </PermissionGate>
-                  )}
-                  {linkedInvoice && (
-                    <>
-                      <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
-                        <FileText className="w-3 h-3 mr-1" /> View Invoice
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
-                        <Send className="w-3 h-3 mr-1" /> Send Invoice
-                      </Button>
-                      {linkedInvoice.payment_status !== "paid" && (
-                        <PermissionGate permission="can_manage_invoices">
-                          <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
-                            <CheckCircle2 className="w-3 h-3 mr-1" /> Mark as Paid
-                          </Button>
-                        </PermissionGate>
-                      )}
-                      {linkedInvoice.payment_status === "paid" && (
-                        <Button variant="outline" size="sm" disabled>
-                          <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
+                {!linkedInvoice && !isQuoteSourced && (
+                  <PermissionGate permission="can_manage_invoices">
+                    <Button variant="outline" size="sm" onClick={() => handleGenerateInvoice(b)}>
+                      <FileText className="w-3 h-3 mr-1" /> Generate Invoice
+                    </Button>
+                  </PermissionGate>
+                )}
+                {linkedInvoice && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
+                      <FileText className="w-3 h-3 mr-1" /> View Invoice
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
+                      <Send className="w-3 h-3 mr-1" /> Send Invoice
+                    </Button>
+                    {linkedInvoice.payment_status !== "paid" && (
+                      <PermissionGate permission="can_manage_invoices">
+                        <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
+                          <CheckCircle2 className="w-3 h-3 mr-1" /> Mark as Paid
                         </Button>
-                      )}
-                    </>
-                  )}
-
-                  {/* Cancel — only on non-completed bookings */}
-                  {showLifecycle && (
-                    <PermissionGate permission="can_manage_bookings">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => setCancelTarget(b)}
-                      >
-                        Cancel
+                      </PermissionGate>
+                    )}
+                    {linkedInvoice.payment_status === "paid" && (
+                      <Button variant="outline" size="sm" disabled>
+                        <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
                       </Button>
-                    </PermissionGate>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </div>
+                    )}
+                  </>
+                )}
+
+                {showLifecycle && (
+                  <PermissionGate permission="can_manage_bookings">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => setCancelTarget(b)}
+                    >
+                      Cancel
+                    </Button>
+                  </PermissionGate>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </CollapsibleRecordCard>
     );
   };
 
