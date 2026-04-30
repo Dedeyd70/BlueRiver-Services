@@ -158,6 +158,27 @@ const QuotesAdmin = () => {
     },
   });
 
+  // Add-on price lookup, used to auto-populate prices in Prepare Quote.
+  const { data: addonServices } = useQuery({
+    queryKey: ["services-addons"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("services")
+        .select("title, price_starting")
+        .eq("service_category", "addon")
+        .eq("is_active", true);
+      return (data ?? []) as any[];
+    },
+  });
+  const addonPriceMap = (() => {
+    const map = new Map<string, number>();
+    (addonServices ?? []).forEach((s: any) => {
+      const n = parseInt(String(s.price_starting ?? "").replace(/[^0-9]/g, ""), 10);
+      if (s.title) map.set(String(s.title).toLowerCase().trim(), Number.isFinite(n) ? n : 0);
+    });
+    return map;
+  })();
+
   const draftMap: Record<string, any> = {};
   (drafts ?? []).forEach((d) => (draftMap[d.quote_id] = d));
 
