@@ -384,14 +384,32 @@ const QuotesAdmin = () => {
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
       const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? []);
       const baseItem = computed.lineItems.find((i) => i.type === "base");
+      // Resolve add-on prices from the services table when the public form
+      // didn't carry pricing through (which is the common case).
+      const resolvedAddons = submittedAddons.map((a: any) => {
+        const title = a?.title || "Add-on";
+        const submitted = Number(a?.price) || 0;
+        const looked = addonPriceMap.get(String(title).toLowerCase().trim()) || 0;
+        return { title, price: submitted > 0 ? submitted : looked };
+      });
+      // Merge resolved add-on prices into computed line items (engine seeded $0 add-ons from request).
+      const mergedItems = computed.lineItems.map((it) => {
+        if (it.type !== "addon") return it;
+        const cleanName = it.name.replace(/^Add-on:\s*/i, "").toLowerCase().trim();
+        const match = resolvedAddons.find((a) => a.title.toLowerCase().trim() === cleanName);
+        if (match && match.price > 0 && it.unit_price === 0) {
+          return { ...it, unit_price: match.price, total_price: match.price };
+        }
+        return it;
+      });
       setDraftForm({
         ...emptyDraft,
         service_type: q.service_type ?? "",
         scope: q.description ?? "",
-        addons: submittedAddons.map((a: any) => ({ title: a.title || "Add-on", price: Number(a.price) || 0 })),
+        addons: resolvedAddons,
         tax_rate: defaultTax,
         base_price: baseItem ? baseItem.unit_price : 0,
-        line_items: computed.lineItems,
+        line_items: mergedItems,
       });
     }
     setPrepareTarget(q);
