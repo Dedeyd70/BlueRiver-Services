@@ -559,25 +559,28 @@ const BookService = () => {
                     </div>
                   )}
 
-                  {/* Price summary */}
-                  {form.service && totalPrice > 0 && (
+                  {/* Price summary — driven by authoritative pricing engine */}
+                  {form.service && computed.total > 0 && (
                     <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{form.service}</span>
-                        <span className="text-foreground">${mainPrice.toFixed(2)}</span>
-                      </div>
-                      {addonPrices.filter((a) => a.price > 0).map((a) => (
-                        <div key={a.title} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{a.title}</span>
-                          <span className="text-foreground">${a.price.toFixed(2)}</span>
+                      {computed.lineItems.filter((i) => i.total_price > 0).map((i, idx) => (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ""}</span>
+                          <span className="text-foreground">${i.total_price.toFixed(2)}</span>
                         </div>
                       ))}
+                      {computed.tax > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Tax</span>
+                          <span className="text-foreground">${computed.tax.toFixed(2)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm font-semibold border-t border-border pt-2 mt-2">
                         <span className="text-foreground">Estimated Total</span>
-                        <span className="text-primary">${totalPrice.toFixed(2)}</span>
+                        <span className="text-primary">${computed.total.toFixed(2)}</span>
                       </div>
                     </div>
                   )}
+
 
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Additional Notes</label>
