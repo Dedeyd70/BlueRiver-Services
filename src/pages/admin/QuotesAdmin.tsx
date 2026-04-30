@@ -19,6 +19,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import HasPermission from "@/components/HasPermission";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
