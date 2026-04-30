@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,16 +9,19 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
-import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon, CalendarClock } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import { friendlyRpcError } from "@/lib/friendlyRpcError";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import { recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
+import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -32,18 +35,22 @@ const ACTION_LABELS: Record<string, string> = {
   confirmed: "Confirmed",
   completed: "Completed",
   cancelled: "Cancelled",
+  rescheduled: "Rescheduled",
+  items_modified: "Items modified",
+  note: "Note",
 };
 
 const logBookingActivity = async (
   bookingId: string,
   action: string,
-  options: { details?: string; previous_status?: string; new_status?: string } = {}
+  options: { details?: string; previous_status?: string; new_status?: string; notes?: string } = {}
 ) => {
   const { data: { user } } = await supabase.auth.getUser();
   await (supabase as any).from("booking_activity_logs").insert({
     booking_id: bookingId,
     action,
     details: options.details ?? null,
+    notes: options.notes ?? null,
     previous_status: options.previous_status ?? null,
     new_status: options.new_status ?? null,
     actor_id: user?.id ?? null,
@@ -66,14 +73,15 @@ const BookingsAdmin = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [archivePage, setArchivePage] = useState(1);
+  const [activityNoteByBooking, setActivityNoteByBooking] = useState<Record<string, string>>({});
 
-  // Auto-expand the focused card so deep-linked records open immediately.
+  // Modify Items dialog state
+  const [modifyTarget, setModifyTarget] = useState<any>(null);
+  const [modifyItems, setModifyItems] = useState<LineItem[]>([]);
+
   useEffect(() => {
     if (focusId) setExpandedId(focusId);
   }, [focusId]);
-
-  // Jump to the page containing the focused item so it renders + can scroll/highlight.
-  // (Defined after queries below; see effect after `archivedBookings` is computed.)
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["admin-bookings"],
@@ -96,7 +104,6 @@ const BookingsAdmin = () => {
     },
   });
 
-  // Linked invoices, keyed by booking_id, used to drive the action buttons.
   const { data: invoiceByBooking } = useQuery({
     queryKey: ["admin-invoices-by-booking"],
     queryFn: async () => {
@@ -130,10 +137,35 @@ const BookingsAdmin = () => {
     },
   });
 
+  // Resolve admin actor names for the activity log.
+  // The list-admin-users edge function only allows Super Admins, so
+  // managers/staff fall back to "Admin user".
+  const { data: adminUserMap } = useQuery({
+    queryKey: ["admin-user-name-map"],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("list-admin-users");
+        if (error) throw error;
+        const list: any[] = (data as any)?.users ?? [];
+        const map: Record<string, string> = {};
+        list.forEach((u) => {
+          map[u.user_id] = u.full_name || u.email || "Admin user";
+        });
+        return map;
+      } catch {
+        return {} as Record<string, string>;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const resolveActor = (id?: string | null): string => {
+    if (!id) return "System";
+    return adminUserMap?.[id] || "Admin user";
+  };
+
   const { getRef } = useFocusHighlight(!isLoading && !!bookings);
 
-  // Lifecycle rule: a booking is "Active" until the workflow is finished —
-  // cancelled OR (completed AND linked invoice fully paid). Otherwise it stays Active.
   const isArchived = (b: any) => {
     if (b.status === "cancelled") return true;
     if (b.status === "completed") {
@@ -148,7 +180,6 @@ const BookingsAdmin = () => {
   });
   const archivedBookings = (bookings ?? []).filter(isArchived);
 
-  // Jump to the page containing the focused item so the ref can mount and scroll.
   useEffect(() => {
     if (!focusId || !bookings) return;
     const idx = activeBookings.findIndex((b: any) => b.id === focusId);
@@ -161,7 +192,7 @@ const BookingsAdmin = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId, bookings]);
 
-  // (status updates are written directly within handlers below so we can also log activity)
+  // ---- Lifecycle handlers ------------------------------------------------
 
   const handleConfirm = async (b: any) => {
     try {
@@ -178,6 +209,18 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
       qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
       toast({ title: "Booking confirmed." });
+
+      // Open mail client with the standardized confirmation template.
+      openMailto({
+        to: b.email,
+        subject: MAIL_TEMPLATES.bookingConfirmed.subject,
+        bodyTemplate: MAIL_TEMPLATES.bookingConfirmed.body,
+        vars: {
+          name: b.name,
+          service: b.service_type || "your booking",
+          date: b.booking_date ? format(new Date(b.booking_date), "MMMM d, yyyy") : "the scheduled date",
+        },
+      });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -185,7 +228,6 @@ const BookingsAdmin = () => {
 
   const handleCompleted = async (b: any) => {
     try {
-      // Update status first
       const { data: updData, error: updErr } = await supabase
         .from("bookings")
         .update({ status: "completed" })
@@ -195,7 +237,6 @@ const BookingsAdmin = () => {
       if (updErr) throw updErr;
       if (!updData) throw new Error("Update blocked by permissions or RLS");
 
-      // Auto-create invoice
       const invoice = await createInvoiceFromBooking(b, user?.id);
 
       await logBookingActivity(b.id, "completed", {
@@ -214,6 +255,7 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
       qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
       toast({ title: `Marked completed. Invoice ${invoice?.invoice_number ?? ""} created.` });
     } catch (e: any) {
@@ -258,7 +300,7 @@ const BookingsAdmin = () => {
   const getActivityFor = (bookingId: string) =>
     (activityLogs ?? []).filter((l) => l.booking_id === bookingId);
 
-  // ---- Invoice action handlers (UI-only triggers; RPC owns the writes) ----
+  // ---- Invoice action handlers ----
 
   const handleGenerateInvoice = async (b: any) => {
     try {
@@ -279,12 +321,17 @@ const BookingsAdmin = () => {
     generateInvoicePdf(inv, branding, pdfSettings);
   };
 
-  const handleSendInvoice = (inv: any) => {
-    const subject = encodeURIComponent(`Invoice ${inv.invoice_number ?? ""}`);
-    const body = encodeURIComponent(
-      `Hello,\n\nPlease find your invoice ${inv.invoice_number ?? ""} attached.\n\nThank you.`
-    );
-    window.location.href = `mailto:${inv.customer_email ?? ""}?subject=${subject}&body=${body}`;
+  const handleSendInvoice = (inv: any, b: any) => {
+    openMailto({
+      to: inv.customer_email || b?.email,
+      subject: MAIL_TEMPLATES.invoiceSend.subject,
+      bodyTemplate: MAIL_TEMPLATES.invoiceSend.body,
+      vars: {
+        name: inv.customer_name || b?.name,
+        service: b?.service_type,
+        date: b?.booking_date ? format(new Date(b.booking_date), "MMMM d, yyyy") : null,
+      },
+    });
   };
 
   const handleMarkPaid = async (inv: any) => {
@@ -294,6 +341,7 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });
       qc.invalidateQueries({ queryKey: ["admin-receipts"] });
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       toast({ title: "Invoice marked as paid. Receipt generated." });
     } catch (e: any) {
       toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
@@ -309,7 +357,6 @@ const BookingsAdmin = () => {
   const handleRescheduleConfirm = async () => {
     if (!rescheduleTarget || !rescheduleDate || !rescheduleSlot) return;
     try {
-      // Collision check via existing RPC
       const { data: bookedSlots } = await (supabase as any).rpc("get_booked_slots", { p_date: rescheduleDate });
       const taken = (bookedSlots ?? []).map((s: any) => s.time_slot);
       const isSameSlot = rescheduleTarget.booking_date === rescheduleDate && rescheduleTarget.time_slot === rescheduleSlot;
@@ -337,29 +384,127 @@ const BookingsAdmin = () => {
     }
   };
 
+  // ---- Add Note ----------------------------------------------------------
+
+  const handleAddNote = async (bookingId: string) => {
+    const note = (activityNoteByBooking[bookingId] || "").trim();
+    if (!note) return;
+    try {
+      await logBookingActivity(bookingId, "note", { notes: note });
+      setActivityNoteByBooking((prev) => ({ ...prev, [bookingId]: "" }));
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      toast({ title: "Note added" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  // ---- Modify Items dialog ----------------------------------------------
+
+  const openModify = (b: any) => {
+    const linkedInv = invoiceByBooking?.[b.id];
+    if (linkedInv && linkedInv.payment_status && linkedInv.payment_status !== "unpaid") {
+      toast({
+        title: "Invoice already has payments",
+        description: "Modify the invoice directly instead of the booking.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const items: LineItem[] = Array.isArray(b.line_items) && b.line_items.length > 0
+      ? b.line_items
+      : [];
+    setModifyItems(items);
+    setModifyTarget(b);
+  };
+
+  const updateModifyItem = (idx: number, patch: Partial<LineItem>) => {
+    setModifyItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  };
+  const removeModifyItem = (idx: number) => {
+    setModifyItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const addModifyItem = () => {
+    setModifyItems((prev) => [
+      ...prev,
+      { name: "Custom item", quantity: 1, unit_price: 0, total_price: 0, type: "addon" },
+    ]);
+  };
+
+  const taxRatePct = useMemo(() => Number(pdfSettings?.tax_rate ?? 0) || 0, [pdfSettings]);
+  const modifyPreview = useMemo(
+    () => recomputeFromLineItems(modifyItems, taxRatePct),
+    [modifyItems, taxRatePct]
+  );
+
+  const handleModifySave = async () => {
+    if (!modifyTarget) return;
+    try {
+      const computed = recomputeFromLineItems(modifyItems, taxRatePct);
+      const prevTotal = Number(modifyTarget.total_amount ?? modifyTarget.total_price ?? 0);
+      const { data, error } = await supabase
+        .from("bookings")
+        .update({
+          line_items: computed.lineItems as any,
+          subtotal: computed.subtotal,
+          tax_amount: computed.tax,
+          total_amount: computed.total,
+          total_price: computed.total,
+        } as any)
+        .eq("id", modifyTarget.id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("Update blocked by permissions or RLS");
+
+      await logBookingActivity(modifyTarget.id, "items_modified", {
+        details: `Total: $${prevTotal.toFixed(2)} → $${computed.total.toFixed(2)} (${computed.lineItems.length} line items)`,
+      });
+
+      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
+      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      toast({ title: "Booking items updated." });
+      setModifyTarget(null);
+      setModifyItems([]);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  // ---- Card renderer -----------------------------------------------------
+
   const renderBookingCard = (b: any) => {
     const addons = parseAddons((b as any).selected_addons);
-    const totalPrice = (b as any).total_price;
+    const totalPrice = (b as any).total_price ?? (b as any).total_amount;
     const isCancelled = b.status === "cancelled";
     const isCompleted = b.status === "completed";
     const archived = isArchived(b);
     const activity = getActivityFor(b.id);
     const isActivityOpen = expandedActivity === b.id;
     const linkedInvoice = invoiceByBooking?.[b.id];
-    const isQuoteSourced = b.source === "quote" || !!b.quote_id;
     const showLifecycle = !isCompleted && !isCancelled;
     const showInvoiceActions = !isCancelled;
+    const lineItems: LineItem[] = Array.isArray(b.line_items) ? b.line_items : [];
 
     const statusBadge = (
-      <span
-        className={`text-xs px-2 py-1 rounded-full font-medium ${
-          isCancelled
-            ? "bg-red-50 text-red-500 border-red-100"
-            : statusColors[b.status] || "bg-muted text-muted-foreground"
-        }`}
-      >
-        {b.status}
-      </span>
+      <div className="flex items-center gap-2">
+        {archived && (
+          <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold">
+            Archived
+          </span>
+        )}
+        <span
+          className={`text-xs px-2 py-1 rounded-full font-medium ${
+            isCancelled
+              ? "bg-red-50 text-red-500 border-red-100"
+              : statusColors[b.status] || "bg-muted text-muted-foreground"
+          }`}
+        >
+          {b.status}
+        </span>
+      </div>
     );
 
     return (
@@ -438,9 +583,33 @@ const BookingsAdmin = () => {
           </div>
         )}
 
-        {totalPrice != null && totalPrice > 0 && (
-          <p className="text-sm font-semibold text-primary">Total: ${Number(totalPrice).toFixed(2)}</p>
-        )}
+        {/* Itemized breakdown */}
+        <div className="border-t border-border pt-3">
+          <p className="text-sm font-semibold text-foreground mb-2">Itemized Breakdown</p>
+          {lineItems.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">No itemized data on this booking.</p>
+          ) : (
+            <div className="border border-border rounded-lg overflow-hidden text-sm">
+              <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted/40 text-xs font-medium text-muted-foreground">
+                <div className="col-span-7">Item</div>
+                <div className="col-span-2 text-right">Qty</div>
+                <div className="col-span-1 text-right">Unit</div>
+                <div className="col-span-2 text-right">Total</div>
+              </div>
+              {lineItems.map((it, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 px-3 py-1.5 border-t border-border">
+                  <div className="col-span-7 truncate">{it.name}</div>
+                  <div className="col-span-2 text-right">{it.quantity}</div>
+                  <div className="col-span-1 text-right">${Number(it.unit_price).toFixed(0)}</div>
+                  <div className="col-span-2 text-right font-medium">${Number(it.total_price).toFixed(2)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {totalPrice != null && Number(totalPrice) > 0 && (
+            <p className="text-sm font-semibold text-primary mt-2">Total: ${Number(totalPrice).toFixed(2)}</p>
+          )}
+        </div>
 
         {b.address && (
           <p className="text-sm text-muted-foreground">
@@ -481,6 +650,9 @@ const BookingsAdmin = () => {
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-foreground">
                       {ACTION_LABELS[entry.action] ?? entry.action}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">
+                        by {resolveActor(entry.actor_id)}
+                      </span>
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {format(new Date(entry.created_at), "MMM d, yyyy 'at' h:mm a")}
@@ -489,8 +661,34 @@ const BookingsAdmin = () => {
                   {entry.details && (
                     <p className="text-xs text-muted-foreground mt-1">{entry.details}</p>
                   )}
+                  {entry.notes && (
+                    <p className="text-sm text-foreground mt-1 whitespace-pre-wrap">{entry.notes}</p>
+                  )}
                 </div>
               ))}
+
+              {/* Add note */}
+              <PermissionGate permission="can_manage_bookings">
+                <div className="flex gap-2 pt-2">
+                  <Textarea
+                    rows={2}
+                    placeholder="Add a note to this booking…"
+                    value={activityNoteByBooking[b.id] || ""}
+                    onChange={(e) =>
+                      setActivityNoteByBooking((p) => ({ ...p, [b.id]: e.target.value }))
+                    }
+                    className="text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleAddNote(b.id)}
+                    disabled={!(activityNoteByBooking[b.id] || "").trim()}
+                  >
+                    Add note
+                  </Button>
+                </div>
+              </PermissionGate>
             </div>
           )}
         </div>
@@ -513,7 +711,7 @@ const BookingsAdmin = () => {
                     </Button>
                   </PermissionGate>
                 )}
-                {showLifecycle && b.status === "confirmed" && (
+                {showLifecycle && b.status === "confirmed" && !archived && (
                   <PermissionGate permission="can_manage_bookings">
                     <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
                       Mark Completed
@@ -529,7 +727,17 @@ const BookingsAdmin = () => {
                   </PermissionGate>
                 )}
 
-                {!linkedInvoice && !isQuoteSourced && (
+                {/* Modify Items — only when not archived */}
+                {!archived && (
+                  <PermissionGate permission="can_manage_bookings">
+                    <Button variant="outline" size="sm" onClick={() => openModify(b)}>
+                      <Pencil className="w-3 h-3 mr-1" /> Modify Items
+                    </Button>
+                  </PermissionGate>
+                )}
+
+                {/* Quote-sourced parity: show Generate Invoice for ALL bookings without an invoice */}
+                {!linkedInvoice && (
                   <PermissionGate permission="can_manage_invoices">
                     <Button variant="outline" size="sm" onClick={() => handleGenerateInvoice(b)}>
                       <FileText className="w-3 h-3 mr-1" /> Generate Invoice
@@ -541,9 +749,25 @@ const BookingsAdmin = () => {
                     <Button variant="outline" size="sm" onClick={() => handleViewInvoice(linkedInvoice)}>
                       <FileText className="w-3 h-3 mr-1" /> View Invoice
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice)}>
-                      <Send className="w-3 h-3 mr-1" /> Send Invoice
-                    </Button>
+
+                    {/* Send Invoice — disabled when archived (paid + completed) */}
+                    {archived ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button variant="outline" size="sm" disabled className="opacity-50">
+                              <Send className="w-3 h-3 mr-1" /> Send Invoice
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>Booking archived — invoice already settled</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => handleSendInvoice(linkedInvoice, b)}>
+                        <Send className="w-3 h-3 mr-1" /> Send Invoice
+                      </Button>
+                    )}
+
                     {linkedInvoice.payment_status !== "paid" && (
                       <PermissionGate permission="can_manage_invoices">
                         <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
@@ -580,6 +804,7 @@ const BookingsAdmin = () => {
   };
 
   return (
+    <TooltipProvider>
     <div className="pb-24">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-display font-bold text-foreground">Bookings</h1>
@@ -648,6 +873,79 @@ const BookingsAdmin = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Modify Items dialog */}
+      <Dialog open={!!modifyTarget} onOpenChange={(o) => { if (!o) { setModifyTarget(null); setModifyItems([]); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Modify Booking Items</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <p className="text-xs text-muted-foreground">
+              Adjust line items below. Totals are recalculated using the pricing engine and saved to the booking.
+            </p>
+
+            <div className="border border-border rounded-lg overflow-hidden">
+              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+                <div className="col-span-6">Item</div>
+                <div className="col-span-2 text-right">Qty</div>
+                <div className="col-span-2 text-right">Unit ($)</div>
+                <div className="col-span-1 text-right">Total</div>
+                <div className="col-span-1"></div>
+              </div>
+              {modifyItems.length === 0 && (
+                <p className="px-3 py-4 text-xs text-muted-foreground italic">No line items. Click "Add line" to start.</p>
+              )}
+              {modifyItems.map((it, idx) => {
+                const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+                return (
+                  <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-t border-border">
+                    <Input
+                      className="col-span-6 h-9"
+                      value={it.name}
+                      onChange={(e) => updateModifyItem(idx, { name: e.target.value })}
+                    />
+                    <Input
+                      type="number" step="1" min="0"
+                      className="col-span-2 h-9 text-right"
+                      value={it.quantity}
+                      onChange={(e) => updateModifyItem(idx, { quantity: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                    />
+                    <Input
+                      type="number" step="1" min="0"
+                      className="col-span-2 h-9 text-right"
+                      value={it.unit_price}
+                      onChange={(e) => updateModifyItem(idx, { unit_price: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                    />
+                    <div className="col-span-1 text-right text-sm font-medium">${lineTotal.toFixed(0)}</div>
+                    <Button
+                      type="button" size="icon" variant="ghost"
+                      onClick={() => removeModifyItem(idx)}
+                      className="col-span-1 h-8 w-8 justify-self-end"
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Button type="button" size="sm" variant="outline" onClick={addModifyItem} className="h-8 gap-1">
+              <Plus className="w-3 h-3" /> Add line
+            </Button>
+
+            <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>${modifyPreview.subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tax ({taxRatePct}%)</span><span>${modifyPreview.tax.toFixed(2)}</span></div>
+              <div className="flex justify-between font-semibold border-t border-border pt-1"><span>Total</span><span>${modifyPreview.total.toFixed(2)}</span></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setModifyTarget(null); setModifyItems([]); }}>Cancel</Button>
+            <Button onClick={handleModifySave}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -696,6 +994,7 @@ const BookingsAdmin = () => {
         </Tabs>
       )}
     </div>
+    </TooltipProvider>
   );
 };
 
