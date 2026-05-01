@@ -57,6 +57,7 @@ const InvoicesAdmin = () => {
   const [form, setForm] = useState<InvoiceForm>({ ...emptyForm });
   const [activePage, setActivePage] = useState(1);
   const [archivePage, setArchivePage] = useState(1);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["admin-invoices"],
