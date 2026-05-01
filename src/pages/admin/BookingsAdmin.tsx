@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
-import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, FileText, Send, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import { friendlyRpcError } from "@/lib/friendlyRpcError";
