@@ -229,7 +229,7 @@ export const generateQuotePdf = (
     y += 5;
     let subtotal = base;
     addons.forEach((a: any) => {
-      const price = parsePrice(a.price);
+      const price = Number(a?.price) || 0;
       subtotal += price;
       doc.text(`Add-on: ${a.name || a.title || "Item"}`, margin + 2, y);
       doc.text(`$${price.toFixed(2)}`, pageW - margin, y, { align: "right" });
