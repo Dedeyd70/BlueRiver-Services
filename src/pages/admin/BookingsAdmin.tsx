@@ -334,19 +334,7 @@ const BookingsAdmin = () => {
     });
   };
 
-  const handleMarkPaid = async (inv: any) => {
-    try {
-      const { error } = await (supabase as any).rpc("mark_invoice_paid", { p_invoice_id: inv.id });
-      if (error) throw error;
-      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
-      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
-      qc.invalidateQueries({ queryKey: ["admin-receipts"] });
-      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
-      toast({ title: "Invoice marked as paid. Receipt generated." });
-    } catch (e: any) {
-      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
-    }
-  };
+  // Mark Paid removed from Bookings — payments are recorded only in InvoicesAdmin (single source of truth).
 
   const openReschedule = (b: any) => {
     setRescheduleTarget(b);
