@@ -575,6 +575,46 @@ const QuotesAdmin = () => {
                             </a>
                           )}
 
+                          {/* Itemized Breakdown — visible when a draft exists */}
+                          <div className="border-t border-border pt-3">
+                            <p className="text-sm font-semibold text-foreground mb-2">Itemized Breakdown</p>
+                            {(() => {
+                              const draft = draftMap[q.id];
+                              const items: LineItem[] = Array.isArray(draft?.line_items) ? draft.line_items : [];
+                              if (!draft || items.length === 0) {
+                                return <p className="text-xs text-muted-foreground italic">No quote prepared yet.</p>;
+                              }
+                              const bd = draft.breakdown || {};
+                              return (
+                                <>
+                                  <div className="border border-border rounded-lg overflow-hidden text-sm">
+                                    <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted/40 text-xs font-medium text-muted-foreground">
+                                      <div className="col-span-7">Item</div>
+                                      <div className="col-span-2 text-right">Qty</div>
+                                      <div className="col-span-1 text-right">Unit</div>
+                                      <div className="col-span-2 text-right">Total</div>
+                                    </div>
+                                    {items.map((it, i) => (
+                                      <div key={i} className="grid grid-cols-12 gap-2 px-3 py-1.5 border-t border-border">
+                                        <div className="col-span-7 truncate">{it.name}</div>
+                                        <div className="col-span-2 text-right">{it.quantity}</div>
+                                        <div className="col-span-1 text-right">${Number(it.unit_price).toFixed(0)}</div>
+                                        <div className="col-span-2 text-right font-medium">${Number(it.total_price).toFixed(2)}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="text-sm mt-2 space-y-0.5">
+                                    <p className="text-muted-foreground">Subtotal: <span className="text-foreground font-medium">${Number(bd.subtotal ?? 0).toFixed(2)}</span></p>
+                                    {Number(bd.tax_amount ?? 0) > 0 && (
+                                      <p className="text-muted-foreground">Tax: <span className="text-foreground font-medium">${Number(bd.tax_amount).toFixed(2)}</span></p>
+                                    )}
+                                    <p className="text-primary font-semibold">Total: ${Number(bd.total ?? 0).toFixed(2)}</p>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+
                           {/* Activity Log — always visible inside the expanded card */}
                           <div className="border-t border-border pt-3">
                             <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
@@ -584,10 +624,15 @@ const QuotesAdmin = () => {
                               {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
                               {notes.map((n) => (
                                 <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                                  <p className="text-foreground">{n.note}</p>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
-                                  </p>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-medium text-foreground">
+                                      Note <span className="font-normal text-muted-foreground">by {resolveActor(n.created_by)}</span>
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
+                                    </span>
+                                  </div>
+                                  <p className="text-foreground mt-1 whitespace-pre-wrap">{n.note}</p>
                                 </div>
                               ))}
                               <div className="flex gap-2">
