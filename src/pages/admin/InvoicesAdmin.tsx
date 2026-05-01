@@ -8,12 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { FileText, Plus, DollarSign, Download, CheckCircle2 } from "lucide-react";
+import { FileText, Plus, DollarSign, Download, CheckCircle2, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import HasPermission from "@/components/HasPermission";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
+import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 
 const statusColors: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-800",
