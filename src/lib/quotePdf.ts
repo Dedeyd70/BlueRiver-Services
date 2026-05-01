@@ -35,12 +35,6 @@ const SLATE_300: [number, number, number] = [203, 213, 225];
 const SLATE_500: [number, number, number] = [100, 116, 139];
 const SLATE_100: [number, number, number] = [241, 245, 249];
 
-const parsePrice = (p: any): number => {
-  if (p == null) return 0;
-  const num = parseFloat(String(p).replace(/[^0-9.]/g, ""));
-  return isNaN(num) ? 0 : num;
-};
-
 const drawLetterhead = (
   doc: jsPDF,
   pageW: number,
