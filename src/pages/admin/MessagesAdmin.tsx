@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Mail, CheckCircle, ArrowRight, MessageSquare, Send } from "lucide-react";
+import { Mail, CheckCircle, ArrowRight, MessageSquare } from "lucide-react";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import PermissionGate from "@/components/PermissionGate";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
+import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 
 interface ContactSubmission {
   id: string;
@@ -28,18 +30,28 @@ interface ContactSubmission {
 
 const ARCHIVE_STATUSES = new Set(["responded", "converted"]);
 
+const statusColors: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-800",
+  read: "bg-blue-100 text-blue-800",
+  responded: "bg-green-100 text-green-800",
+  converted: "bg-primary/10 text-primary",
+};
+
 const MessagesAdmin = () => {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get("focus");
 
-  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  const [noteContent, setNoteContent] = useState("");
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [archivePage, setArchivePage] = useState(1);
+
+  // Convert dialog state
+  const [convertTarget, setConvertTarget] = useState<ContactSubmission | null>(null);
+  const [convertService, setConvertService] = useState("");
+  const [convertDescription, setConvertDescription] = useState("");
 
   const { data: messages, isLoading } = useQuery({
     queryKey: ["admin-contact-messages"],
@@ -48,52 +60,130 @@ const MessagesAdmin = () => {
         .from("contact_submissions")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (error) throw error;
       return (data as unknown as ContactSubmission[]) ?? [];
     },
   });
 
+  // Service list (main only) for the Convert-to-Quote service select.
+  const { data: services } = useQuery({
+    queryKey: ["services-main-for-convert"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("services")
+        .select("title")
+        .eq("is_active", true)
+        .neq("service_category", "addon")
+        .order("display_order");
+      return (data ?? []) as { title: string }[];
+    },
+  });
+
+  // Shared admin name lookup — same query key as Bookings/Quotes/Invoices.
+  const { data: adminUserMap } = useQuery({
+    queryKey: ["admin-user-name-map"],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("list-admin-users");
+        if (error) throw error;
+        const list: any[] = (data as any)?.users ?? [];
+        const map: Record<string, string> = {};
+        list.forEach((u) => {
+          map[u.user_id] = u.full_name || u.email || "Admin user";
+        });
+        return map;
+      } catch {
+        return {} as Record<string, string>;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  // contact_submissions doesn't carry actor_id, so log entries default to "Admin user".
+  const resolveActor = (id?: string | null): string => {
+    if (!id) return "Admin user";
+    return adminUserMap?.[id] || "Admin user";
+  };
+
   const { getRef } = useFocusHighlight(!isLoading && !!messages);
 
-  // Auto-expand the focused card so deep-linked messages open immediately.
   useEffect(() => {
     if (focusId) setExpandedId(focusId);
   }, [focusId]);
 
   const updateMessage = useMutation({
     mutationFn: async ({ id, status, admin_notes }: { id: string; status: string; admin_notes?: string }) => {
+      const patch: any = { status };
+      if (admin_notes !== undefined) patch.admin_notes = admin_notes;
       const { data, error } = await supabase
         .from("contact_submissions")
-        .update({ status, admin_notes } as any)
+        .update(patch)
         .eq("id", id)
         .select("id")
         .maybeSingle();
-
       if (error) throw error;
       if (!data) throw new Error("Update blocked by permissions or RLS");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
       toast({ title: "Update successful." });
-      setActiveNoteId(null);
-      setNoteContent("");
     },
     onError: (err: Error) => {
       toast({ title: "Update failed.", description: err.message, variant: "destructive" });
     },
   });
 
-  const handleConvertToBooking = (m: ContactSubmission) => {
-    updateMessage.mutate({ id: m.id, status: "converted" });
-    const params = new URLSearchParams({
-      name: m.name || "",
-      email: m.email || "",
-      phone: m.phone || "",
-      service: m.service_type || "",
-    });
-    navigate(`/book?${params.toString()}`);
+  const addNote = (m: ContactSubmission) => {
+    const next = (noteDraft[m.id] || "").trim();
+    if (!next) return;
+    // Append to existing admin_notes (single text column → keep entries separated by line break + timestamp).
+    const stamp = format(new Date(), "MMM d, yyyy 'at' h:mm a");
+    const prefix = m.admin_notes ? `${m.admin_notes}\n---\n` : "";
+    const composed = `${prefix}[${stamp}] ${next}`;
+    updateMessage.mutate(
+      { id: m.id, status: m.status === "pending" ? "read" : m.status, admin_notes: composed },
+      {
+        onSuccess: () => setNoteDraft((p) => ({ ...p, [m.id]: "" })),
+      }
+    );
   };
+
+  const openConvert = (m: ContactSubmission) => {
+    setConvertTarget(m);
+    setConvertService(m.service_type || "");
+    setConvertDescription(m.message || "");
+  };
+
+  const convertToQuote = useMutation({
+    mutationFn: async () => {
+      if (!convertTarget) throw new Error("No submission selected");
+      if (!convertDescription.trim()) throw new Error("Description is required");
+      const { error: insertErr } = await supabase.from("quote_requests").insert({
+        name: convertTarget.name,
+        email: convertTarget.email,
+        phone: convertTarget.phone,
+        service_type: convertService || null,
+        description: convertDescription.trim(),
+        status: "requested",
+        consent_given: true,
+        preferred_contact: "email",
+      } as any);
+      if (insertErr) throw insertErr;
+      const { error: updErr } = await supabase
+        .from("contact_submissions")
+        .update({ status: "converted" } as any)
+        .eq("id", convertTarget.id);
+      if (updErr) throw updErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-quotes"] });
+      toast({ title: "Submission converted to quote request." });
+      setConvertTarget(null);
+      setConvertService("");
+      setConvertDescription("");
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
 
   if (isLoading) return <p className="p-8">Loading messages...</p>;
 
@@ -101,109 +191,147 @@ const MessagesAdmin = () => {
   const active = all.filter((m) => !ARCHIVE_STATUSES.has(m.status));
   const archived = all.filter((m) => ARCHIVE_STATUSES.has(m.status));
 
+  // Parse stored admin_notes back into stamped entries for log rendering.
+  const parseLogEntries = (raw: string | null): { stamp: string | null; text: string }[] => {
+    if (!raw) return [];
+    return raw.split(/\n---\n/).map((chunk) => {
+      const m = chunk.match(/^\[([^\]]+)\]\s*([\s\S]*)$/);
+      return m ? { stamp: m[1], text: m[2] } : { stamp: null, text: chunk };
+    });
+  };
+
   const renderCard = (m: ContactSubmission, readOnly: boolean) => {
-    const isExpanded = expandedId === m.id;
-    return (
-      <div
-        ref={getRef(m.id)}
-        key={m.id}
-        className={`p-5 rounded-xl border border-border bg-card shadow-sm scroll-mt-24 ${readOnly ? "opacity-90" : ""}`}
+    const entries = parseLogEntries(m.admin_notes);
+    const statusBadge = (
+      <span
+        className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${
+          statusColors[m.status] || "bg-muted text-muted-foreground"
+        }`}
       >
-        <button
-          type="button"
-          onClick={() => setExpandedId(isExpanded ? null : m.id)}
-          className="w-full text-left"
-        >
-          <div className="flex justify-between items-start mb-1">
-            <div className="min-w-0">
-              <p className="font-semibold text-lg truncate">{m.name}</p>
-              <p className="text-sm text-muted-foreground truncate">
-                {m.email} {m.phone ? `· ${m.phone}` : ""}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <Badge variant={m.status === "pending" ? "default" : "secondary"}>{m.status}</Badge>
-              <span className="text-[10px] text-muted-foreground uppercase">
-                {format(new Date(m.created_at), "MMM d, h:mm a")}
-              </span>
-            </div>
+        {m.status}
+      </span>
+    );
+
+    return (
+      <CollapsibleRecordCard
+        key={m.id}
+        innerRef={getRef(m.id)}
+        title={m.name}
+        subtitle={`${m.email}${m.phone ? ` • ${m.phone}` : ""}`}
+        statusBadge={statusBadge}
+        readOnly={readOnly}
+        expanded={expandedId === m.id}
+        onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
+        summary={[
+          { label: "Service", value: m.service_type || "General" },
+          { label: "Status", value: <span className="capitalize">{m.status}</span> },
+          { label: "Submitted", value: format(new Date(m.created_at), "MMM d, yyyy") },
+          { label: "Notes", value: String(entries.length) },
+        ]}
+      >
+        {/* Original message */}
+        <div className="bg-muted/30 p-3 rounded-lg text-sm">
+          <p className="text-xs font-medium text-muted-foreground mb-1">Message</p>
+          <p className="whitespace-pre-wrap">{m.message}</p>
+        </div>
+
+        {/* Submission details — labelled key/value list */}
+        <div className="border-t border-border pt-3">
+          <p className="text-sm font-semibold text-foreground mb-2">Submission Details</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            {[
+              ["Name", m.name],
+              ["Email", m.email],
+              ["Phone", m.phone || "—"],
+              ["Service", m.service_type || "General Inquiry"],
+              ["Status", m.status],
+              ["Submitted", format(new Date(m.created_at), "MMM d, yyyy 'at' h:mm a")],
+              ["Last updated", format(new Date(m.updated_at), "MMM d, yyyy 'at' h:mm a")],
+            ].map(([label, value]) => (
+              <div key={label as string} className="min-w-0">
+                <span className="text-xs text-muted-foreground block">{label}</span>
+                <span className="font-medium text-foreground text-sm break-words">{value as string}</span>
+              </div>
+            ))}
           </div>
-          <p className="text-xs text-primary uppercase font-bold mt-2">{m.service_type || "General Inquiry"}</p>
-        </button>
+        </div>
 
-        {isExpanded && (
-          <div className="mt-3 space-y-3">
-            <div className="bg-muted/30 p-3 rounded-lg text-sm">
-              <p className="whitespace-pre-wrap">{m.message}</p>
-            </div>
-
-            {m.admin_notes && (
-              <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg">
-                <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">
-                  <MessageSquare className="w-3 h-3" /> Activity Log:
-                </p>
-                <p className="text-sm text-blue-900 italic">"{m.admin_notes}"</p>
-              </div>
+        {/* Activity Log — same pattern as Bookings/Quotes */}
+        <div className="border-t border-border pt-3">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-2">
+            <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({entries.length})
+          </div>
+          <div className="space-y-2">
+            {entries.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">No notes yet.</p>
             )}
+            {entries.map((e, i) => (
+              <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-foreground">
+                    Note <span className="font-normal text-muted-foreground">by {resolveActor(null)}</span>
+                  </span>
+                  {e.stamp && (
+                    <span className="text-xs text-muted-foreground">{e.stamp}</span>
+                  )}
+                </div>
+                <p className="text-foreground mt-1 whitespace-pre-wrap">{e.text}</p>
+              </div>
+            ))}
 
-            {readOnly ? (
-              <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
-                Archived record — actions disabled.
-              </p>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
-                {m.status === "pending" && (
-                  <PermissionGate permission="can_manage_messages">
-                    <Button variant="ghost" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "read" })}>
-                      <CheckCircle className="w-4 h-4 mr-1 text-green-500" /> Mark Read
-                    </Button>
-                  </PermissionGate>
-                )}
-                <PermissionGate permission="can_manage_messages">
+            {!readOnly && (
+              <PermissionGate permission="can_manage_messages">
+                <div className="flex gap-2 pt-2">
+                  <Textarea
+                    rows={2}
+                    placeholder="Add a note to this submission…"
+                    value={noteDraft[m.id] || ""}
+                    onChange={(e) => setNoteDraft((p) => ({ ...p, [m.id]: e.target.value }))}
+                    className="text-sm"
+                  />
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={() => {
-                      setActiveNoteId(activeNoteId === m.id ? null : m.id);
-                      setNoteContent(m.admin_notes || "");
-                    }}
+                    variant="outline"
+                    onClick={() => addNote(m)}
+                    disabled={!(noteDraft[m.id] || "").trim()}
                   >
-                    <MessageSquare className="w-4 h-4 mr-1" /> Log Response
+                    Add note
                   </Button>
-                </PermissionGate>
-                <PermissionGate permission="can_manage_messages">
-                  <Button variant="secondary" size="sm" onClick={() => handleConvertToBooking(m)}>
-                    <ArrowRight className="w-4 h-4 mr-1" /> Convert
-                  </Button>
-                </PermissionGate>
-              </div>
+                </div>
+              </PermissionGate>
             )}
+          </div>
+        </div>
 
-            {activeNoteId === m.id && !readOnly && (
-              <div className="mt-2 flex gap-2">
-                <Input
-                  placeholder="Describe action taken..."
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    updateMessage.mutate({
-                      id: m.id,
-                      status: "responded",
-                      admin_notes: noteContent,
-                    })
-                  }
-                >
-                  <Send className="w-4 h-4" />
+        {/* Actions */}
+        {readOnly ? (
+          <div className="pt-2">
+            <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
+              Archived record — actions disabled.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50">
+            {m.status === "pending" && (
+              <PermissionGate permission="can_manage_messages">
+                <Button variant="outline" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "read" })}>
+                  <CheckCircle className="w-4 h-4 mr-1 text-green-500" /> Mark Read
                 </Button>
-              </div>
+              </PermissionGate>
             )}
+            <PermissionGate permission="can_manage_messages">
+              <Button variant="outline" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "responded" })}>
+                Mark Responded
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission="can_manage_messages">
+              <Button variant="default" size="sm" onClick={() => openConvert(m)}>
+                <ArrowRight className="w-4 h-4 mr-1" /> Convert to Quote
+              </Button>
+            </PermissionGate>
           </div>
         )}
-      </div>
+      </CollapsibleRecordCard>
     );
   };
 
@@ -225,7 +353,7 @@ const MessagesAdmin = () => {
             <p className="text-sm text-muted-foreground py-8 text-center italic">No active messages.</p>
           ) : (
             <>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {usePagedSlice(active, activePage).map((m) => renderCard(m, false))}
               </div>
               <Paginator page={activePage} pageSize={PAGE_SIZE} total={active.length} onChange={setActivePage} />
@@ -238,7 +366,7 @@ const MessagesAdmin = () => {
             <p className="text-sm text-muted-foreground py-8 text-center italic">No archived messages.</p>
           ) : (
             <>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {usePagedSlice(archived, archivePage).map((m) => renderCard(m, true))}
               </div>
               <Paginator page={archivePage} pageSize={PAGE_SIZE} total={archived.length} onChange={setArchivePage} />
@@ -246,6 +374,62 @@ const MessagesAdmin = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Convert Submission to Quote dialog */}
+      <Dialog open={!!convertTarget} onOpenChange={(o) => !o && setConvertTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Convert Submission to Quote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Name</label>
+                <Input value={convertTarget?.name || ""} readOnly className="bg-muted/40" />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Email</label>
+                <Input value={convertTarget?.email || ""} readOnly className="bg-muted/40" />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Phone</label>
+              <Input value={convertTarget?.phone || ""} readOnly className="bg-muted/40" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Service</label>
+              <select
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                value={convertService}
+                onChange={(e) => setConvertService(e.target.value)}
+              >
+                <option value="">— Select a service —</option>
+                {(services ?? []).map((s) => (
+                  <option key={s.title} value={s.title}>{s.title}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Description *</label>
+              <Textarea
+                rows={4}
+                value={convertDescription}
+                onChange={(e) => setConvertDescription(e.target.value)}
+                placeholder="Quote scope / customer request…"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => convertToQuote.mutate()}
+              disabled={convertToQuote.isPending || !convertDescription.trim()}
+            >
+              Create Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
