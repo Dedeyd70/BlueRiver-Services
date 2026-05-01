@@ -768,17 +768,14 @@ const BookingsAdmin = () => {
                       </Button>
                     )}
 
-                    {linkedInvoice.payment_status !== "paid" && (
-                      <PermissionGate permission="can_manage_invoices">
-                        <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
-                          <CheckCircle2 className="w-3 h-3 mr-1" /> Mark as Paid
-                        </Button>
-                      </PermissionGate>
-                    )}
-                    {linkedInvoice.payment_status === "paid" && (
+                    {linkedInvoice.payment_status === "paid" ? (
                       <Button variant="outline" size="sm" disabled>
                         <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
                       </Button>
+                    ) : (
+                      <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 font-medium">
+                        Unpaid · manage in Invoices
+                      </span>
                     )}
                   </>
                 )}
