@@ -488,8 +488,21 @@ const BookingsAdmin = () => {
     const showInvoiceActions = !isCancelled;
     const lineItems: LineItem[] = Array.isArray(b.line_items) ? b.line_items : [];
 
+    const paymentPill = linkedInvoice ? (
+      linkedInvoice.payment_status === "paid" ? (
+        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">
+          Paid
+        </span>
+      ) : (
+        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
+          Unpaid
+        </span>
+      )
+    ) : null;
+
     const statusBadge = (
       <div className="flex items-center gap-2">
+        {paymentPill}
         {archived && (
           <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold">
             Archived
