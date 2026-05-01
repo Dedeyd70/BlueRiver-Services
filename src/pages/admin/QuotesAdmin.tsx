@@ -845,10 +845,15 @@ const QuotesAdmin = () => {
                               {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
                               {notes.map((n) => (
                                 <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                                  <p className="text-foreground">{n.note}</p>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
-                                  </p>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-medium text-foreground">
+                                      Note <span className="font-normal text-muted-foreground">by {resolveActor(n.created_by)}</span>
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
+                                    </span>
+                                  </div>
+                                  <p className="text-foreground mt-1 whitespace-pre-wrap">{n.note}</p>
                                 </div>
                               ))}
                             </div>
