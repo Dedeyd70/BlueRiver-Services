@@ -8,12 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { FileText, Plus, DollarSign, Download, CheckCircle2 } from "lucide-react";
+import { FileText, Plus, DollarSign, Download, CheckCircle2, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import HasPermission from "@/components/HasPermission";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
+import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 
 const statusColors: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-800",
@@ -56,6 +57,7 @@ const InvoicesAdmin = () => {
   const [form, setForm] = useState<InvoiceForm>({ ...emptyForm });
   const [activePage, setActivePage] = useState(1);
   const [archivePage, setArchivePage] = useState(1);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["admin-invoices"],
@@ -118,6 +120,30 @@ const InvoicesAdmin = () => {
       return map;
     },
   });
+
+  // Shared admin name lookup — same query key as Bookings/Quotes for cache reuse.
+  const { data: adminUserMap } = useQuery({
+    queryKey: ["admin-user-name-map"],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("list-admin-users");
+        if (error) throw error;
+        const list: any[] = (data as any)?.users ?? [];
+        const map: Record<string, string> = {};
+        list.forEach((u) => {
+          map[u.user_id] = u.full_name || u.email || "Admin user";
+        });
+        return map;
+      } catch {
+        return {} as Record<string, string>;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const resolveActor = (id?: string | null): string => {
+    if (!id) return "System";
+    return adminUserMap?.[id] || "Admin user";
+  };
 
   // SAFE-MODE: invoice creation is delegated to the database RPC.
   // The RPC snapshots line_items + totals from the booking — no client-side math.
@@ -337,80 +363,180 @@ const InvoicesAdmin = () => {
       <p className="text-sm text-muted-foreground mb-6">Invoices are automatically generated when a booking is marked as Completed.</p>
 
       {(() => {
-        const renderInvoiceCard = (inv: any) => (
-          <div
-            key={inv.id}
-            ref={getRef(inv.id)}
-            className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-24"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-foreground">{inv.customer_name}</h3>
-                  {(inv as any).invoice_number && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
-                      {(inv as any).invoice_number}
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">{inv.customer_email}</p>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[inv.payment_status] || "bg-muted text-muted-foreground"}`}>
+        const renderInvoiceCard = (inv: any) => {
+          const archived = inv.payment_status === "paid";
+          const lineItems: any[] = Array.isArray(inv.line_items) && inv.line_items.length > 0
+            ? inv.line_items
+            : Array.isArray(inv.services) ? inv.services : [];
+
+          // Derived activity events from invoice columns (no separate log table for invoices).
+          const events: { label: string; at: string; actor?: string | null; detail?: string }[] = [];
+          if (inv.created_at) {
+            events.push({
+              label: "Invoice generated",
+              at: inv.created_at,
+              actor: inv.created_by ?? null,
+              detail: inv.invoice_number ? `# ${inv.invoice_number}` : undefined,
+            });
+          }
+          if (inv.payment_date && (inv.payment_method || Number(inv.amount_paid) > 0)) {
+            events.push({
+              label: "Payment recorded",
+              at: inv.payment_date,
+              actor: inv.created_by ?? null,
+              detail: [inv.payment_method, inv.payment_reference ? `Ref ${inv.payment_reference}` : null].filter(Boolean).join(" · "),
+            });
+          }
+          if (inv.paid_at) {
+            events.push({
+              label: "Marked paid",
+              at: inv.paid_at,
+              actor: inv.created_by ?? null,
+              detail: `Total $${Number(inv.total_amount).toFixed(2)}`,
+            });
+          }
+          events.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+
+          const statusBadge = (
+            <div className="flex items-center gap-2">
+              {(inv as any).invoice_number && (
+                <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                  {(inv as any).invoice_number}
+                </span>
+              )}
+              <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${statusColors[inv.payment_status] || "bg-muted text-muted-foreground"}`}>
                 {inv.payment_status}
               </span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Subtotal:</span>
-                <p className="font-medium text-foreground">${Number((inv as any).subtotal || 0).toFixed(2)}</p>
+          );
+
+          return (
+            <CollapsibleRecordCard
+              key={inv.id}
+              innerRef={getRef(inv.id)}
+              title={inv.customer_name}
+              subtitle={inv.customer_email}
+              statusBadge={statusBadge}
+              readOnly={archived}
+              expanded={expandedId === inv.id}
+              onToggle={() => setExpandedId(expandedId === inv.id ? null : inv.id)}
+              summary={[
+                { label: "Total", value: `$${Number(inv.total_amount).toFixed(2)}` },
+                { label: "Paid", value: `$${Number(inv.amount_paid).toFixed(2)}` },
+                { label: "Issued", value: format(new Date(inv.issued_date), "MMM d, yyyy") },
+                { label: "Due", value: inv.due_date ? format(new Date(inv.due_date), "MMM d, yyyy") : "—" },
+              ]}
+            >
+              <div className="border-t border-border pt-3">
+                <p className="text-sm font-semibold text-foreground mb-2">Itemized Breakdown</p>
+                {lineItems.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No itemized data on this invoice.</p>
+                ) : (
+                  <div className="border border-border rounded-lg overflow-hidden text-sm">
+                    <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-muted/40 text-xs font-medium text-muted-foreground">
+                      <div className="col-span-7">Item</div>
+                      <div className="col-span-2 text-right">Qty</div>
+                      <div className="col-span-1 text-right">Unit</div>
+                      <div className="col-span-2 text-right">Total</div>
+                    </div>
+                    {lineItems.map((it: any, i: number) => {
+                      const qty = Number(it.quantity) || 1;
+                      const unit = it.unit_price != null ? Number(it.unit_price) : Number(it.price) || 0;
+                      const total = Number(it.total_price) || Number(it.price) || qty * unit;
+                      const name = String(it.name || it.title || "Item");
+                      return (
+                        <div key={i} className="grid grid-cols-12 gap-2 px-3 py-1.5 border-t border-border">
+                          <div className="col-span-7 truncate">{name}</div>
+                          <div className="col-span-2 text-right">{qty}</div>
+                          <div className="col-span-1 text-right">${unit.toFixed(0)}</div>
+                          <div className="col-span-2 text-right font-medium">${total.toFixed(2)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm mt-3">
+                  <div>
+                    <span className="text-muted-foreground text-xs block">Subtotal</span>
+                    <span className="font-medium text-foreground">${Number(inv.subtotal || 0).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs block">Tax</span>
+                    <span className="font-medium text-foreground">${Number(inv.tax_amount || 0).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs block">Total</span>
+                    <span className="font-semibold text-primary">${Number(inv.total_amount).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs block">Paid</span>
+                    <span className="font-medium text-foreground">${Number(inv.amount_paid).toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Tax:</span>
-                <p className="font-medium text-foreground">${Number((inv as any).tax_amount || 0).toFixed(2)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total:</span>
-                <p className="font-medium text-foreground">${Number(inv.total_amount).toFixed(2)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Paid:</span>
-                <p className="font-medium text-foreground">${Number(inv.amount_paid).toFixed(2)}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Issued:</span>
-                <p className="font-medium text-foreground">{format(new Date(inv.issued_date), "MMM d, yyyy")}</p>
-              </div>
-            </div>
-            {inv.payment_status !== "unpaid" && (inv.payment_method || (inv as any).payment_date || (inv as any).payment_reference) && (
-              <p className="text-sm text-muted-foreground">
-                <span className="text-foreground font-medium">Payment:</span>{" "}
-                {[
-                  inv.payment_method,
-                  (inv as any).payment_date ? format(new Date((inv as any).payment_date), "MMM d, yyyy") : null,
-                  (inv as any).payment_reference ? `Ref ${(inv as any).payment_reference}` : null,
-                ].filter(Boolean).join(" · ")}
-              </p>
-            )}
-            {inv.notes && (
-              <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {inv.notes}</p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)}>
-                <Download className="w-3 h-3 mr-1" /> Download PDF
-              </Button>
-              {inv.payment_status !== "paid" && (
-                <HasPermission permission="can_manage_bookings">
-                  <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "full")}>
-                    <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Paid
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "partial")}>
-                    <DollarSign className="w-3 h-3 mr-1" /> Add Payment
-                  </Button>
-                </HasPermission>
+
+              {inv.payment_status !== "unpaid" && (inv.payment_method || inv.payment_date || inv.payment_reference) && (
+                <p className="text-sm text-muted-foreground">
+                  <span className="text-foreground font-medium">Payment:</span>{" "}
+                  {[
+                    inv.payment_method,
+                    inv.payment_date ? format(new Date(inv.payment_date), "MMM d, yyyy") : null,
+                    inv.payment_reference ? `Ref ${inv.payment_reference}` : null,
+                  ].filter(Boolean).join(" · ")}
+                </p>
               )}
-            </div>
-          </div>
-        );
+
+              {inv.notes && (
+                <p className="text-sm text-muted-foreground"><span className="text-foreground font-medium">Notes:</span> {inv.notes}</p>
+              )}
+
+              <div className="border-t border-border pt-3">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-2">
+                  <Clock className="w-3.5 h-3.5" /> Activity ({events.length})
+                </div>
+                <div className="space-y-2">
+                  {events.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">No activity recorded.</p>
+                  )}
+                  {events.map((e, i) => (
+                    <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">
+                          {e.label}
+                          <span className="text-xs font-normal text-muted-foreground ml-1">
+                            by {resolveActor(e.actor)}
+                          </span>
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(e.at), "MMM d, yyyy 'at' h:mm a")}
+                        </span>
+                      </div>
+                      {e.detail && (
+                        <p className="text-xs text-muted-foreground mt-1">{e.detail}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-border/50">
+                <Button variant="outline" size="sm" onClick={() => handleDownloadPdf(inv)}>
+                  <Download className="w-3 h-3 mr-1" /> Download PDF
+                </Button>
+                {inv.payment_status !== "paid" && (
+                  <HasPermission permission="can_manage_bookings">
+                    <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "full")}>
+                      <CheckCircle2 className="w-3 h-3 mr-1" /> Mark Paid
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openPaymentDialog(inv, "partial")}>
+                      <DollarSign className="w-3 h-3 mr-1" /> Add Payment
+                    </Button>
+                  </HasPermission>
+                )}
+              </div>
+            </CollapsibleRecordCard>
+          );
+        };
 
         if (isLoading) return <p className="text-muted-foreground">Loading...</p>;
         if (!invoices?.length) {

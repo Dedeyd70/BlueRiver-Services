@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
 import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
-import { ChevronDown, ChevronUp, Clock, FileText, Send, CheckCircle2, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, FileText, Send, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import { friendlyRpcError } from "@/lib/friendlyRpcError";
@@ -334,19 +334,7 @@ const BookingsAdmin = () => {
     });
   };
 
-  const handleMarkPaid = async (inv: any) => {
-    try {
-      const { error } = await (supabase as any).rpc("mark_invoice_paid", { p_invoice_id: inv.id });
-      if (error) throw error;
-      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
-      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
-      qc.invalidateQueries({ queryKey: ["admin-receipts"] });
-      qc.invalidateQueries({ queryKey: ["admin-bookings"] });
-      toast({ title: "Invoice marked as paid. Receipt generated." });
-    } catch (e: any) {
-      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
-    }
-  };
+  // Mark Paid removed from Bookings — payments are recorded only in InvoicesAdmin (single source of truth).
 
   const openReschedule = (b: any) => {
     setRescheduleTarget(b);
@@ -488,8 +476,21 @@ const BookingsAdmin = () => {
     const showInvoiceActions = !isCancelled;
     const lineItems: LineItem[] = Array.isArray(b.line_items) ? b.line_items : [];
 
+    const paymentPill = linkedInvoice ? (
+      linkedInvoice.payment_status === "paid" ? (
+        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">
+          Paid
+        </span>
+      ) : (
+        <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
+          Unpaid
+        </span>
+      )
+    ) : null;
+
     const statusBadge = (
       <div className="flex items-center gap-2">
+        {paymentPill}
         {archived && (
           <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold">
             Archived
@@ -768,17 +769,14 @@ const BookingsAdmin = () => {
                       </Button>
                     )}
 
-                    {linkedInvoice.payment_status !== "paid" && (
-                      <PermissionGate permission="can_manage_invoices">
-                        <Button variant="outline" size="sm" onClick={() => handleMarkPaid(linkedInvoice)}>
-                          <CheckCircle2 className="w-3 h-3 mr-1" /> Mark as Paid
-                        </Button>
-                      </PermissionGate>
-                    )}
-                    {linkedInvoice.payment_status === "paid" && (
+                    {linkedInvoice.payment_status === "paid" ? (
                       <Button variant="outline" size="sm" disabled>
                         <ReceiptIcon className="w-3 h-3 mr-1" /> Receipt Generated
                       </Button>
+                    ) : (
+                      <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 font-medium">
+                        Unpaid · manage in Invoices
+                      </span>
                     )}
                   </>
                 )}
