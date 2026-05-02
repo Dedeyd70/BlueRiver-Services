@@ -87,7 +87,8 @@ export function computeQuote(
   rules: PricingRule[],
   conditions: ConditionSetting[],
   taxRate: number = 0,
-  fields: ServiceField[] = []
+  fields: ServiceField[] = [],
+  multipliers: PricingMultiplier[] = []
 ): ComputeResult {
   const items: LineItem[] = [];
 
@@ -127,12 +128,12 @@ export function computeQuote(
       : undefined;
 
   // Read a field value from typed columns first, then custom_fields jsonb
-  const readField = (key: string): number => {
+  const readField = (key: string): any => {
     const r = request as any;
     const direct = r[key];
-    if (direct !== undefined && direct !== null && direct !== "") return intify(direct);
+    if (direct !== undefined && direct !== null && direct !== "") return direct;
     const custom = request.custom_fields ?? {};
-    return intify(custom[key]);
+    return custom[key];
   };
 
   // Dynamic fields path: if service_fields are provided for this service, render line items from them
@@ -144,7 +145,7 @@ export function computeQuote(
 
   // Strict dynamic resolution only — pricing rules must match service_fields.field_key
   serviceFields.forEach((f) => {
-    const qty = readField(f.field_key);
+    const qty = intify(readField(f.field_key));
     if (!qty || qty <= 0) return;
     const rule = ruleFor(f.field_key);
     const unit = intify(rule?.unit_price ?? 0);
@@ -186,6 +187,77 @@ export function computeQuote(
       });
     }
   }
+
+  // ---- Pricing multipliers (Phase 2 advanced engine) -------------------
+  // Filter to active rules that target this service (or are global with NULL service_type_id).
+  const applicableMultipliers = (multipliers ?? []).filter((m) => {
+    if (m.is_active === false) return false;
+    if (m.service_type_id && matchedService?.id && m.service_type_id !== matchedService.id) return false;
+    return true;
+  });
+
+  // Determine if a multiplier rule matches the customer's inputs.
+  const addonTitlesLower = addons.map((a: any) => String(a?.title ?? "").toLowerCase().trim());
+  const matchMultiplier = (m: PricingMultiplier): boolean => {
+    const axis = String(m.axis || "").toLowerCase();
+    const key = String(m.key || "").toLowerCase().trim();
+    if (!key) return false;
+    if (axis === "condition" || axis === "condition_level") {
+      return String(request.condition_level || "").toLowerCase().trim() === key;
+    }
+    if (axis === "addon" || axis === "addons") {
+      return addonTitlesLower.includes(key);
+    }
+    // Default: treat axis as a field key (typed column or custom_fields entry).
+    const v = readField(m.axis);
+    if (v === undefined || v === null || v === "") return false;
+    const vStr = String(v).toLowerCase().trim();
+    if (vStr === key) return true;
+    // Numeric band match — supports "1500-2500" or "1500+".
+    const num = Number(v);
+    if (Number.isFinite(num)) {
+      const range = key.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (range) {
+        const lo = Number(range[1]);
+        const hi = Number(range[2]);
+        if (num >= lo && num <= hi) return true;
+      }
+      const open = key.match(/^(\d+)\s*\+$/);
+      if (open) {
+        const lo = Number(open[1]);
+        if (num >= lo) return true;
+      }
+    }
+    return false;
+  };
+
+  // Apply matched multipliers in stable order: flat_amount first, percent after,
+  // so percentages compound on flat-adjusted subtotal.
+  const ordered = [...applicableMultipliers].sort((a, b) => {
+    const ax = (a.modifier_type === "percent") ? 1 : 0;
+    const bx = (b.modifier_type === "percent") ? 1 : 0;
+    return ax - bx;
+  });
+
+  ordered.forEach((m) => {
+    if (!matchMultiplier(m)) return;
+    const runningSubtotal = items.reduce((s, i) => s + intify(i.total_price), 0);
+    let amount = 0;
+    if (m.modifier_type === "percent") {
+      amount = Math.round((runningSubtotal * Number(m.value || 0)) / 100);
+    } else {
+      // flat_amount (default)
+      amount = intify(m.value);
+    }
+    if (!amount) return;
+    items.push({
+      name: m.display_label || `Adjustment (${m.axis}: ${m.key})`,
+      quantity: 1,
+      unit_price: amount,
+      total_price: amount,
+      type: "condition",
+    });
+  });
 
   const subtotal = items.reduce((s, i) => s + intify(i.total_price), 0);
   const tax = Math.round(subtotal * (Number(taxRate) || 0)) / 100;
