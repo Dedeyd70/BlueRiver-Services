@@ -96,7 +96,11 @@ export const generateInvoicePdf = (
   y += 5;
   doc.setFont("helvetica", "normal");
   doc.text(inv.customer_name || "—", margin, y);
-  doc.text(inv.address || "—", pageW / 2, y);
+  // Service location now reads from `invoices.address` (copied from booking
+  // via create_invoice_from_booking RPC). Falls back to "—" when missing.
+  const serviceAddress = String(inv.address || inv.service_address || "—");
+  const addrLines = doc.splitTextToSize(serviceAddress, pageW / 2 - margin - 4);
+  doc.text(addrLines, pageW / 2, y);
   y += 5;
   doc.text(inv.customer_email || "", margin, y);
   y += 10;

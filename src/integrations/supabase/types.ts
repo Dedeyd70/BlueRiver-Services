@@ -415,6 +415,7 @@ export type Database = {
       }
       invoices: {
         Row: {
+          address: string | null
           amount_paid: number
           booking_id: string | null
           created_at: string
@@ -444,6 +445,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address?: string | null
           amount_paid?: number
           booking_id?: string | null
           created_at?: string
@@ -473,6 +475,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address?: string | null
           amount_paid?: number
           booking_id?: string | null
           created_at?: string
@@ -1197,6 +1200,14 @@ export type Database = {
         Args: { p_email: string; p_table: string }
         Returns: boolean
       }
+      check_slot_overlap: {
+        Args: {
+          p_date: string
+          p_exclude_booking?: string
+          p_time_slot: string
+        }
+        Returns: boolean
+      }
       convert_quote_to_booking: {
         Args: {
           p_booking_date: string
@@ -1211,6 +1222,13 @@ export type Database = {
       }
       create_receipt: { Args: { p_invoice_id: string }; Returns: Json }
       generate_receipt_number: { Args: never; Returns: string }
+      get_admin_display_names: {
+        Args: { _user_ids: string[] }
+        Returns: {
+          display_name: string
+          user_id: string
+        }[]
+      }
       get_booked_slots: {
         Args: { p_date: string }
         Returns: {
@@ -1229,6 +1247,7 @@ export type Database = {
         Returns: boolean
       }
       mark_invoice_paid: { Args: { p_invoice_id: string }; Returns: Json }
+      parse_time_slot: { Args: { p_slot: string }; Returns: unknown }
     }
     Enums: {
       app_role: "admin" | "user" | "manager" | "staff"

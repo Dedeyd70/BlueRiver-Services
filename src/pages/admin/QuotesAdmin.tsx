@@ -20,6 +20,7 @@ import HasPermission from "@/components/HasPermission";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
+import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -222,25 +223,8 @@ const QuotesAdmin = () => {
     },
   });
 
-  // Shared admin name lookup — same query key as BookingsAdmin so the cache is shared.
-  const { data: adminUserMap } = useQuery({
-    queryKey: ["admin-user-name-map"],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("list-admin-users");
-        if (error) throw error;
-        const list: any[] = (data as any)?.users ?? [];
-        const map: Record<string, string> = {};
-        list.forEach((u) => {
-          map[u.user_id] = u.full_name || u.email || "Admin user";
-        });
-        return map;
-      } catch {
-        return {} as Record<string, string>;
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // Shared admin name lookup via SECURITY DEFINER RPC (works for all roles).
+  const { data: adminUserMap } = useAdminUserNames();
   const resolveActor = (id?: string | null): string => {
     if (!id) return "System";
     return adminUserMap?.[id] || "Admin user";
@@ -450,7 +434,7 @@ const QuotesAdmin = () => {
     setPrepareTarget(q);
   };
 
-  const handleDownloadPdf = (q: any) => {
+  const handleDownloadPdf = async (q: any) => {
     const draft = draftMap[q.id];
     if (!draft) {
       toast({ title: "Prepare quote first", description: "Please prepare quote before generating PDF", variant: "destructive" });
@@ -458,6 +442,19 @@ const QuotesAdmin = () => {
     }
     if (!branding || !settings) return;
     generateQuotePdf(q, branding, settings, draft);
+    await logActivity(q.id, "Quote PDF downloaded");
+    qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+  };
+
+  const handleSendQuote = async (q: any) => {
+    openMailto({
+      to: q.email,
+      subject: MAIL_TEMPLATES.quoteSend.subject,
+      bodyTemplate: MAIL_TEMPLATES.quoteSend.body,
+      vars: { name: q.name, service: q.service_type },
+    });
+    await logActivity(q.id, `Quote sent to ${q.email}`);
+    qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
   };
 
   const getNotesForQuote = (quoteId: string) => (allNotes ?? []).filter((n) => n.quote_id === quoteId);
@@ -711,14 +708,7 @@ const QuotesAdmin = () => {
                                       size="sm"
                                       className="gap-1"
                                       disabled={!hasDraft}
-                                      onClick={() =>
-                                        openMailto({
-                                          to: q.email,
-                                          subject: MAIL_TEMPLATES.quoteSend.subject,
-                                          bodyTemplate: MAIL_TEMPLATES.quoteSend.body,
-                                          vars: { name: q.name, service: q.service_type },
-                                        })
-                                      }
+                                      onClick={() => handleSendQuote(q)}
                                     >
                                       <Mail className="w-3 h-3" /> Send Quote
                                     </Button>

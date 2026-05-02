@@ -171,22 +171,12 @@ export function computeQuote(
     });
   });
 
-  // Condition surcharge
-  if (request.condition_level) {
-    const cond = conditions.find(
-      (c) => c.name.toLowerCase() === (request.condition_level || "").toLowerCase()
-    );
-    if (cond && intify(cond.surcharge_amount) > 0) {
-      const surcharge = intify(cond.surcharge_amount);
-      items.push({
-        name: `Condition Surcharge (${cond.name})`,
-        quantity: 1,
-        unit_price: surcharge,
-        total_price: surcharge,
-        type: "condition",
-      });
-    }
-  }
+  // NOTE: Condition surcharges are now handled exclusively by the
+  // pricing_multipliers table below. The legacy `condition_settings` path
+  // was retired to eliminate double-charging when both tables defined the
+  // same condition (audit finding §1b). The `conditions` argument is kept
+  // for backward-compat in the function signature but no longer applied.
+  void conditions;
 
   // ---- Pricing multipliers (Phase 2 advanced engine) -------------------
   // Filter to active rules that target this service (or are global with NULL service_type_id).
