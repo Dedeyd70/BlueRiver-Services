@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 
 export interface DynamicFieldDef {
   id: string;
@@ -55,6 +56,31 @@ const DynamicField = ({ field, value, onChange }: Props) => {
           {field.label}
           {required}
         </label>
+      </div>
+    );
+  }
+
+  if (field.input_type === "textarea" || field.input_type === "text") {
+    return (
+      <div className="sm:col-span-2">
+        <label className="text-sm font-medium text-foreground mb-1.5 block">
+          {field.label}
+          {required}
+        </label>
+        {field.input_type === "textarea" ? (
+          <Textarea
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+            rows={3}
+            placeholder="Optional details…"
+          />
+        ) : (
+          <Input
+            type="text"
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        )}
       </div>
     );
   }
