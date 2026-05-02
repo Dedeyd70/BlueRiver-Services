@@ -132,6 +132,17 @@ const BookService = () => {
     },
   });
 
+  const { data: pricingMultipliers } = useQuery({
+    queryKey: ["public-pricing-multipliers"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("pricing_multipliers")
+        .select("*")
+        .eq("is_active", true);
+      return data ?? [];
+    },
+  });
+
   const { data: taxRate } = useQuery({
     queryKey: ["public-tax-rate"],
     queryFn: async () => {
@@ -243,8 +254,9 @@ const BookService = () => {
       conditionSettings ?? [],
       taxRate ?? 0,
       serviceFields ?? [],
+      pricingMultipliers ?? [],
     );
-  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons]);
+  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons, pricingMultipliers]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);

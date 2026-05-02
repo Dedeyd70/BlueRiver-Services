@@ -609,6 +609,50 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_multipliers: {
+        Row: {
+          axis: string
+          created_at: string | null
+          display_label: string | null
+          id: string
+          is_active: boolean | null
+          key: string
+          modifier_type: string | null
+          service_type_id: string | null
+          value: number
+        }
+        Insert: {
+          axis: string
+          created_at?: string | null
+          display_label?: string | null
+          id?: string
+          is_active?: boolean | null
+          key: string
+          modifier_type?: string | null
+          service_type_id?: string | null
+          value: number
+        }
+        Update: {
+          axis?: string
+          created_at?: string | null
+          display_label?: string | null
+          id?: string
+          is_active?: boolean | null
+          key?: string
+          modifier_type?: string | null
+          service_type_id?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_multipliers_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quote_drafts: {
         Row: {
           addons: Json

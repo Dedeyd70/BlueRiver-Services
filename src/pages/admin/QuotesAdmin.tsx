@@ -158,6 +158,17 @@ const QuotesAdmin = () => {
     },
   });
 
+  const { data: pricingMultipliers } = useQuery({
+    queryKey: ["pricing-multipliers"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("pricing_multipliers")
+        .select("*")
+        .eq("is_active", true);
+      return (data ?? []) as any[];
+    },
+  });
+
   // Add-on price lookup, used to auto-populate prices in Prepare Quote.
   const { data: addonServices } = useQuery({
     queryKey: ["services-addons"],
@@ -392,7 +403,7 @@ const QuotesAdmin = () => {
     if (existing) {
       const existingItems: LineItem[] = Array.isArray(existing.line_items) && existing.line_items.length > 0
         ? existing.line_items
-        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax, pricingFields ?? []).lineItems;
+        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax, pricingFields ?? [], pricingMultipliers ?? []).lineItems;
       setDraftForm({
         service_type: existing.service_type ?? "",
         scope: existing.scope ?? "",
@@ -406,7 +417,7 @@ const QuotesAdmin = () => {
       });
     } else {
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
-      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? []);
+      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? [], pricingMultipliers ?? []);
       const baseItem = computed.lineItems.find((i) => i.type === "base");
       // Resolve add-on prices from the services table when the public form
       // didn't carry pricing through (which is the common case).
