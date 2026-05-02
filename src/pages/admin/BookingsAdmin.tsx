@@ -339,6 +339,14 @@ const BookingsAdmin = () => {
 
   const handleRescheduleConfirm = async () => {
     if (!rescheduleTarget || !rescheduleDate || !rescheduleSlot) return;
+    // Date Guard: reject any date earlier than today (No Backdating).
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const proposed = new Date(`${rescheduleDate}T00:00:00`);
+    if (isNaN(proposed.getTime()) || proposed < today) {
+      toast({ title: "Invalid date", description: "Bookings cannot be scheduled in the past.", variant: "destructive" });
+      return;
+    }
     try {
       const { data: bookedSlots } = await (supabase as any).rpc("get_booked_slots", { p_date: rescheduleDate });
       const taken = (bookedSlots ?? []).map((s: any) => s.time_slot);
