@@ -20,6 +20,7 @@ import HasPermission from "@/components/HasPermission";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
+import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
   requested: "bg-amber-100 text-amber-800",
@@ -222,25 +223,8 @@ const QuotesAdmin = () => {
     },
   });
 
-  // Shared admin name lookup — same query key as BookingsAdmin so the cache is shared.
-  const { data: adminUserMap } = useQuery({
-    queryKey: ["admin-user-name-map"],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("list-admin-users");
-        if (error) throw error;
-        const list: any[] = (data as any)?.users ?? [];
-        const map: Record<string, string> = {};
-        list.forEach((u) => {
-          map[u.user_id] = u.full_name || u.email || "Admin user";
-        });
-        return map;
-      } catch {
-        return {} as Record<string, string>;
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // Shared admin name lookup via SECURITY DEFINER RPC (works for all roles).
+  const { data: adminUserMap } = useAdminUserNames();
   const resolveActor = (id?: string | null): string => {
     if (!id) return "System";
     return adminUserMap?.[id] || "Admin user";

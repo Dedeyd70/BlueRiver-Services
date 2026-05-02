@@ -22,6 +22,7 @@ import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginato
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 import { recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
+import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -137,27 +138,9 @@ const BookingsAdmin = () => {
     },
   });
 
-  // Resolve admin actor names for the activity log.
-  // The list-admin-users edge function only allows Super Admins, so
-  // managers/staff fall back to "Admin user".
-  const { data: adminUserMap } = useQuery({
-    queryKey: ["admin-user-name-map"],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("list-admin-users");
-        if (error) throw error;
-        const list: any[] = (data as any)?.users ?? [];
-        const map: Record<string, string> = {};
-        list.forEach((u) => {
-          map[u.user_id] = u.full_name || u.email || "Admin user";
-        });
-        return map;
-      } catch {
-        return {} as Record<string, string>;
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // Resolve admin actor names via the SECURITY DEFINER RPC
+  // get_admin_display_names — works for Manager/Staff too (audit fix §6).
+  const { data: adminUserMap } = useAdminUserNames();
 
   const resolveActor = (id?: string | null): string => {
     if (!id) return "System";
