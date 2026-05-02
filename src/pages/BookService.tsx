@@ -132,6 +132,17 @@ const BookService = () => {
     },
   });
 
+  const { data: pricingMultipliers } = useQuery({
+    queryKey: ["public-pricing-multipliers"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("pricing_multipliers")
+        .select("*")
+        .eq("is_active", true);
+      return data ?? [];
+    },
+  });
+
   const { data: taxRate } = useQuery({
     queryKey: ["public-tax-rate"],
     queryFn: async () => {
