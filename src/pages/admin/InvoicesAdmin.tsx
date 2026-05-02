@@ -15,6 +15,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-800",
