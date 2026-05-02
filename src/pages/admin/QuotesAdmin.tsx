@@ -434,7 +434,7 @@ const QuotesAdmin = () => {
     setPrepareTarget(q);
   };
 
-  const handleDownloadPdf = (q: any) => {
+  const handleDownloadPdf = async (q: any) => {
     const draft = draftMap[q.id];
     if (!draft) {
       toast({ title: "Prepare quote first", description: "Please prepare quote before generating PDF", variant: "destructive" });
@@ -442,6 +442,19 @@ const QuotesAdmin = () => {
     }
     if (!branding || !settings) return;
     generateQuotePdf(q, branding, settings, draft);
+    await logActivity(q.id, "Quote PDF downloaded");
+    qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+  };
+
+  const handleSendQuote = async (q: any) => {
+    openMailto({
+      to: q.email,
+      subject: MAIL_TEMPLATES.quoteSend.subject,
+      bodyTemplate: MAIL_TEMPLATES.quoteSend.body,
+      vars: { name: q.name, service: q.service_type },
+    });
+    await logActivity(q.id, `Quote sent to ${q.email}`);
+    qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
   };
 
   const getNotesForQuote = (quoteId: string) => (allNotes ?? []).filter((n) => n.quote_id === quoteId);
@@ -695,14 +708,7 @@ const QuotesAdmin = () => {
                                       size="sm"
                                       className="gap-1"
                                       disabled={!hasDraft}
-                                      onClick={() =>
-                                        openMailto({
-                                          to: q.email,
-                                          subject: MAIL_TEMPLATES.quoteSend.subject,
-                                          bodyTemplate: MAIL_TEMPLATES.quoteSend.body,
-                                          vars: { name: q.name, service: q.service_type },
-                                        })
-                                      }
+                                      onClick={() => handleSendQuote(q)}
                                     >
                                       <Mail className="w-3 h-3" /> Send Quote
                                     </Button>
