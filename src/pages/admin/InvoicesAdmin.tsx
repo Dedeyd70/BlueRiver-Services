@@ -15,6 +15,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-800",
@@ -121,25 +122,8 @@ const InvoicesAdmin = () => {
     },
   });
 
-  // Shared admin name lookup — same query key as Bookings/Quotes for cache reuse.
-  const { data: adminUserMap } = useQuery({
-    queryKey: ["admin-user-name-map"],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("list-admin-users");
-        if (error) throw error;
-        const list: any[] = (data as any)?.users ?? [];
-        const map: Record<string, string> = {};
-        list.forEach((u) => {
-          map[u.user_id] = u.full_name || u.email || "Admin user";
-        });
-        return map;
-      } catch {
-        return {} as Record<string, string>;
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // Shared admin name lookup via RPC (Manager/Staff included).
+  const { data: adminUserMap } = useAdminUserNames();
   const resolveActor = (id?: string | null): string => {
     if (!id) return "System";
     return adminUserMap?.[id] || "Admin user";

@@ -302,13 +302,25 @@ const BookService = () => {
       }
     } catch { /* allow booking if rate check fails */ }
 
-    // Final server-side slot availability check
+    // Final server-side slot availability check — exact match AND time-range overlap.
     try {
-      const { data: bookedSlots } = await supabase.rpc("get_booked_slots", { p_date: format(selectedDate, "yyyy-MM-dd") });
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const { data: bookedSlots } = await supabase.rpc("get_booked_slots", { p_date: dateStr });
       const taken = (bookedSlots || []).map((s: any) => s.time_slot);
       if (taken.includes(selectedSlot)) {
         setLoading(false);
         toast({ title: "This time slot was just booked. Please select another.", variant: "destructive" });
+        return;
+      }
+      // Range-overlap check (e.g. 7-11 AM vs 9:00) via SECURITY DEFINER RPC.
+      const { data: overlaps } = await (supabase as any).rpc("check_slot_overlap", {
+        p_date: dateStr,
+        p_time_slot: selectedSlot,
+        p_exclude_booking: null,
+      });
+      if (overlaps === true) {
+        setLoading(false);
+        toast({ title: "Time slot overlaps an existing booking. Please pick a different time.", variant: "destructive" });
         return;
       }
     } catch { /* proceed if check fails */ }
