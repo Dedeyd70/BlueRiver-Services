@@ -296,15 +296,21 @@ const BookingsAdmin = () => {
     }
   };
 
-  const handleViewInvoice = (inv: any) => {
+  const handleViewInvoice = async (inv: any, b?: any) => {
     if (!branding || !pdfSettings) {
       toast({ title: "Loading branding…", description: "Please try again in a moment." });
       return;
     }
     generateInvoicePdf(inv, branding, pdfSettings);
+    if (b?.id) {
+      await logBookingActivity(b.id, "note", {
+        notes: `Invoice ${inv.invoice_number ?? ""} PDF downloaded`,
+      });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+    }
   };
 
-  const handleSendInvoice = (inv: any, b: any) => {
+  const handleSendInvoice = async (inv: any, b: any) => {
     openMailto({
       to: inv.customer_email || b?.email,
       subject: MAIL_TEMPLATES.invoiceSend.subject,
@@ -315,6 +321,12 @@ const BookingsAdmin = () => {
         date: b?.booking_date ? format(new Date(b.booking_date), "MMMM d, yyyy") : null,
       },
     });
+    if (b?.id) {
+      await logBookingActivity(b.id, "note", {
+        notes: `Invoice ${inv.invoice_number ?? ""} sent to ${inv.customer_email || b?.email}`,
+      });
+      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+    }
   };
 
   // Mark Paid removed from Bookings — payments are recorded only in InvoicesAdmin (single source of truth).
@@ -333,6 +345,16 @@ const BookingsAdmin = () => {
       const isSameSlot = rescheduleTarget.booking_date === rescheduleDate && rescheduleTarget.time_slot === rescheduleSlot;
       if (taken.includes(rescheduleSlot) && !isSameSlot) {
         toast({ title: "That time slot is already booked.", variant: "destructive" });
+        return;
+      }
+      // Time-range overlap check (excludes the booking being rescheduled).
+      const { data: overlaps } = await (supabase as any).rpc("check_slot_overlap", {
+        p_date: rescheduleDate,
+        p_time_slot: rescheduleSlot,
+        p_exclude_booking: rescheduleTarget.id,
+      });
+      if (overlaps === true) {
+        toast({ title: "Time slot overlaps an existing booking. Please pick a different time.", variant: "destructive" });
         return;
       }
       const { data, error } = await supabase
