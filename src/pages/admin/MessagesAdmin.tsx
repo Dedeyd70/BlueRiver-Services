@@ -14,6 +14,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import PermissionGate from "@/components/PermissionGate";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 interface ContactSubmission {
   id: string;
@@ -79,25 +80,8 @@ const MessagesAdmin = () => {
     },
   });
 
-  // Shared admin name lookup — same query key as Bookings/Quotes/Invoices.
-  const { data: adminUserMap } = useQuery({
-    queryKey: ["admin-user-name-map"],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("list-admin-users");
-        if (error) throw error;
-        const list: any[] = (data as any)?.users ?? [];
-        const map: Record<string, string> = {};
-        list.forEach((u) => {
-          map[u.user_id] = u.full_name || u.email || "Admin user";
-        });
-        return map;
-      } catch {
-        return {} as Record<string, string>;
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // Shared admin name lookup via RPC (Manager/Staff included).
+  const { data: adminUserMap } = useAdminUserNames();
   // contact_submissions doesn't carry actor_id, so log entries default to "Admin user".
   const resolveActor = (id?: string | null): string => {
     if (!id) return "Admin user";
