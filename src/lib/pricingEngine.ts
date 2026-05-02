@@ -28,6 +28,17 @@ export interface ConditionSetting {
   surcharge_amount: number;
 }
 
+export interface PricingMultiplier {
+  id: string;
+  service_type_id: string | null; // null = global
+  axis: string;                   // e.g. "condition", "sqft_band", "addon", or a custom_field key
+  key: string;                    // value to match against the input (e.g. "Heavy", "1500-2500", addon title)
+  modifier_type: "flat_amount" | "percent" | string | null;
+  value: number;
+  display_label: string | null;
+  is_active?: boolean | null;
+}
+
 export interface QuoteRequestLike {
   service_type_id?: string | null;
   service_type?: string | null;
