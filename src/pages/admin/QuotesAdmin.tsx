@@ -403,7 +403,7 @@ const QuotesAdmin = () => {
     if (existing) {
       const existingItems: LineItem[] = Array.isArray(existing.line_items) && existing.line_items.length > 0
         ? existing.line_items
-        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax, pricingFields ?? []).lineItems;
+        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax, pricingFields ?? [], pricingMultipliers ?? []).lineItems;
       setDraftForm({
         service_type: existing.service_type ?? "",
         scope: existing.scope ?? "",
