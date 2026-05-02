@@ -254,8 +254,9 @@ const BookService = () => {
       conditionSettings ?? [],
       taxRate ?? 0,
       serviceFields ?? [],
+      pricingMultipliers ?? [],
     );
-  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons]);
+  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons, pricingMultipliers]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
