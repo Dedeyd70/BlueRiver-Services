@@ -417,7 +417,7 @@ const QuotesAdmin = () => {
       });
     } else {
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
-      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? []);
+      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? [], pricingMultipliers ?? []);
       const baseItem = computed.lineItems.find((i) => i.type === "base");
       // Resolve add-on prices from the services table when the public form
       // didn't carry pricing through (which is the common case).
