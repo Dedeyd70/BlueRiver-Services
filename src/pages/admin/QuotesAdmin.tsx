@@ -158,6 +158,17 @@ const QuotesAdmin = () => {
     },
   });
 
+  const { data: pricingMultipliers } = useQuery({
+    queryKey: ["pricing-multipliers"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("pricing_multipliers")
+        .select("*")
+        .eq("is_active", true);
+      return (data ?? []) as any[];
+    },
+  });
+
   // Add-on price lookup, used to auto-populate prices in Prepare Quote.
   const { data: addonServices } = useQuery({
     queryKey: ["services-addons"],
