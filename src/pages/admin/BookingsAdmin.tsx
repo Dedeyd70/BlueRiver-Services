@@ -857,6 +857,7 @@ const BookingsAdmin = () => {
               <label className="text-sm font-medium">New date</label>
               <Input
                 type="date"
+                min={new Date().toISOString().slice(0, 10)}
                 value={rescheduleDate}
                 onChange={(e) => setRescheduleDate(e.target.value)}
               />
