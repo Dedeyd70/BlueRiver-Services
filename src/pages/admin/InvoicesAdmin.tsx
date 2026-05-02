@@ -122,9 +122,6 @@ const InvoicesAdmin = () => {
     },
   });
 
-  // Bring in the shared admin-name resolver (RPC-based, all roles).
-  const _useAdminUserNames = (await import("@/hooks/useAdminUserNames")).useAdminUserNames;
-
   // Shared admin name lookup via RPC (Manager/Staff included).
   const { data: adminUserMap } = useAdminUserNames();
   const resolveActor = (id?: string | null): string => {
