@@ -81,6 +81,18 @@ const RequestQuote = () => {
     enabled: !!matchedServiceType?.id,
   });
 
+  // Phase 2: pricing multipliers preloaded for any future live-estimate hookup on this page.
+  useQuery({
+    queryKey: ["public-pricing-multipliers"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("pricing_multipliers")
+        .select("*")
+        .eq("is_active", true);
+      return data ?? [];
+    },
+  });
+
   const setDyn = (key: string, val: any) => setDynValues((p) => ({ ...p, [key]: val }));
 
   const toggleAddon = (title: string) => {
