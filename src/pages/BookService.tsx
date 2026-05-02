@@ -64,20 +64,6 @@ const BookService = () => {
     if (prefilledService) setForm((f) => ({ ...f, service: prefilledService }));
   }, [prefilledService]);
 
-  // Sync service_type_id once serviceTypes loads, so deep links like
-  // /book?service=Recurring%20Cleaning correctly preselect the dropdown
-  // AND avoid a brief $0.00 flash before the engine matches by name.
-  useEffect(() => {
-    if (!form.service || form.service_type_id) return;
-    const st = (serviceTypes ?? []).find(
-      (s: any) => String(s.name).toLowerCase() === form.service.toLowerCase()
-    );
-    if (st?.id) {
-      setForm((prev) => ({ ...prev, service_type_id: st.id, service: st.name }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceTypes, form.service]);
-
   useEffect(() => {
     if (prefilledAddon && !selectedAddons.includes(prefilledAddon)) {
       setSelectedAddons((prev) => [...prev, prefilledAddon]);
