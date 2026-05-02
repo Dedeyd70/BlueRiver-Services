@@ -79,6 +79,7 @@ const BookService = () => {
       const { data, error } = await (supabase as any).from("service_types").select("id,name,base_price");
       if (error) throw error;
       return data ?? [];
+    },
   });
 
   // Sync service_type_id once serviceTypes loads, so deep links like
