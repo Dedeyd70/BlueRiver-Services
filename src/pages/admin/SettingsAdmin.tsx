@@ -4,6 +4,7 @@ import BusinessRulesSettings from "@/components/admin/BusinessRulesSettings";
 import AvailabilitySettings from "@/components/admin/AvailabilitySettings";
 import PaymentSettings from "@/components/admin/PaymentSettings";
 import PricingSettings from "@/components/admin/PricingSettings";
+import PricingMultipliersSettings from "@/components/admin/PricingMultipliersSettings";
 import SocialLinksSettings from "@/components/admin/SocialLinksSettings";
 import { useHasPermission } from "@/hooks/usePermissions";
 
@@ -21,6 +22,7 @@ const SettingsAdmin = () => {
     { value: "availability", label: "Availability", allowed: canEditAvailability, content: <AvailabilitySettings /> },
     { value: "payment", label: "Payment", allowed: canManagePayment, content: <PaymentSettings /> },
     { value: "pricing", label: "Pricing", allowed: canEditPricing, content: <PricingSettings /> },
+    { value: "multipliers", label: "Pricing Multipliers", allowed: canEditPricing, content: <PricingMultipliersSettings /> },
     { value: "socials", label: "Social Media", allowed: canManageSocials, content: <SocialLinksSettings /> },
   ].filter((t) => t.allowed);
 
