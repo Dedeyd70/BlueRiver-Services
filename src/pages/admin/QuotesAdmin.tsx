@@ -19,7 +19,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import HasPermission from "@/components/HasPermission";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
-import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
+
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
@@ -264,13 +264,20 @@ const QuotesAdmin = () => {
     onSuccess: (q: any) => {
       qc.invalidateQueries({ queryKey: ["admin-quotes"] });
       qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
-      toast({ title: "Quote marked In Progress" });
-      openMailto({
-        to: q.email,
-        subject: MAIL_TEMPLATES.quoteInProgress.subject,
-        bodyTemplate: MAIL_TEMPLATES.quoteInProgress.body,
-        vars: { name: q.name, service: q.service_type || "your cleaning service" },
-      });
+      toast({ title: "Quote marked In Progress", description: "Acknowledgement email sent to customer." });
+      const html = `
+        <p>Hi ${q.name || "there"},</p>
+        <p>We've received your quote request for <strong>${q.service_type || "your cleaning service"}</strong> and our team is reviewing the details.</p>
+        <p>We'll get back to you with a customized quote within 24 hours.</p>
+        <p>— The BlueRiver Team</p>`;
+      supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "custom",
+          to: q.email,
+          subject: "Quote Request Received - BlueRiver Services",
+          html,
+        },
+      }).catch((err) => console.error("Quote in-progress email failed:", err));
     },
   });
 
@@ -447,12 +454,23 @@ const QuotesAdmin = () => {
   };
 
   const handleSendQuote = async (q: any) => {
-    openMailto({
-      to: q.email,
-      subject: MAIL_TEMPLATES.quoteSend.subject,
-      bodyTemplate: MAIL_TEMPLATES.quoteSend.body,
-      vars: { name: q.name, service: q.service_type },
-    });
+    const draft = draftMap[q.id];
+    const totalLine = draft ? `<p><strong>Estimated total:</strong> $${Number(draft.total ?? 0).toFixed(2)}</p>` : "";
+    const html = `
+      <p>Hi ${q.name || "there"},</p>
+      <p>Thank you for considering BlueRiver Services. Please find your quote details below for <strong>${q.service_type || "your cleaning service"}</strong>.</p>
+      ${totalLine}
+      <p>Reply to this email if you have any questions or to confirm scheduling.</p>
+      <p>— The BlueRiver Team</p>`;
+    supabase.functions.invoke("send-transactional-email", {
+      body: {
+        type: "custom",
+        to: q.email,
+        subject: "Your Quote from BlueRiver Services",
+        html,
+      },
+    }).catch((err) => console.error("Quote send email failed:", err));
+    toast({ title: "Quote sent", description: `Emailed to ${q.email}` });
     await logActivity(q.id, `Quote sent to ${q.email}`);
     qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
   };
