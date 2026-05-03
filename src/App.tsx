@@ -41,6 +41,7 @@ import UserManagement from "./pages/admin/UserManagement";
 import PermissionsAdmin from "./pages/admin/PermissionsAdmin";
 import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
 import SiteContentAdmin from "./pages/admin/SiteContentAdmin";
+import LeaveReview from "./pages/LeaveReview";
 import LocalBusinessSchema from "./components/LocalBusinessSchema";
 
 const queryClient = new QueryClient({
@@ -104,6 +105,7 @@ const App = () => (
               <Route path="/terms-of-service" element={<TermsOfService />} />
               <Route path="/liability-disclaimer" element={<LiabilityDisclaimer />} />
               <Route path="/cancellation-policy" element={<CancellationPolicy />} />
+              <Route path="/review/:bookingId" element={<LeaveReview />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
