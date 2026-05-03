@@ -408,11 +408,27 @@ const BookService = () => {
 
       await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
 
+      // Fire-and-forget customer confirmation email via Resend.
+      supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "booking_confirmation",
+          to: form.email.trim(),
+          data: {
+            name: form.name.trim(),
+            service: form.service,
+            date: format(selectedDate, "MMM d, yyyy"),
+            timeSlot: selectedSlot,
+            address: form.address.trim(),
+            total: computed.total,
+          },
+        },
+      }).catch((err) => console.error("Confirmation email failed:", err));
+
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
 
       setSubmitted(true);
-      toast({ title: "Booking confirmed!", description: "We'll be in touch within 24 hours." });
+      toast({ title: "Booking confirmed!", description: "We'll be in touch within 24 hours. Check your inbox for a confirmation from info@blueriverservices.co. If you don't see it, please check your spam folder and mark us as a safe sender!" });
     } catch (e: any) {
       console.error("Booking submit threw:", e);
       toast({ title: "Booking failed", description: e?.message ?? String(e) ?? "An unexpected error occurred.", variant: "destructive" });
