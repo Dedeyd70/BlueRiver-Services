@@ -16,7 +16,7 @@ import { notifyAdmins } from "@/lib/notifications";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { ChevronDown, ChevronUp, Clock, FileText, Send, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
-import { generateInvoicePdf } from "@/lib/invoicePdf";
+import { generateInvoicePdf, generateInvoicePdfBase64 } from "@/lib/invoicePdf";
 import { friendlyRpcError } from "@/lib/friendlyRpcError";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
@@ -315,29 +315,44 @@ const BookingsAdmin = () => {
   };
 
   const handleSendInvoice = async (inv: any, b: any) => {
+    if (!branding || !pdfSettings) {
+      toast({ title: "Loading branding…", description: "Please try again in a moment." });
+      return;
+    }
     const recipient = inv.customer_email || b?.email;
     const customerName = inv.customer_name || b?.name || "there";
     const total = Number(inv.total_amount ?? 0).toFixed(2);
     const html = `
       <p>Hi ${customerName},</p>
-      <p>Thank you for choosing BlueRiver Services. Your invoice <strong>${inv.invoice_number ?? ""}</strong> is ready.</p>
+      <p>Thank you for choosing BlueRiver Services. Your invoice <strong>${inv.invoice_number ?? ""}</strong> is attached as a PDF.</p>
       <p><strong>Amount due:</strong> $${total}</p>
       <p>Please reply to this email if you have any questions.</p>
       <p>— The BlueRiver Team</p>`;
-    supabase.functions.invoke("send-transactional-email", {
-      body: {
-        type: "custom",
-        to: recipient,
-        subject: `Invoice ${inv.invoice_number ?? ""} from BlueRiver Services`,
-        html,
-      },
-    }).catch((err) => console.error("Invoice email failed:", err));
-    toast({ title: "Invoice emailed", description: `Sent to ${recipient}` });
-    if (b?.id) {
-      await logBookingActivity(b.id, "note", {
-        notes: `Invoice ${inv.invoice_number ?? ""} sent to ${inv.customer_email || b?.email}`,
+    try {
+      const { filename, base64 } = generateInvoicePdfBase64(inv, branding, pdfSettings);
+      const { error } = await supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "custom",
+          to: recipient,
+          subject: `Invoice ${inv.invoice_number ?? ""} from BlueRiver Services`,
+          html,
+          attachments: [{ filename, content: base64 }],
+        },
       });
-      qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      if (error) throw error;
+      toast({ title: "Invoice emailed", description: `Sent to ${recipient}` });
+      if (b?.id) {
+        await logBookingActivity(b.id, "note", {
+          notes: `Invoice ${inv.invoice_number ?? ""} sent to ${recipient}`,
+        });
+        qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
+      }
+    } catch (err) {
+      console.error("Invoice email failed:", err);
+      toast({
+        title: "Failed to send email with attachment. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -393,7 +408,14 @@ const BookingsAdmin = () => {
       toast({ title: "Booking rescheduled." });
       setRescheduleTarget(null);
     } catch (e: any) {
-      toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
+      if (e?.code === "23505") {
+        toast({
+          title: "This slot is already occupied (Confirmed/Completed).",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Error", description: friendlyRpcError(e), variant: "destructive" });
+      }
     }
   };
 
