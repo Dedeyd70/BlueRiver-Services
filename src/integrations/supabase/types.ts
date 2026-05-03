@@ -929,6 +929,36 @@ export type Database = {
           },
         ]
       }
+      reviews: {
+        Row: {
+          booking_id: string
+          comment: string | null
+          created_at: string
+          customer_name: string
+          id: string
+          is_public: boolean
+          rating: number
+        }
+        Insert: {
+          booking_id: string
+          comment?: string | null
+          created_at?: string
+          customer_name?: string
+          id?: string
+          is_public?: boolean
+          rating: number
+        }
+        Update: {
+          booking_id?: string
+          comment?: string | null
+          created_at?: string
+          customer_name?: string
+          id?: string
+          is_public?: boolean
+          rating?: number
+        }
+        Relationships: []
+      }
       service_fields: {
         Row: {
           created_at: string
@@ -1248,6 +1278,16 @@ export type Database = {
       }
       mark_invoice_paid: { Args: { p_invoice_id: string }; Returns: Json }
       parse_time_slot: { Args: { p_slot: string }; Returns: unknown }
+      submit_review: {
+        Args: {
+          p_booking_id: string
+          p_comment: string
+          p_email: string
+          p_name: string
+          p_rating: number
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "user" | "manager" | "staff"
