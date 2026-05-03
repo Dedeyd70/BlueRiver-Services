@@ -86,10 +86,24 @@ const Contact = () => {
         await notifyAdmins("contact", `New contact from ${form.name.trim()}`, insertedContact?.id, "contact");
       } catch {}
 
+      // Send branded acknowledgement email via Resend (fire-and-forget).
+      const html = `
+        <p>Hi ${form.name.trim() || "there"},</p>
+        <p>Thanks for reaching out to BlueRiver Services. We've received your message and will respond within 24 hours.</p>
+        <p>— The BlueRiver Team</p>`;
+      supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "custom",
+          to: form.email.trim(),
+          subject: "We received your message - BlueRiver Services",
+          html,
+        },
+      }).catch((err) => console.error("Contact confirmation email failed:", err));
+
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
       setSubmitted(true);
-      toast({ title: "Message sent!", description: "We'll respond within 24 hours." });
+      toast({ title: "Message sent!", description: "We'll respond within 24 hours. Check your inbox for a confirmation from info@blueriverservices.co. If you don't see it, please check your spam folder and mark us as a safe sender!" });
     } catch {
       toast({ title: "Message failed to send.", description: "An unexpected error occurred.", variant: "destructive" });
     } finally {
