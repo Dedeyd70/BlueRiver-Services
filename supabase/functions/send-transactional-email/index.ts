@@ -11,13 +11,47 @@ const corsHeaders = {
 const FROM = "BlueRiver Services <info@blueriverservices.co>";
 const REPLY_TO = "info@blueriverservices.co";
 
+type Attachment = { filename: string; content: string };
+
 type Payload = {
   type: "booking_confirmation" | "quote_received" | "custom";
   to: string;
   data?: Record<string, unknown>;
   subject?: string;
   html?: string;
+  attachments?: Attachment[];
 };
+
+// Resend free-tier safety: max 2 attachments, 1MB each, 2MB total.
+const MAX_ATTACHMENTS = 2;
+const MAX_ATTACHMENT_BYTES = 1 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+
+function validateAttachments(att: unknown): { ok: true; value: Attachment[] } | { ok: false; error: string } {
+  if (att == null) return { ok: true, value: [] };
+  if (!Array.isArray(att)) return { ok: false, error: "attachments must be an array" };
+  if (att.length > MAX_ATTACHMENTS) return { ok: false, error: `Max ${MAX_ATTACHMENTS} attachments per email` };
+  let total = 0;
+  for (const a of att) {
+    if (!a || typeof a.filename !== "string" || typeof a.content !== "string") {
+      return { ok: false, error: "Each attachment needs filename and base64 content" };
+    }
+    if (!a.filename.toLowerCase().endsWith(".pdf")) {
+      return { ok: false, error: "Only .pdf attachments are allowed" };
+    }
+    // Decoded base64 size = (length * 3/4) - padding. Approximate via length * 0.75.
+    const padding = (a.content.match(/=+$/)?.[0]?.length ?? 0);
+    const bytes = Math.floor((a.content.length * 3) / 4) - padding;
+    if (bytes > MAX_ATTACHMENT_BYTES) {
+      return { ok: false, error: `Attachment ${a.filename} exceeds 1MB limit` };
+    }
+    total += bytes;
+  }
+  if (total > MAX_TOTAL_ATTACHMENT_BYTES) {
+    return { ok: false, error: "Total attachment size exceeds 2MB limit" };
+  }
+  return { ok: true, value: att as Attachment[] };
+}
 
 const esc = (v: unknown) =>
   String(v ?? "")
@@ -106,19 +140,36 @@ Deno.serve(async (req) => {
       });
     }
 
+    const attCheck = validateAttachments(body.attachments);
+    if (!attCheck.ok) {
+      console.error("Attachment validation failed:", attCheck.error);
+      return new Response(JSON.stringify({ error: attCheck.error }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const resendBody: Record<string, unknown> = {
+      from: FROM,
+      to: [body.to],
+      reply_to: REPLY_TO,
+      subject,
+      html,
+    };
+    if (attCheck.value.length > 0) {
+      resendBody.attachments = attCheck.value.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+      }));
+    }
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: FROM,
-        to: [body.to],
-        reply_to: REPLY_TO,
-        subject,
-        html,
-      }),
+      body: JSON.stringify(resendBody),
     });
 
     const result = await res.json();

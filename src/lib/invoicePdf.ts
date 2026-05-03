@@ -56,15 +56,20 @@ const drawLetterhead = (
 };
 
 /**
- * Branded invoice PDF. Reads only from the persisted `invoices` row —
- * never recalculates pricing.
+ * Branded invoice PDF builder. Returns the configured jsPDF instance so it
+ * can be either saved to disk or exported as base64 for email attachment.
+ *
+ * NOTE (cost-efficiency): jsPDF is initialised with `compress: true` to keep
+ * attachments small for the Resend free tier (<100KB target). If a raster
+ * logo is ever added here, use `addImage(..., 'JPEG', ..., 'FAST')` with
+ * quality ~0.6 to stay under that budget.
  */
-export const generateInvoicePdf = (
+const buildInvoiceDoc = (
   inv: any,
   branding: BrandingMap,
   settings: SettingsMap
-) => {
-  const doc = new jsPDF();
+): jsPDF => {
+  const doc = new jsPDF({ compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 20;
@@ -265,5 +270,32 @@ export const generateInvoicePdf = (
     }
   }
 
+  return doc;
+};
+
+export const generateInvoicePdf = (
+  inv: any,
+  branding: BrandingMap,
+  settings: SettingsMap
+) => {
+  const doc = buildInvoiceDoc(inv, branding, settings);
+  const invoiceNum = inv.invoice_number || `BR-${inv.id?.slice(0, 8).toUpperCase()}`;
   doc.save(`invoice-${invoiceNum}.pdf`);
+};
+
+/**
+ * Builds the invoice PDF and returns a base64 string + filename suitable
+ * for the `attachments` array of `send-transactional-email`.
+ */
+export const generateInvoicePdfBase64 = (
+  inv: any,
+  branding: BrandingMap,
+  settings: SettingsMap
+): { filename: string; base64: string } => {
+  const doc = buildInvoiceDoc(inv, branding, settings);
+  const idPart = (inv.invoice_number || inv.id?.slice(0, 8) || "INV").toString();
+  const filename = `BlueRiver_Invoice_${idPart}.pdf`;
+  const dataUri = doc.output("datauristring");
+  const base64 = dataUri.split(",")[1] ?? "";
+  return { filename, base64 };
 };
