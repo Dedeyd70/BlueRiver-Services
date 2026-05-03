@@ -1,59 +1,62 @@
 ## Goal
-Send transactional emails (booking + quote confirmations) from `BlueRiver Services <info@blueriverservices.co>` via Resend, plus update success toasts to mention the confirmation email.
 
-## Prerequisite (one-time, by you)
-1. Verify the domain `blueriverservices.co` in your Resend dashboard (DNS: SPF, DKIM, DMARC). Required before Resend will send from `info@blueriverservices.co`.
-2. Create a Resend API key — I'll request it via the secret tool so you can paste it in.
+Remove all `mailto:` triggers from form/admin email actions and route every transactional send through the existing `send-transactional-email` Edge Function (Resend). Standardize success toast and silent error handling.
 
-## Implementation
+## Scope
 
-### 1. New Edge Function: `send-transactional-email`
-Path: `supabase/functions/send-transactional-email/index.ts`
+Mailto links used purely as contact info (Contact.tsx, Footer.tsx, PrivacyPolicy.tsx) will be **kept** — they are display links, not form triggers. Only programmatic mailto launches will be removed. `src/lib/mailto.ts` will be deleted.
 
-- Public endpoint (no JWT verification) so the public booking/quote forms can call it.
-- Uses CORS headers.
-- Validates request body with Zod: `{ type: 'booking_confirmation' | 'quote_received' | 'custom', to: string(email), data: object, subject?, html? }`.
-- Reads `RESEND_API_KEY` from secrets.
-- Sends via Resend REST API (`https://api.resend.com/emails`) with:
-  - `from: "BlueRiver Services <info@blueriverservices.co>"`
-  - `reply_to: "info@blueriverservices.co"`
-- Holds simple inline HTML templates for `booking_confirmation` and `quote_received`, easy to customize later. Each template uses brand blue/white styling and inserts the customer name, service, date, time, and total.
-- Returns `{ id }` on success, `{ error }` on failure.
-- Errors are logged but never break the form submission (caller wraps in try/catch).
+## Changes
 
-No `supabase/config.toml` change needed — default `verify_jwt = false` for new Lovable functions.
+### 1. Public forms — already invoke the function; just standardize
 
-### 2. Wire up triggers
-**`src/pages/BookService.tsx`** (after line 409, before toast):
-After successful booking insert, fire-and-forget:
-```ts
-supabase.functions.invoke('send-transactional-email', {
-  body: {
-    type: 'booking_confirmation',
-    to: form.email.trim(),
-    data: { name: form.name, service: serviceName, date, timeSlot, total },
-  },
-}).catch((err) => console.error('Email send failed:', err));
-```
+**`src/pages/BookService.tsx`** (around line 412)
+- Confirm payload: `{ type: "booking_confirmation", to: email, data: { name, service, date, timeSlot, address, total } }`.
+- Wrap in `try/catch` → `console.error` on failure, then ALWAYS show success toast:
+  > "Check your inbox for a confirmation from info@blueriverservices.co. If you don't see it, please check your spam folder and mark us as a safe sender!"
 
-**`src/pages/RequestQuote.tsx`** (after line 225):
-Same pattern with `type: 'quote_received'` and quote-specific data.
+**`src/pages/RequestQuote.tsx`** (around line 228)
+- Confirm payload: `{ type: "quote_received", to: email, data: { name, service, address } }`.
+- Same try/catch + same success toast string.
 
-### 3. Update success toasts
-- BookService line 415 description → `"We'll be in touch within 24 hours. Check your inbox for a confirmation from info@blueriverservices.co. If you don't see it, please check your spam folder and mark us as a safe sender!"`
-- RequestQuote line 231 description → `"Expect a reply within 24 hours. Check your inbox for a confirmation from info@blueriverservices.co. If you don't see it, please check your spam folder and mark us as a safe sender!"`
+**`src/pages/Contact.tsx`**
+- Add `supabase.functions.invoke("send-transactional-email", { body: { type: "custom", to, subject, html } })` on successful submit (currently sends none). Use a small inline HTML acknowledgement. Same success toast appended.
 
-### 4. Secret
-Use `add_secret` to request `RESEND_API_KEY`. I'll only request it after you confirm to proceed (per integration policy).
+### 2. Admin actions — replace `openMailto` with edge function
 
-## Files
-- **New**: `supabase/functions/send-transactional-email/index.ts`
-- **Modified**: `src/pages/BookService.tsx`, `src/pages/RequestQuote.tsx`
+**`src/pages/admin/BookingsAdmin.tsx`**
+- `handleConfirm` (L197): replace `openMailto` → `supabase.functions.invoke("send-transactional-email", { body: { type: "booking_confirmation", to: b.email, data: { name, service, date, total } } })`.
+- `handleSendInvoice` (L314): replace with `type: "custom"` call providing `subject` + `html` derived from invoice (number, total, due date). Toast: "Invoice emailed to {email}".
+- Remove `openMailto`/`MAIL_TEMPLATES` import.
 
-## Testing
-- Run existing Vitest suite — no test changes; data-mapping tests remain valid.
-- After deploy, manually submit a booking on the preview to verify Resend dashboard shows a delivered email.
+**`src/pages/admin/QuotesAdmin.tsx`**
+- `markInProgress.onSuccess` (L268): replace with `type: "custom"` call (subject/html from `quoteInProgress` template content rendered as HTML).
+- `handleSendQuote` (L450): replace with `type: "custom"` call (subject/html for "Your Quote from BlueRiver").
+- Remove `openMailto`/`MAIL_TEMPLATES` import.
 
-## Notes
-- Future templates (e.g., admin notification, invoice, reschedule) can be added by extending the `type` switch in the Edge Function — no new function per template.
-- Recommend (separate task) also wiring an admin notification email to `info@blueriverservices.co` on each new booking/quote — happy to add in a follow-up if you want.
+All admin replacements use try/catch → `console.error` on failure but keep the existing success toast so the UI flow continues.
+
+### 3. Cleanup
+
+- Delete `src/lib/mailto.ts`.
+- Update `src/pages/admin/__tests__/AuditTrail.test.ts` mailto comments to reference the edge function instead.
+- Verify `FullFlow.test.tsx` still passes with the standardized toast string.
+
+### 4. Edge function
+
+No changes required — `send-transactional-email` already supports `booking_confirmation`, `quote_received`, and `custom` types with branded HTML.
+
+## Files Touched
+
+- `src/pages/BookService.tsx`
+- `src/pages/RequestQuote.tsx`
+- `src/pages/Contact.tsx`
+- `src/pages/admin/BookingsAdmin.tsx`
+- `src/pages/admin/QuotesAdmin.tsx`
+- `src/pages/admin/__tests__/AuditTrail.test.ts`
+- Delete `src/lib/mailto.ts`
+
+## Out of Scope
+
+- Display-only `mailto:` links on Contact/Footer/PrivacyPolicy pages (kept; they are user-initiated contact links, not automated triggers).
+- Switching to Lovable Emails infrastructure (project is locked to Resend per prior decision).
