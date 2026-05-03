@@ -21,7 +21,7 @@ import { friendlyRpcError } from "@/lib/friendlyRpcError";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 import { recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
-import { openMailto, MAIL_TEMPLATES } from "@/lib/mailto";
+
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
@@ -191,19 +191,23 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
       qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
-      toast({ title: "Booking confirmed." });
+      toast({ title: "Booking confirmed.", description: "Confirmation email sent to customer." });
 
-      // Open mail client with the standardized confirmation template.
-      openMailto({
-        to: b.email,
-        subject: MAIL_TEMPLATES.bookingConfirmed.subject,
-        bodyTemplate: MAIL_TEMPLATES.bookingConfirmed.body,
-        vars: {
-          name: b.name,
-          service: b.service_type || "your booking",
-          date: b.booking_date ? format(new Date(b.booking_date), "MMMM d, yyyy") : "the scheduled date",
+      // Send branded confirmation email via Resend (fire-and-forget).
+      supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "booking_confirmation",
+          to: b.email,
+          data: {
+            name: b.name,
+            service: b.service_type || "your booking",
+            date: b.booking_date ? format(new Date(b.booking_date), "MMMM d, yyyy") : null,
+            timeSlot: b.time_slot,
+            address: b.address,
+            total: b.total_amount,
+          },
         },
-      });
+      }).catch((err) => console.error("Booking confirmation email failed:", err));
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -311,16 +315,24 @@ const BookingsAdmin = () => {
   };
 
   const handleSendInvoice = async (inv: any, b: any) => {
-    openMailto({
-      to: inv.customer_email || b?.email,
-      subject: MAIL_TEMPLATES.invoiceSend.subject,
-      bodyTemplate: MAIL_TEMPLATES.invoiceSend.body,
-      vars: {
-        name: inv.customer_name || b?.name,
-        service: b?.service_type,
-        date: b?.booking_date ? format(new Date(b.booking_date), "MMMM d, yyyy") : null,
+    const recipient = inv.customer_email || b?.email;
+    const customerName = inv.customer_name || b?.name || "there";
+    const total = Number(inv.total_amount ?? 0).toFixed(2);
+    const html = `
+      <p>Hi ${customerName},</p>
+      <p>Thank you for choosing BlueRiver Services. Your invoice <strong>${inv.invoice_number ?? ""}</strong> is ready.</p>
+      <p><strong>Amount due:</strong> $${total}</p>
+      <p>Please reply to this email if you have any questions.</p>
+      <p>— The BlueRiver Team</p>`;
+    supabase.functions.invoke("send-transactional-email", {
+      body: {
+        type: "custom",
+        to: recipient,
+        subject: `Invoice ${inv.invoice_number ?? ""} from BlueRiver Services`,
+        html,
       },
-    });
+    }).catch((err) => console.error("Invoice email failed:", err));
+    toast({ title: "Invoice emailed", description: `Sent to ${recipient}` });
     if (b?.id) {
       await logBookingActivity(b.id, "note", {
         notes: `Invoice ${inv.invoice_number ?? ""} sent to ${inv.customer_email || b?.email}`,
