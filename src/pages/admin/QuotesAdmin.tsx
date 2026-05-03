@@ -11,7 +11,7 @@ import { ExternalLink, ArrowRightLeft, MessageSquare, Send, Download, PlayCircle
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { generateQuotePdf } from "@/lib/quotePdf";
+import { generateQuotePdf, generateQuotePdfBase64 } from "@/lib/quotePdf";
 import { notifyAdmins } from "@/lib/notifications";
 import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 import DynamicQuoteSummary from "@/components/admin/DynamicQuoteSummary";
@@ -455,24 +455,47 @@ const QuotesAdmin = () => {
 
   const handleSendQuote = async (q: any) => {
     const draft = draftMap[q.id];
-    const totalLine = draft ? `<p><strong>Estimated total:</strong> $${Number(draft.total ?? 0).toFixed(2)}</p>` : "";
+    if (!draft) {
+      toast({
+        title: "Prepare quote first",
+        description: "Please prepare quote before sending",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!branding || !settings) {
+      toast({ title: "Loading branding…", description: "Please try again in a moment." });
+      return;
+    }
+    const totalLine = `<p><strong>Estimated total:</strong> $${Number(draft.total ?? 0).toFixed(2)}</p>`;
     const html = `
       <p>Hi ${q.name || "there"},</p>
-      <p>Thank you for considering BlueRiver Services. Please find your quote details below for <strong>${q.service_type || "your cleaning service"}</strong>.</p>
+      <p>Thank you for considering BlueRiver Services. Your quote for <strong>${q.service_type || "your cleaning service"}</strong> is attached as a PDF.</p>
       ${totalLine}
       <p>Reply to this email if you have any questions or to confirm scheduling.</p>
       <p>— The BlueRiver Team</p>`;
-    supabase.functions.invoke("send-transactional-email", {
-      body: {
-        type: "custom",
-        to: q.email,
-        subject: "Your Quote from BlueRiver Services",
-        html,
-      },
-    }).catch((err) => console.error("Quote send email failed:", err));
-    toast({ title: "Quote sent", description: `Emailed to ${q.email}` });
-    await logActivity(q.id, `Quote sent to ${q.email}`);
-    qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+    try {
+      const { filename, base64 } = generateQuotePdfBase64(q, branding, settings, draft);
+      const { error } = await supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "custom",
+          to: q.email,
+          subject: "Your Quote from BlueRiver Services",
+          html,
+          attachments: [{ filename, content: base64 }],
+        },
+      });
+      if (error) throw error;
+      toast({ title: "Quote sent", description: `Emailed to ${q.email}` });
+      await logActivity(q.id, `Quote sent to ${q.email}`);
+      qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
+    } catch (err) {
+      console.error("Quote send email failed:", err);
+      toast({
+        title: "Failed to send email with attachment. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getNotesForQuote = (quoteId: string) => (allNotes ?? []).filter((n) => n.quote_id === quoteId);

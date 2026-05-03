@@ -74,13 +74,20 @@ const drawLetterhead = (
   return bandH + 8;
 };
 
-export const generateQuotePdf = (
+/**
+ * Branded quote PDF builder. Returns the configured jsPDF instance.
+ *
+ * NOTE (cost-efficiency): `compress: true` keeps attachments small for the
+ * Resend free tier. If a raster logo is added later, use
+ * `addImage(..., 'JPEG', ..., 'FAST')` with quality ~0.6.
+ */
+const buildQuoteDoc = (
   quote: QuoteData,
   branding: BrandingMap,
   settings: SettingsMap,
   draft: QuoteDraft
-) => {
-  const doc = new jsPDF();
+): jsPDF => {
+  const doc = new jsPDF({ compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
   let y = drawLetterhead(doc, pageW, branding, settings);
@@ -312,5 +319,37 @@ export const generateQuotePdf = (
   doc.text("Thank you for choosing BlueRiver Services.", margin, y);
   doc.setTextColor(0, 0, 0);
 
+  return doc;
+};
+
+export const generateQuotePdf = (
+  quote: QuoteData,
+  branding: BrandingMap,
+  settings: SettingsMap,
+  draft: QuoteDraft
+) => {
+  const doc = buildQuoteDoc(quote, branding, settings, draft);
+  const validityDays = draft.validity_days ?? 7;
+  const quoteNum = `Q-${format(new Date(quote.created_at), "yyyy")}-${quote.id.slice(0, 4).toUpperCase()}`;
+  // validityDays referenced to mirror naming; not used in filename.
+  void validityDays;
   doc.save(`quote-${quote.name.replace(/\s+/g, "-").toLowerCase()}-${quoteNum}.pdf`);
+};
+
+/**
+ * Builds the quote PDF and returns a base64 string + filename for use in
+ * the `attachments` array of `send-transactional-email`.
+ */
+export const generateQuotePdfBase64 = (
+  quote: QuoteData,
+  branding: BrandingMap,
+  settings: SettingsMap,
+  draft: QuoteDraft
+): { filename: string; base64: string } => {
+  const doc = buildQuoteDoc(quote, branding, settings, draft);
+  const idPart = quote.id?.slice(0, 8).toUpperCase() ?? "QUOTE";
+  const filename = `BlueRiver_Quote_${idPart}.pdf`;
+  const dataUri = doc.output("datauristring");
+  const base64 = dataUri.split(",")[1] ?? "";
+  return { filename, base64 };
 };

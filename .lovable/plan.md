@@ -1,62 +1,55 @@
-## Goal
+## Conflict Lockdown & Ultra-Light Attachments
 
-Remove all `mailto:` triggers from form/admin email actions and route every transactional send through the existing `send-transactional-email` Edge Function (Resend). Standardize success toast and silent error handling.
+### 1. DB migration — conflict lockdown
 
-## Scope
+New migration file:
+- Update `public.get_booked_slots(date)` to also return rows where `status = 'completed'` (currently only `pending`/`confirmed`).
+- Update `public.check_slot_overlap(...)` to include `'completed'` in its status filter.
+- **De-duplicate existing rows** before recreating the index. For each `(booking_date, time_slot)` group across `pending`/`confirmed`/`completed` with COUNT > 1, keep the newest `created_at` row and mark older ones `status = 'cancelled'` with an audit note appended to `notes`. Confirmed via DB query — there are exactly 3 affected groups (2026‑05‑01 `11:00 AM - 3:00 PM`, 2026‑04‑30 `7:00 AM - 11:00 AM`, 2026‑04‑30 `3:00 PM - 7:00 PM`).
+- Drop and recreate `idx_unique_confirmed_booking_slot` so its `WHERE` clause includes `'completed'` alongside `pending`/`confirmed`.
+- Bonus: log each demoted booking via `booking_activity_logs` with action `cancelled` so admins see why.
 
-Mailto links used purely as contact info (Contact.tsx, Footer.tsx, PrivacyPolicy.tsx) will be **kept** — they are display links, not form triggers. Only programmatic mailto launches will be removed. `src/lib/mailto.ts` will be deleted.
+### 2. Ultra-light PDF generators
 
-## Changes
+`src/lib/invoicePdf.ts` and `src/lib/quotePdf.ts`:
+- Initialize jsPDF with `new jsPDF({ compress: true })` in both generators.
+- No `addImage` calls today (badge is drawn with `roundedRect` + text), so the JPEG/0.6 quality rule applies only IF a logo image is later introduced — add a code comment documenting the requirement so future edits stay compliant.
+- Add new exported helpers without breaking existing download flow:
+  - `generateInvoicePdfBase64(inv, branding, settings) => { filename, base64 }`
+  - `generateQuotePdfBase64(quote, branding, settings, draft) => { filename, base64 }`
+- Internally extract the existing build code into a `build*Doc(...)` function returning the `jsPDF` instance. The existing `generateInvoicePdf` / `generateQuotePdf` keep calling `doc.save(...)` for the download UX. The new base64 helpers call `doc.output("datauristring").split(",")[1]`.
+- Filenames: `BlueRiver_Invoice_<invoice_number_or_id8>.pdf`, `BlueRiver_Quote_<id8>.pdf`.
 
-### 1. Public forms — already invoke the function; just standardize
+### 3. Edge function — `send-transactional-email/index.ts`
+- Extend `Payload` with `attachments?: { filename: string; content: string }[]`.
+- Validation (return 400 on failure, log reason):
+  - Max **2** attachments per request.
+  - Each attachment: filename must end in `.pdf`, base64 content decoded size ≤ **1 MB**, total ≤ **2 MB**.
+- Forward as `attachments: [{ filename, content }]` in the Resend POST body. Resend accepts base64 `content` directly.
+- Keep `FROM = "BlueRiver Services <info@blueriverservices.co>"` and `REPLY_TO = "info@blueriverservices.co"` exactly as today.
+- Redeploy via `supabase--deploy_edge_functions`.
 
-**`src/pages/BookService.tsx`** (around line 412)
-- Confirm payload: `{ type: "booking_confirmation", to: email, data: { name, service, date, timeSlot, address, total } }`.
-- Wrap in `try/catch` → `console.error` on failure, then ALWAYS show success toast:
-  > "Check your inbox for a confirmation from info@blueriverservices.co. If you don't see it, please check your spam folder and mark us as a safe sender!"
+### 4. UI wiring
 
-**`src/pages/RequestQuote.tsx`** (around line 228)
-- Confirm payload: `{ type: "quote_received", to: email, data: { name, service, address } }`.
-- Same try/catch + same success toast string.
+`src/pages/admin/BookingsAdmin.tsx`:
+- `handleSendInvoice`: build attachment via `generateInvoicePdfBase64(inv, branding, pdfSettings)`. Pass `attachments: [{ filename, content: base64 }]` into the `invoke` call. On the invoke promise: `.then` keeps the success toast, `.catch` shows `toast({ title: "Failed to send email with attachment. Please try again.", variant: "destructive" })` and `console.error(err)`. Only fire the success toast after the promise resolves (replace current fire-and-forget pattern).
+- `handleRescheduleConfirm`: catch the Postgres error and surface error code `23505` as `toast({ title: "This slot is already occupied (Confirmed/Completed).", variant: "destructive" })`. Other errors keep `friendlyRpcError` path.
 
-**`src/pages/Contact.tsx`**
-- Add `supabase.functions.invoke("send-transactional-email", { body: { type: "custom", to, subject, html } })` on successful submit (currently sends none). Use a small inline HTML acknowledgement. Same success toast appended.
+`src/pages/admin/QuotesAdmin.tsx`:
+- `handleSendQuote`: same attachment pattern using `generateQuotePdfBase64(q, branding, settings, draftMap[q.id])`. If no draft exists yet, show toast asking admin to prepare quote first (mirrors `handleDownloadPdf`). Same success/error toast flow as invoice path.
 
-### 2. Admin actions — replace `openMailto` with edge function
+### 5. Sender identity
+- `FROM` constant in the edge function stays hardcoded to `BlueRiver Services <info@blueriverservices.co>` — verified in current source. No changes needed.
 
-**`src/pages/admin/BookingsAdmin.tsx`**
-- `handleConfirm` (L197): replace `openMailto` → `supabase.functions.invoke("send-transactional-email", { body: { type: "booking_confirmation", to: b.email, data: { name, service, date, total } } })`.
-- `handleSendInvoice` (L314): replace with `type: "custom"` call providing `subject` + `html` derived from invoice (number, total, due date). Toast: "Invoice emailed to {email}".
-- Remove `openMailto`/`MAIL_TEMPLATES` import.
-
-**`src/pages/admin/QuotesAdmin.tsx`**
-- `markInProgress.onSuccess` (L268): replace with `type: "custom"` call (subject/html from `quoteInProgress` template content rendered as HTML).
-- `handleSendQuote` (L450): replace with `type: "custom"` call (subject/html for "Your Quote from BlueRiver").
-- Remove `openMailto`/`MAIL_TEMPLATES` import.
-
-All admin replacements use try/catch → `console.error` on failure but keep the existing success toast so the UI flow continues.
-
-### 3. Cleanup
-
-- Delete `src/lib/mailto.ts`.
-- Update `src/pages/admin/__tests__/AuditTrail.test.ts` mailto comments to reference the edge function instead.
-- Verify `FullFlow.test.tsx` still passes with the standardized toast string.
-
-### 4. Edge function
-
-No changes required — `send-transactional-email` already supports `booking_confirmation`, `quote_received`, and `custom` types with branded HTML.
-
-## Files Touched
-
-- `src/pages/BookService.tsx`
-- `src/pages/RequestQuote.tsx`
-- `src/pages/Contact.tsx`
+### Files touched
+- New SQL migration (RPCs + dedup + unique index recreate)
+- `supabase/functions/send-transactional-email/index.ts` (+ deploy)
+- `src/lib/invoicePdf.ts`
+- `src/lib/quotePdf.ts`
 - `src/pages/admin/BookingsAdmin.tsx`
 - `src/pages/admin/QuotesAdmin.tsx`
-- `src/pages/admin/__tests__/AuditTrail.test.ts`
-- Delete `src/lib/mailto.ts`
 
-## Out of Scope
-
-- Display-only `mailto:` links on Contact/Footer/PrivacyPolicy pages (kept; they are user-initiated contact links, not automated triggers).
-- Switching to Lovable Emails infrastructure (project is locked to Resend per prior decision).
+### Out of scope
+- Customer-facing booking/quote confirmation emails do not get attachments (no PDF context at submit time).
+- No changes to `InvoicesAdmin.tsx` send paths (not requested).
+- Brand asset image-based logo (still drawn programmatically; documented for future).
