@@ -245,6 +245,25 @@ const BookingsAdmin = () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
       qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
       toast({ title: `Marked completed. Invoice ${invoice?.invoice_number ?? ""} created.` });
+
+      // Fire-and-forget: ask the customer for a review
+      if (b.email) {
+        const reviewLink = `${window.location.origin}/review/${b.id}?email=${encodeURIComponent(b.email)}`;
+        const reviewHtml = `
+          <p>Hi ${b.name || "there"},</p>
+          <p>Thanks for choosing BlueRiver Services! We'd love to hear how it went.</p>
+          <p style="margin:20px 0;"><a href="${reviewLink}" style="background:#1e40af;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Leave a Review</a></p>
+          <p>It only takes a minute and really helps our small team.</p>
+          <p>— The BlueRiver Team</p>`;
+        supabase.functions.invoke("send-transactional-email", {
+          body: {
+            type: "custom",
+            to: b.email,
+            subject: "How was your BlueRiver cleaning?",
+            html: reviewHtml,
+          },
+        }).catch((err) => console.error("Review request email failed:", err));
+      }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -321,11 +340,25 @@ const BookingsAdmin = () => {
     }
     const recipient = inv.customer_email || b?.email;
     const customerName = inv.customer_name || b?.name || "there";
-    const total = Number(inv.total_amount ?? 0).toFixed(2);
+    // Defensive fallback: if persisted total is 0, recompute from line_items.
+    let totalNum = Number(inv.total_amount ?? 0);
+    if (!totalNum || totalNum <= 0) {
+      const items: any[] = Array.isArray(inv.line_items) ? inv.line_items : [];
+      totalNum = items.reduce((sum, li: any) => {
+        const qty = Number(li?.quantity) || 1;
+        const unit = Number(li?.unit_price ?? li?.price) || 0;
+        return sum + (Number(li?.total_price) || qty * unit);
+      }, 0);
+    }
+    const total = totalNum.toFixed(2);
     const html = `
       <p>Hi ${customerName},</p>
       <p>Thank you for choosing BlueRiver Services. Your invoice <strong>${inv.invoice_number ?? ""}</strong> is attached as a PDF.</p>
       <p><strong>Amount due:</strong> $${total}</p>
+      <h3 style="margin:20px 0 6px;color:#1e40af;">Payment Instructions</h3>
+      <p style="margin:0 0 4px;">Pay via <strong>Zelle</strong> to <a href="mailto:info@blueriverservices.co">info@blueriverservices.co</a>.</p>
+      <p style="margin:0 0 4px;">Memo: Invoice #${inv.invoice_number ?? ""}</p>
+      <p style="margin:0 0 16px;">Cash also accepted on-site.</p>
       <p>Please reply to this email if you have any questions.</p>
       <p>— The BlueRiver Team</p>`;
     try {
