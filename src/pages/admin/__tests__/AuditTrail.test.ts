@@ -20,7 +20,7 @@ beforeEach(() => {
 
 // Mirrors QuotesAdmin.handleSendQuote (after the mailto step).
 const handleSendQuote = async (q: { id: string; email: string }) => {
-  // ...mailto.open(...)
+  // ...supabase.functions.invoke("send-transactional-email", ...)
   await logActivity(q.id, `Quote sent to ${q.email}`);
 };
 
@@ -32,7 +32,7 @@ const handleDownloadQuotePdf = async (q: { id: string }) => {
 
 // Mirrors BookingsAdmin.handleSendInvoice.
 const handleSendInvoice = async (inv: { id: string; customer_email: string }, b: { id: string }) => {
-  // ...mailto.open(...)
+  // ...supabase.functions.invoke("send-transactional-email", ...)
   await logBookingActivity(b.id, "note", {
     notes: `Invoice ${inv.id} emailed to ${inv.customer_email}`,
   });
