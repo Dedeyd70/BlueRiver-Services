@@ -246,6 +246,25 @@ const buildInvoiceDoc = (
     y += 5;
   }
 
+  // Payment Instructions (Zelle, non-transactional)
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...PRIMARY);
+  doc.text("Payment Instructions", margin, y);
+  doc.setTextColor(0, 0, 0);
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const payLines = [
+    "Pay via Zelle to: info@blueriverservices.co",
+    `Memo: Invoice #${invoiceNum}`,
+    "Cash also accepted on-site.",
+  ];
+  payLines.forEach((line) => {
+    doc.text(line, margin, y);
+    y += 5;
+  });
+  y += 4;
+
   // Footer thank-you
   doc.setTextColor(...PRIMARY);
   doc.setFont("helvetica", "bold");
