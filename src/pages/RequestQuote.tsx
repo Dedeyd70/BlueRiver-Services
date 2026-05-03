@@ -224,11 +224,24 @@ const RequestQuote = () => {
 
       await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, insertedQuote?.id, "quote");
 
+      // Fire-and-forget customer confirmation email via Resend.
+      supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "quote_received",
+          to: form.email.trim(),
+          data: {
+            name: form.name.trim(),
+            service: form.service,
+            address: form.address.trim(),
+          },
+        },
+      }).catch((err) => console.error("Confirmation email failed:", err));
+
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
 
       setSubmitted(true);
-      toast({ title: "Quote received!", description: "Expect a reply within 24 hours." });
+      toast({ title: "Quote received!", description: "Expect a reply within 24 hours. Check your inbox for a confirmation from info@blueriverservices.co. If you don't see it, please check your spam folder and mark us as a safe sender!" });
     } catch (e: any) {
       console.error("Quote submit threw:", e);
       toast({ title: "Quote submission failed", description: e?.message ?? String(e) ?? "An unexpected error occurred.", variant: "destructive" });
