@@ -854,27 +854,18 @@ const QuotesAdmin = () => {
                             )}
                           </div>
 
-                          <div className="border-t border-border pt-3">
-                            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                              <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
-                            </div>
-                            <div className="mt-3 space-y-2">
-                              {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
-                              {notes.map((n) => (
-                                <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs font-medium text-foreground">
-                                      Note <span className="font-normal text-muted-foreground">by {resolveActor(n.created_by)}</span>
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
-                                    </span>
-                                  </div>
-                                  <p className="text-foreground mt-1 whitespace-pre-wrap">{n.note}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <RecordActivityPanel
+                            collapsible={false}
+                            readOnly
+                            entries={notes.map((n: any): ActivityEntry => ({
+                              id: n.id,
+                              action: "note",
+                              notes: n.note,
+                              actor_id: n.created_by,
+                              created_at: n.created_at,
+                            }))}
+                            resolveActor={resolveActor}
+                          />
 
                           <div className="pt-2">
                             <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
