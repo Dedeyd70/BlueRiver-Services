@@ -7,6 +7,7 @@ import PricingSettings from "@/components/admin/PricingSettings";
 import PricingMultipliersSettings from "@/components/admin/PricingMultipliersSettings";
 import SocialLinksSettings from "@/components/admin/SocialLinksSettings";
 import ContentManagementSettings from "@/components/admin/ContentManagementSettings";
+import ServiceAreasSettings from "@/components/admin/ServiceAreasSettings";
 import { useHasPermission } from "@/hooks/usePermissions";
 
 const SettingsAdmin = () => {
@@ -26,6 +27,7 @@ const SettingsAdmin = () => {
     { value: "multipliers", label: "Pricing Multipliers", allowed: canEditPricing, content: <PricingMultipliersSettings /> },
     { value: "socials", label: "Social Media", allowed: canManageSocials, content: <SocialLinksSettings /> },
     { value: "content", label: "Content Management", allowed: canManageSettings, content: <ContentManagementSettings /> },
+    { value: "areas", label: "Service Areas", allowed: canManageSettings, content: <ServiceAreasSettings /> },
   ].filter((t) => t.allowed);
 
   return (

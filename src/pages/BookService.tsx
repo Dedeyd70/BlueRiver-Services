@@ -15,9 +15,13 @@ import { format, isBefore, startOfDay, getDay } from "date-fns";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import { notifyAdmins } from "@/lib/notifications";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useServiceAreas } from "@/hooks/useServiceAreas";
 import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
 import { computeQuote } from "@/lib/pricingEngine";
+
+const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail"];
+const isCommercialService = (s: string) => /commercial/i.test(s ?? "");
 
 // Keys mapped to typed columns on bookings table; everything else → custom_fields JSON.
 const BOOKING_TYPED_KEYS = new Set([
@@ -30,6 +34,7 @@ const BOOKING_BOOLEAN_KEYS = new Set(["has_pets", "is_empty_property"]);
 const BookService = () => {
   const { toast } = useToast();
   const { data: siteSettings } = useSiteSettings();
+  const { data: serviceAreas } = useServiceAreas(true);
   const [searchParams] = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
   const prefilledAddon = searchParams.get("addon") || "";
@@ -486,6 +491,11 @@ const BookService = () => {
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Address *</label>
                     <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
+                    {serviceAreas && serviceAreas.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Serving {serviceAreas[0].city}: {serviceAreas.map((a) => a.zip).join(", ")}
+                      </p>
+                    )}
                   </div>
 
                   {/* Service Type — drives the dynamic form */}
@@ -522,10 +532,9 @@ const BookService = () => {
                             <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
                             <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                               <option value="">Select type</option>
-                              <option value="House">House</option>
-                              <option value="Apartment">Apartment</option>
-                              <option value="Office">Office</option>
-                              <option value="Townhome">Townhome</option>
+                              {(isCommercialService(form.service) ? COMMERCIAL_PROPERTY_TYPES : ["House", "Apartment", "Office", "Townhome"]).map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
                             </select>
                           </div>
                           <div>
@@ -565,15 +574,19 @@ const BookService = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <Checkbox id="book-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v, pet_count: v ? f.pet_count : "" }))} />
-                          <label htmlFor="book-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
-                        </div>
-                        {form.has_pets && (
-                          <div>
-                            <label className="text-sm font-medium text-foreground mb-1.5 block">Number of Pets</label>
-                            <Input type="number" inputMode="numeric" min={1} placeholder="e.g. 2" value={form.pet_count} onChange={update("pet_count")} className="max-w-[140px]" />
-                          </div>
+                        {!isCommercialService(form.service) && (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Checkbox id="book-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v, pet_count: v ? f.pet_count : "" }))} />
+                              <label htmlFor="book-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
+                            </div>
+                            {form.has_pets && (
+                              <div>
+                                <label className="text-sm font-medium text-foreground mb-1.5 block">Number of Pets</label>
+                                <Input type="number" inputMode="numeric" min={1} placeholder="e.g. 2" value={form.pet_count} onChange={update("pet_count")} className="max-w-[140px]" />
+                              </div>
+                            )}
+                          </>
                         )}
                         <div>
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Entry Codes / Key Location</label>
