@@ -959,6 +959,33 @@ export type Database = {
         }
         Relationships: []
       }
+      service_areas: {
+        Row: {
+          city: string
+          created_at: string
+          id: string
+          is_active: boolean
+          updated_at: string
+          zip: string
+        }
+        Insert: {
+          city?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          zip: string
+        }
+        Update: {
+          city?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          zip?: string
+        }
+        Relationships: []
+      }
       service_fields: {
         Row: {
           created_at: string
