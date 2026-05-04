@@ -8,6 +8,7 @@ import { Phone, Mail, MapPin, CheckCircle, Clock, CalendarDays, CalendarPlus, Fi
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useServiceAreas } from "@/hooks/useServiceAreas";
 import { useQuery } from "@tanstack/react-query";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +18,7 @@ const Contact = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { data: settings } = useSiteSettings();
+  const { data: serviceAreas } = useServiceAreas(true);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(false);
@@ -285,11 +287,20 @@ const Contact = () => {
                       <p className="text-sm">{email}</p>
                     </div>
                   </a>
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <MapPin className="w-5 h-5 text-sky" />
+                  <div className="flex items-start gap-3 text-muted-foreground">
+                    <MapPin className="w-5 h-5 text-sky mt-0.5 shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-foreground">Service Area</p>
-                      <p className="text-sm">{serviceArea}</p>
+                      {serviceAreas && serviceAreas.length > 0 ? (
+                        <>
+                          <p className="text-sm">Serving {serviceAreas[0].city}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            ZIPs: {serviceAreas.map((a) => a.zip).join(", ")}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm">{serviceArea}</p>
+                      )}
                     </div>
                   </div>
                 </div>
