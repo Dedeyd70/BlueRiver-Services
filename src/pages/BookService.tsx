@@ -15,9 +15,13 @@ import { format, isBefore, startOfDay, getDay } from "date-fns";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import { notifyAdmins } from "@/lib/notifications";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useServiceAreas } from "@/hooks/useServiceAreas";
 import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
 import { computeQuote } from "@/lib/pricingEngine";
+
+const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail"];
+const isCommercialService = (s: string) => /commercial/i.test(s ?? "");
 
 // Keys mapped to typed columns on bookings table; everything else → custom_fields JSON.
 const BOOKING_TYPED_KEYS = new Set([
@@ -30,6 +34,7 @@ const BOOKING_BOOLEAN_KEYS = new Set(["has_pets", "is_empty_property"]);
 const BookService = () => {
   const { toast } = useToast();
   const { data: siteSettings } = useSiteSettings();
+  const { data: serviceAreas } = useServiceAreas(true);
   const [searchParams] = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
   const prefilledAddon = searchParams.get("addon") || "";
@@ -486,6 +491,11 @@ const BookService = () => {
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">Address *</label>
                     <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
+                    {serviceAreas && serviceAreas.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Serving {serviceAreas[0].city}: {serviceAreas.map((a) => a.zip).join(", ")}
+                      </p>
+                    )}
                   </div>
 
                   {/* Service Type — drives the dynamic form */}
