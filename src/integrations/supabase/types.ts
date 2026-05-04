@@ -1265,6 +1265,7 @@ export type Database = {
           time_slot: string
         }[]
       }
+      get_public_stats: { Args: never; Returns: Json }
       has_permission: {
         Args: { _key: string; _user_id: string }
         Returns: boolean
