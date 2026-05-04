@@ -71,6 +71,18 @@ const IndexPage = () => {
       return data ?? [];
     },
   });
+  const { data: publicReviews } = useQuery({
+    queryKey: ["public-reviews"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("reviews")
+        .select("id, customer_name, rating, comment, created_at")
+        .eq("is_public", true)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      return data ?? [];
+    },
+  });
   const { data: beforeAfter } = useQuery({
     queryKey: ["public-before-after-home"],
     queryFn: async () => {
