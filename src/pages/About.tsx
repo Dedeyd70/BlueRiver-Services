@@ -6,6 +6,7 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import defaultLogo from "@/assets/blueriver-logo.png";
 
 const values = [
@@ -31,6 +32,21 @@ const About = () => {
       const map: Record<string, string> = {};
       data?.forEach((r: any) => (map[r.setting_key] = r.setting_value));
       return map;
+    },
+  });
+  const { data: stats } = useQuery({
+    queryKey: ["public-stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_public_stats" as any);
+      if (error) throw error;
+      return (data ?? {}) as { completed_bookings?: number; unique_customers?: number; avg_rating?: number };
+    },
+  });
+  const { data: faqs } = useQuery({
+    queryKey: ["public-faqs"],
+    queryFn: async () => {
+      const { data } = await supabase.from("faqs").select("*").eq("is_active", true).order("display_order");
+      return data ?? [];
     },
   });
   const logoUrl = branding?.logo_url || defaultLogo;
