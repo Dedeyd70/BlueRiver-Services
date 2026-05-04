@@ -87,6 +87,65 @@ const QuotesAdmin = () => {
     if (focusId) setExpandedId(focusId);
   }, [focusId]);
 
+  // Prefill flow: when arriving from MessagesAdmin "Convert to Quote",
+  // create a new quote_request prefilled with the contact's data, mark the
+  // contact as converted, and log activity on both sides. Runs once.
+  const [prefillProcessed, setPrefillProcessed] = useState(false);
+  useEffect(() => {
+    if (!prefillFromContact || prefillProcessed) return;
+    setPrefillProcessed(true);
+    (async () => {
+      try {
+        const { data: contact, error: cErr } = await supabase
+          .from("contact_submissions")
+          .select("*")
+          .eq("id", prefillFromContact)
+          .maybeSingle();
+        if (cErr || !contact) throw cErr || new Error("Contact not found");
+
+        const { data: inserted, error: insErr } = await supabase
+          .from("quote_requests")
+          .insert({
+            name: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+            service_type: contact.service_type || null,
+            description: contact.message || "Converted from contact submission.",
+            status: "requested",
+            consent_given: true,
+            preferred_contact: "email",
+          } as any)
+          .select("id")
+          .maybeSingle();
+        if (insErr || !inserted) throw insErr || new Error("Failed to create quote");
+
+        await supabase
+          .from("contact_submissions")
+          .update({ status: "converted" } as any)
+          .eq("id", contact.id);
+
+        await (supabase as any).rpc("log_contact_activity", {
+          p_contact_id: contact.id,
+          p_action: "converted",
+          p_previous_status: contact.status,
+          p_new_status: "converted",
+          p_details: `Quote ${inserted.id} created`,
+        });
+
+        toast({ title: "Quote created from contact", description: `${contact.name} prefilled and ready.` });
+        qc.invalidateQueries({ queryKey: ["admin-quotes"] });
+        qc.invalidateQueries({ queryKey: ["admin-contact-messages"] });
+        qc.invalidateQueries({ queryKey: ["contact-activity-logs"] });
+        navigate(`/admin/quotes?focus=${inserted.id}`, { replace: true });
+        setExpandedId(inserted.id);
+      } catch (e: any) {
+        toast({ title: "Convert failed", description: e?.message || String(e), variant: "destructive" });
+        navigate(`/admin/quotes`, { replace: true });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillFromContact]);
+
   const { data: quotes, isLoading } = useQuery({
     queryKey: ["admin-quotes"],
     queryFn: async () => {
