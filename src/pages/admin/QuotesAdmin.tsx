@@ -19,6 +19,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import HasPermission from "@/components/HasPermission";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import RecordActivityPanel, { ActivityEntry } from "@/components/admin/RecordActivityPanel";
 
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
@@ -664,45 +665,19 @@ const QuotesAdmin = () => {
                             })()}
                           </div>
 
-                          {/* Activity Log — always visible inside the expanded card */}
-                          <div className="border-t border-border pt-3">
-                            <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                              <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({notes.length})
-                            </div>
-                            <div className="mt-3 space-y-2">
-                              {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet.</p>}
-                              {notes.map((n) => (
-                                <div key={n.id} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs font-medium text-foreground">
-                                      Note <span className="font-normal text-muted-foreground">by {resolveActor(n.created_by)}</span>
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {format(new Date(n.created_at), "MMM d, yyyy 'at' h:mm a")}
-                                    </span>
-                                  </div>
-                                  <p className="text-foreground mt-1 whitespace-pre-wrap">{n.note}</p>
-                                </div>
-                              ))}
-                              <div className="flex gap-2">
-                                <Input
-                                  value={newNote}
-                                  onChange={(e) => setNewNote(e.target.value)}
-                                  placeholder="Add a note..."
-                                  className="flex-1 h-8 text-sm"
-                                />
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => addNote.mutate({ quoteId: q.id, note: newNote })}
-                                  className="h-8"
-                                  disabled={!newNote.trim()}
-                                >
-                                  <Send className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
+                          <RecordActivityPanel
+                            collapsible={false}
+                            entries={notes.map((n: any): ActivityEntry => ({
+                              id: n.id,
+                              action: "note",
+                              notes: n.note,
+                              actor_id: n.created_by,
+                              created_at: n.created_at,
+                            }))}
+                            resolveActor={resolveActor}
+                            permission="can_manage_quotes"
+                            onAddNote={async (note) => addNote.mutate({ quoteId: q.id, note })}
+                          />
 
                           {/* Action Buttons */}
                           <div className="flex flex-wrap gap-2 pt-1">
