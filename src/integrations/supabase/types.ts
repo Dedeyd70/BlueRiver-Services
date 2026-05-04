@@ -281,6 +281,42 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_activity_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          contact_id: string
+          created_at: string
+          details: string | null
+          id: string
+          new_status: string | null
+          notes: string | null
+          previous_status: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          contact_id: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          new_status?: string | null
+          notes?: string | null
+          previous_status?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          contact_id?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          new_status?: string | null
+          notes?: string | null
+          previous_status?: string | null
+        }
+        Relationships: []
+      }
       contact_submissions: {
         Row: {
           admin_notes: string | null
@@ -1303,6 +1339,17 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      log_contact_activity: {
+        Args: {
+          p_action: string
+          p_contact_id: string
+          p_details?: string
+          p_new_status?: string
+          p_notes?: string
+          p_previous_status?: string
+        }
+        Returns: string
       }
       mark_invoice_paid: { Args: { p_invoice_id: string }; Returns: Json }
       parse_time_slot: { Args: { p_slot: string }; Returns: unknown }
