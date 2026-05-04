@@ -4,6 +4,7 @@ import { Phone, Mail, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServices } from "@/hooks/useServices";
 import { useSocialLinks } from "@/hooks/useSocialLinks";
+import { useServiceAreas } from "@/hooks/useServiceAreas";
 import { getSocialIcon } from "@/lib/socialIcons";
 import logo from "@/assets/blueriver-logo.png";
 
@@ -11,6 +12,7 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
   const { data: settings } = useSiteSettings();
   const { services } = useServices();
   const { data: socialLinks } = useSocialLinks();
+  const { data: serviceAreas } = useServiceAreas(true);
 
   const phone = settings?.phone || "(206) 317-8300";
   const phoneLink = settings?.phone_link || "+12063178300";
@@ -84,8 +86,13 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
               <a href={`mailto:${email}`} className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
                 <Mail className="w-4 h-4" /> {email}
               </a>
-              <span className="flex items-center gap-2 text-sm text-navy-foreground/70">
-                <MapPin className="w-4 h-4" /> {serviceArea}
+              <span className="flex items-start gap-2 text-sm text-navy-foreground/70">
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>
+                  {serviceAreas && serviceAreas.length > 0
+                    ? `Serving ${serviceAreas[0].city}: ${serviceAreas.map((a) => a.zip).join(", ")}`
+                    : serviceArea}
+                </span>
               </span>
             </div>
           </div>
