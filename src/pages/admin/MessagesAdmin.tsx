@@ -1,21 +1,19 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Mail, CheckCircle, ArrowRight, MessageSquare } from "lucide-react";
+import { Mail, ArrowRight } from "lucide-react";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import PermissionGate from "@/components/PermissionGate";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 import RecordActivityPanel, { ActivityEntry } from "@/components/admin/RecordActivityPanel";
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
+import ContactReplyComposer from "@/components/admin/ContactReplyComposer";
 
 interface ContactSubmission {
   id: string;
@@ -30,30 +28,41 @@ interface ContactSubmission {
   admin_notes: string | null;
 }
 
+// Status mapping: existing column values → CRM labels
+// pending→New, read→In Progress, converted→Quoted, responded→Archived
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "pending", label: "New" },
+  { value: "read", label: "In Progress" },
+  { value: "converted", label: "Quoted" },
+  { value: "responded", label: "Archived" },
+];
+const STATUS_LABEL: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
 const ARCHIVE_STATUSES = new Set(["responded", "converted"]);
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
   read: "bg-blue-100 text-blue-800",
-  responded: "bg-green-100 text-green-800",
-  converted: "bg-primary/10 text-primary",
+  responded: "bg-muted text-muted-foreground",
+  converted: "bg-green-100 text-green-800",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  status_change: "Status changed",
+  note: "Note",
+  reply_sent: "Reply sent",
+  converted: "Converted to quote",
 };
 
 const MessagesAdmin = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get("focus");
 
-  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [archivePage, setArchivePage] = useState(1);
-
-  // Convert dialog state
-  const [convertTarget, setConvertTarget] = useState<ContactSubmission | null>(null);
-  const [convertService, setConvertService] = useState("");
-  const [convertDescription, setConvertDescription] = useState("");
 
   const { data: messages, isLoading } = useQuery({
     queryKey: ["admin-contact-messages"],
@@ -67,25 +76,40 @@ const MessagesAdmin = () => {
     },
   });
 
-  // Service list (main only) for the Convert-to-Quote service select.
-  const { data: services } = useQuery({
-    queryKey: ["services-main-for-convert"],
+  const { data: activityByContact } = useQuery({
+    queryKey: ["contact-activity-logs"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("services")
-        .select("title")
-        .eq("is_active", true)
-        .neq("service_category", "addon")
-        .order("display_order");
-      return (data ?? []) as { title: string }[];
+      const { data, error } = await (supabase as any)
+        .from("contact_activity_logs")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const map: Record<string, ActivityEntry[]> = {};
+      (data ?? []).forEach((row: any) => {
+        const detailParts: string[] = [];
+        if (row.action === "status_change") {
+          detailParts.push(`${STATUS_LABEL[row.previous_status] ?? row.previous_status ?? "—"} → ${STATUS_LABEL[row.new_status] ?? row.new_status ?? "—"}`);
+        }
+        if (row.details) detailParts.push(row.details);
+        const entry: ActivityEntry = {
+          id: row.id,
+          action: row.action,
+          notes: row.notes,
+          details: detailParts.join(" • ") || null,
+          actor_id: row.actor_id,
+          created_at: row.created_at,
+        };
+        (map[row.contact_id] ||= []).push(entry);
+      });
+      // RecordActivityPanel renders chronologically; ensure ascending by created_at
+      Object.keys(map).forEach((k) => map[k].reverse());
+      return map;
     },
   });
 
-  // Shared admin name lookup via RPC (Manager/Staff included).
   const { data: adminUserMap } = useAdminUserNames();
-  // contact_submissions doesn't carry actor_id, so log entries default to "Admin user".
   const resolveActor = (id?: string | null): string => {
-    if (!id) return "Admin user";
+    if (!id) return "System";
     return adminUserMap?.[id] || "Admin user";
   };
 
@@ -95,79 +119,44 @@ const MessagesAdmin = () => {
     if (focusId) setExpandedId(focusId);
   }, [focusId]);
 
-  const updateMessage = useMutation({
-    mutationFn: async ({ id, status, admin_notes }: { id: string; status: string; admin_notes?: string }) => {
-      const patch: any = { status };
-      if (admin_notes !== undefined) patch.admin_notes = admin_notes;
-      const { data, error } = await supabase
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
+    queryClient.invalidateQueries({ queryKey: ["contact-activity-logs"] });
+  };
+
+  const changeStatus = useMutation({
+    mutationFn: async ({ m, next }: { m: ContactSubmission; next: string }) => {
+      if (m.status === next) return;
+      const { error } = await supabase
         .from("contact_submissions")
-        .update(patch)
-        .eq("id", id)
-        .select("id")
-        .maybeSingle();
+        .update({ status: next } as any)
+        .eq("id", m.id);
       if (error) throw error;
-      if (!data) throw new Error("Update blocked by permissions or RLS");
+      await (supabase as any).rpc("log_contact_activity", {
+        p_contact_id: m.id,
+        p_action: "status_change",
+        p_previous_status: m.status,
+        p_new_status: next,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
-      toast({ title: "Update successful." });
+      refreshAll();
+      toast({ title: "Status updated." });
     },
-    onError: (err: Error) => {
-      toast({ title: "Update failed.", description: err.message, variant: "destructive" });
-    },
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
 
-  const addNote = (m: ContactSubmission) => {
-    const next = (noteDraft[m.id] || "").trim();
-    if (!next) return;
-    // Append to existing admin_notes (single text column → keep entries separated by line break + timestamp).
-    const stamp = format(new Date(), "MMM d, yyyy 'at' h:mm a");
-    const prefix = m.admin_notes ? `${m.admin_notes}\n---\n` : "";
-    const composed = `${prefix}[${stamp}] ${next}`;
-    updateMessage.mutate(
-      { id: m.id, status: m.status === "pending" ? "read" : m.status, admin_notes: composed },
-      {
-        onSuccess: () => setNoteDraft((p) => ({ ...p, [m.id]: "" })),
-      }
-    );
-  };
-
-  const openConvert = (m: ContactSubmission) => {
-    setConvertTarget(m);
-    setConvertService(m.service_type || "");
-    setConvertDescription(m.message || "");
-  };
-
-  const convertToQuote = useMutation({
-    mutationFn: async () => {
-      if (!convertTarget) throw new Error("No submission selected");
-      if (!convertDescription.trim()) throw new Error("Description is required");
-      const { error: insertErr } = await supabase.from("quote_requests").insert({
-        name: convertTarget.name,
-        email: convertTarget.email,
-        phone: convertTarget.phone,
-        service_type: convertService || null,
-        description: convertDescription.trim(),
-        status: "requested",
-        consent_given: true,
-        preferred_contact: "email",
-      } as any);
-      if (insertErr) throw insertErr;
-      const { error: updErr } = await supabase
-        .from("contact_submissions")
-        .update({ status: "converted" } as any)
-        .eq("id", convertTarget.id);
-      if (updErr) throw updErr;
+  const addNote = useMutation({
+    mutationFn: async ({ id, note }: { id: string; note: string }) => {
+      const { error } = await (supabase as any).rpc("log_contact_activity", {
+        p_contact_id: id,
+        p_action: "note",
+        p_notes: note,
+      });
+      if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-quotes"] });
-      toast({ title: "Submission converted to quote request." });
-      setConvertTarget(null);
-      setConvertService("");
-      setConvertDescription("");
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => refreshAll(),
+    onError: (e: Error) => toast({ title: "Could not add note", description: e.message, variant: "destructive" }),
   });
 
   if (isLoading) return <p className="p-8">Loading messages...</p>;
@@ -176,24 +165,15 @@ const MessagesAdmin = () => {
   const active = all.filter((m) => !ARCHIVE_STATUSES.has(m.status));
   const archived = all.filter((m) => ARCHIVE_STATUSES.has(m.status));
 
-  // Parse stored admin_notes back into stamped entries for log rendering.
-  const parseLogEntries = (raw: string | null): { stamp: string | null; text: string }[] => {
-    if (!raw) return [];
-    return raw.split(/\n---\n/).map((chunk) => {
-      const m = chunk.match(/^\[([^\]]+)\]\s*([\s\S]*)$/);
-      return m ? { stamp: m[1], text: m[2] } : { stamp: null, text: chunk };
-    });
-  };
-
   const renderCard = (m: ContactSubmission, readOnly: boolean) => {
-    const entries = parseLogEntries(m.admin_notes);
+    const entries = activityByContact?.[m.id] ?? [];
     const statusBadge = (
       <span
-        className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${
+        className={`text-xs px-2 py-1 rounded-full font-medium ${
           statusColors[m.status] || "bg-muted text-muted-foreground"
         }`}
       >
-        {m.status}
+        {STATUS_LABEL[m.status] ?? m.status}
       </span>
     );
 
@@ -209,9 +189,9 @@ const MessagesAdmin = () => {
         onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
         summary={[
           { label: "Service", value: m.service_type || "General" },
-          { label: "Status", value: <span className="capitalize">{m.status}</span> },
+          { label: "Status", value: STATUS_LABEL[m.status] ?? m.status },
           { label: "Submitted", value: format(new Date(m.created_at), "MMM d, yyyy") },
-          { label: "Notes", value: String(entries.length) },
+          { label: "Activity", value: String(entries.length) },
         ]}
       >
         {/* Original message */}
@@ -220,7 +200,35 @@ const MessagesAdmin = () => {
           <p className="whitespace-pre-wrap">{m.message}</p>
         </div>
 
-        {/* Submission details — labelled key/value list */}
+        {/* Status select + Convert button */}
+        {!readOnly && (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <PermissionGate permission="can_manage_messages">
+              <label className="text-sm font-medium">Status:</label>
+              <select
+                className="flex h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={m.status}
+                onChange={(e) => changeStatus.mutate({ m, next: e.target.value })}
+                disabled={changeStatus.isPending}
+              >
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </PermissionGate>
+            <PermissionGate permission="can_manage_messages">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => navigate(`/admin/quotes?prefillFromContact=${m.id}`)}
+              >
+                <ArrowRight className="w-4 h-4 mr-1" /> Convert to Quote
+              </Button>
+            </PermissionGate>
+          </div>
+        )}
+
+        {/* Submission details */}
         <div className="border-t border-border pt-3">
           <p className="text-sm font-semibold text-foreground mb-2">Submission Details</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
@@ -229,9 +237,8 @@ const MessagesAdmin = () => {
               ["Email", m.email],
               ["Phone", m.phone || "—"],
               ["Service", m.service_type || "General Inquiry"],
-              ["Status", m.status],
+              ["Status", STATUS_LABEL[m.status] ?? m.status],
               ["Submitted", format(new Date(m.created_at), "MMM d, yyyy 'at' h:mm a")],
-              ["Last updated", format(new Date(m.updated_at), "MMM d, yyyy 'at' h:mm a")],
             ].map(([label, value]) => (
               <div key={label as string} className="min-w-0">
                 <span className="text-xs text-muted-foreground block">{label}</span>
@@ -241,55 +248,38 @@ const MessagesAdmin = () => {
           </div>
         </div>
 
+        {/* Smart Reply composer */}
+        {!readOnly && (
+          <ContactReplyComposer
+            contactId={m.id}
+            to={m.email}
+            customerName={m.name}
+            onSent={async () => {
+              // Auto-bump status from New → In Progress when first reply sent
+              if (m.status === "pending") {
+                await changeStatus.mutateAsync({ m, next: "read" });
+              } else {
+                refreshAll();
+              }
+            }}
+          />
+        )}
+
         <RecordActivityPanel
           collapsible={false}
           readOnly={readOnly}
-          entries={entries.map((e, i): ActivityEntry => ({
-            id: `${m.id}-${i}`,
-            action: "note",
-            notes: e.text,
-            created_at: e.stamp ? new Date(e.stamp).toISOString() : m.updated_at,
-          }))}
-          resolveActor={() => "Admin user"}
+          entries={entries}
+          resolveActor={resolveActor}
+          actionLabels={ACTION_LABELS}
           permission="can_manage_messages"
-          onAddNote={async (note) => {
-            const stamp = format(new Date(), "MMM d, yyyy 'at' h:mm a");
-            const prefix = m.admin_notes ? `${m.admin_notes}\n---\n` : "";
-            const composed = `${prefix}[${stamp}] ${note}`;
-            updateMessage.mutate({
-              id: m.id,
-              status: m.status === "pending" ? "read" : m.status,
-              admin_notes: composed,
-            });
-          }}
+          onAddNote={async (note) => addNote.mutateAsync({ id: m.id, note })}
         />
 
-        {/* Actions */}
-        {readOnly ? (
+        {readOnly && (
           <div className="pt-2">
             <p className="text-xs text-muted-foreground italic bg-muted/30 inline-block px-3 py-1 rounded-md">
               Archived record — actions disabled.
             </p>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50">
-            {m.status === "pending" && (
-              <PermissionGate permission="can_manage_messages">
-                <Button variant="outline" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "read" })}>
-                  <CheckCircle className="w-4 h-4 mr-1 text-green-500" /> Mark Read
-                </Button>
-              </PermissionGate>
-            )}
-            <PermissionGate permission="can_manage_messages">
-              <Button variant="outline" size="sm" onClick={() => updateMessage.mutate({ id: m.id, status: "responded" })}>
-                Mark Responded
-              </Button>
-            </PermissionGate>
-            <PermissionGate permission="can_manage_messages">
-              <Button variant="default" size="sm" onClick={() => openConvert(m)}>
-                <ArrowRight className="w-4 h-4 mr-1" /> Convert to Quote
-              </Button>
-            </PermissionGate>
           </div>
         )}
       </CollapsibleRecordCard>
@@ -335,62 +325,6 @@ const MessagesAdmin = () => {
           )}
         </TabsContent>
       </Tabs>
-
-      {/* Convert Submission to Quote dialog */}
-      <Dialog open={!!convertTarget} onOpenChange={(o) => !o && setConvertTarget(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Convert Submission to Quote</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 mt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Name</label>
-                <Input value={convertTarget?.name || ""} readOnly className="bg-muted/40" />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Email</label>
-                <Input value={convertTarget?.email || ""} readOnly className="bg-muted/40" />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Phone</label>
-              <Input value={convertTarget?.phone || ""} readOnly className="bg-muted/40" />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Service</label>
-              <select
-                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                value={convertService}
-                onChange={(e) => setConvertService(e.target.value)}
-              >
-                <option value="">— Select a service —</option>
-                {(services ?? []).map((s) => (
-                  <option key={s.title} value={s.title}>{s.title}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Description *</label>
-              <Textarea
-                rows={4}
-                value={convertDescription}
-                onChange={(e) => setConvertDescription(e.target.value)}
-                placeholder="Quote scope / customer request…"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConvertTarget(null)}>Cancel</Button>
-            <Button
-              onClick={() => convertToQuote.mutate()}
-              disabled={convertToQuote.isPending || !convertDescription.trim()}
-            >
-              Create Quote
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
