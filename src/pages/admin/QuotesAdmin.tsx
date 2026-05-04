@@ -67,6 +67,8 @@ const QuotesAdmin = () => {
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get("status");
   const focusId = searchParams.get("focus");
+  const prefillFromContact = searchParams.get("prefillFromContact");
+  const navigate = useNavigate();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<any>(null);
   const [bookingDate, setBookingDate] = useState("");
