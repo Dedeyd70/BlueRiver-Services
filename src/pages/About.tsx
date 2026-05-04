@@ -6,6 +6,7 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import defaultLogo from "@/assets/blueriver-logo.png";
 
 const values = [
@@ -31,6 +32,21 @@ const About = () => {
       const map: Record<string, string> = {};
       data?.forEach((r: any) => (map[r.setting_key] = r.setting_value));
       return map;
+    },
+  });
+  const { data: stats } = useQuery({
+    queryKey: ["public-stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_public_stats" as any);
+      if (error) throw error;
+      return (data ?? {}) as { completed_bookings?: number; unique_customers?: number; avg_rating?: number };
+    },
+  });
+  const { data: faqs } = useQuery({
+    queryKey: ["public-faqs"],
+    queryFn: async () => {
+      const { data } = await supabase.from("faqs").select("*").eq("is_active", true).order("display_order");
+      return data ?? [];
     },
   });
   const logoUrl = branding?.logo_url || defaultLogo;
@@ -93,23 +109,41 @@ const About = () => {
         </div>
       </section>
 
-      <section className="py-20 md:py-28">
-        <div className="container">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+      <section className="relative py-24 md:py-32 bg-hero-gradient overflow-hidden">
+        <div className="absolute -top-32 -right-20 w-96 h-96 bg-primary-foreground/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -left-20 w-96 h-96 bg-accent/30 rounded-full blur-3xl animate-float" />
+        <div className="container relative">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
             {[
-              { value: settings?.stats_clients || "1,000+", label: "Happy Clients" },
+              { value: stats?.completed_bookings != null ? `${stats.completed_bookings}+` : settings?.stats_clients || "1,000+", label: "Cleanings Completed" },
+              { value: stats?.unique_customers != null ? `${stats.unique_customers}+` : "500+", label: "Happy Customers" },
               { value: settings?.stats_years || "5+", label: "Years Experience" },
-              { value: settings?.stats_satisfaction || "98%", label: "Satisfaction Rate" },
-              { value: settings?.stats_rating || "4.9", label: "Ratings" },
+              { value: stats?.avg_rating ? stats.avg_rating.toFixed(1) : settings?.stats_rating || "4.9", label: "Average Rating" },
             ].map((s, i) => (
-              <motion.div key={s.label} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }} className="text-center">
-                <p className="text-3xl md:text-4xl font-display font-extrabold text-gradient mb-1">{s.value}</p>
-                <p className="text-sm text-muted-foreground">{s.label}</p>
+              <motion.div key={s.label} {...fadeUp} transition={{ duration: 0.6, delay: i * 0.1 }} className="text-center">
+                <p className="text-5xl md:text-7xl font-display font-extrabold text-primary-foreground mb-2 drop-shadow-lg">{s.value}</p>
+                <p className="text-sm md:text-base font-medium text-primary-foreground/90 uppercase tracking-wider">{s.label}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
+
+      {(faqs ?? []).length > 0 && (
+        <section className="py-20 md:py-28">
+          <div className="container max-w-3xl">
+            <SectionHeading badge="FAQ" title="Frequently Asked Questions" description="Answers to the questions we hear most often." />
+            <Accordion type="single" collapsible className="w-full">
+              {faqs!.map((f: any) => (
+                <AccordionItem key={f.id} value={f.id}>
+                  <AccordionTrigger className="text-left font-display">{f.question}</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed">{f.answer}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </section>
+      )}
     </div>
   );
 };
