@@ -15,6 +15,10 @@ import imageCompression from "browser-image-compression";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
+import { useServiceAreas } from "@/hooks/useServiceAreas";
+
+const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail"];
+const isCommercialService = (s: string) => /commercial/i.test(s ?? "");
 
 // Keys that map to typed columns on quote_requests; everything else goes into custom_fields.
 const TYPED_FIELD_KEYS = new Set([
@@ -48,6 +52,7 @@ const RequestQuote = () => {
   const [dynValues, setDynValues] = useState<Record<string, any>>({});
 
   const { mainServices, addons } = useServices();
+  const { data: serviceAreas } = useServiceAreas(true);
 
   // Resolve selected service_type_id by name match
   const { data: serviceTypes } = useQuery({
@@ -309,6 +314,11 @@ const RequestQuote = () => {
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Address</label>
                   <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
+                  {serviceAreas && serviceAreas.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Serving {serviceAreas[0].city}: {serviceAreas.map((a) => a.zip).join(", ")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Service Type — drives the form */}
@@ -344,10 +354,9 @@ const RequestQuote = () => {
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
                           <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                             <option value="">Select type</option>
-                            <option value="House">House</option>
-                            <option value="Apartment">Apartment</option>
-                            <option value="Office">Office</option>
-                            <option value="Townhome">Townhome</option>
+                            {(isCommercialService(form.service) ? COMMERCIAL_PROPERTY_TYPES : ["House", "Apartment", "Office", "Townhome"]).map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -405,18 +414,22 @@ const RequestQuote = () => {
                       </div>
                     )}
 
-                    {/* Pets + Entry instructions */}
+                    {/* Pets + Entry instructions — hidden for Commercial services */}
                     <div className="border border-border rounded-lg p-4 bg-card space-y-4">
                       <h3 className="text-sm font-semibold text-foreground">Additional Info</h3>
-                      <div className="flex items-center gap-2">
-                        <Checkbox id="quote-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v, pet_count: v ? f.pet_count : "" }))} />
-                        <label htmlFor="quote-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
-                      </div>
-                      {form.has_pets && (
-                        <div>
-                          <label className="text-sm font-medium text-foreground mb-1.5 block">Number of Pets</label>
-                          <Input type="number" inputMode="numeric" min={1} placeholder="e.g. 2" value={form.pet_count} onChange={update("pet_count")} className="max-w-[140px]" />
-                        </div>
+                      {!isCommercialService(form.service) && (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <Checkbox id="quote-pets" checked={form.has_pets} onCheckedChange={(v) => setForm((f) => ({ ...f, has_pets: !!v, pet_count: v ? f.pet_count : "" }))} />
+                            <label htmlFor="quote-pets" className="text-sm font-medium text-foreground cursor-pointer">Pets in home</label>
+                          </div>
+                          {form.has_pets && (
+                            <div>
+                              <label className="text-sm font-medium text-foreground mb-1.5 block">Number of Pets</label>
+                              <Input type="number" inputMode="numeric" min={1} placeholder="e.g. 2" value={form.pet_count} onChange={update("pet_count")} className="max-w-[140px]" />
+                            </div>
+                          )}
+                        </>
                       )}
                       <div>
                         <label className="text-sm font-medium text-foreground mb-1.5 block">Entry Codes / Key Location</label>

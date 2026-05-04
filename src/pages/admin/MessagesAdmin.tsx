@@ -14,6 +14,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import PermissionGate from "@/components/PermissionGate";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import RecordActivityPanel, { ActivityEntry } from "@/components/admin/RecordActivityPanel";
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 interface ContactSubmission {
@@ -240,52 +241,28 @@ const MessagesAdmin = () => {
           </div>
         </div>
 
-        {/* Activity Log — same pattern as Bookings/Quotes */}
-        <div className="border-t border-border pt-3">
-          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground mb-2">
-            <MessageSquare className="w-3.5 h-3.5" /> Activity Log ({entries.length})
-          </div>
-          <div className="space-y-2">
-            {entries.length === 0 && (
-              <p className="text-xs text-muted-foreground italic">No notes yet.</p>
-            )}
-            {entries.map((e, i) => (
-              <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-foreground">
-                    Note <span className="font-normal text-muted-foreground">by {resolveActor(null)}</span>
-                  </span>
-                  {e.stamp && (
-                    <span className="text-xs text-muted-foreground">{e.stamp}</span>
-                  )}
-                </div>
-                <p className="text-foreground mt-1 whitespace-pre-wrap">{e.text}</p>
-              </div>
-            ))}
-
-            {!readOnly && (
-              <PermissionGate permission="can_manage_messages">
-                <div className="flex gap-2 pt-2">
-                  <Textarea
-                    rows={2}
-                    placeholder="Add a note to this submission…"
-                    value={noteDraft[m.id] || ""}
-                    onChange={(e) => setNoteDraft((p) => ({ ...p, [m.id]: e.target.value }))}
-                    className="text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => addNote(m)}
-                    disabled={!(noteDraft[m.id] || "").trim()}
-                  >
-                    Add note
-                  </Button>
-                </div>
-              </PermissionGate>
-            )}
-          </div>
-        </div>
+        <RecordActivityPanel
+          collapsible={false}
+          readOnly={readOnly}
+          entries={entries.map((e, i): ActivityEntry => ({
+            id: `${m.id}-${i}`,
+            action: "note",
+            notes: e.text,
+            created_at: e.stamp ? new Date(e.stamp).toISOString() : m.updated_at,
+          }))}
+          resolveActor={() => "Admin user"}
+          permission="can_manage_messages"
+          onAddNote={async (note) => {
+            const stamp = format(new Date(), "MMM d, yyyy 'at' h:mm a");
+            const prefix = m.admin_notes ? `${m.admin_notes}\n---\n` : "";
+            const composed = `${prefix}[${stamp}] ${note}`;
+            updateMessage.mutate({
+              id: m.id,
+              status: m.status === "pending" ? "read" : m.status,
+              admin_notes: composed,
+            });
+          }}
+        />
 
         {/* Actions */}
         {readOnly ? (
