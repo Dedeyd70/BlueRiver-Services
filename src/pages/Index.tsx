@@ -461,6 +461,37 @@ const IndexPage = () => {
         </section>
       )}
 
+      {/* Customer Reviews */}
+      {(publicReviews ?? []).length > 0 && (
+        <section className="py-20 md:py-28">
+          <div className="container">
+            <SectionHeading
+              badge="Reviews"
+              title="What Our Customers Say"
+              description="Real feedback from real customers after their cleanings."
+            />
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {publicReviews!.map((r: any, i: number) => (
+                <motion.div
+                  key={r.id}
+                  {...fadeUp}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className="p-6 rounded-2xl bg-card border border-border"
+                >
+                  <div className="flex gap-1 mb-3">
+                    {Array.from({ length: r.rating }).map((_, j) => (
+                      <Star key={j} className="w-4 h-4 fill-primary text-primary" />
+                    ))}
+                  </div>
+                  {r.comment && <p className="text-muted-foreground text-sm leading-relaxed mb-4">"{r.comment}"</p>}
+                  <p className="font-display font-semibold text-card-foreground text-sm">{r.customer_name}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* CTA */}
       <section className="py-20 md:py-28 bg-hero-gradient">
         <div className="container text-center">
