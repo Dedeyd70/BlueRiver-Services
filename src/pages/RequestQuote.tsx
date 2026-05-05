@@ -62,6 +62,7 @@ const RequestQuote = () => {
     condition_level: "",
     floor_type: "",
     is_empty_property: false,
+    property_type_other: "",
   });
   // Dynamic field values keyed by field_key
   const [dynValues, setDynValues] = useState<Record<string, any>>({});
