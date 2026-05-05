@@ -68,6 +68,14 @@ const TeamManagementSettings = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="text-sm text-destructive p-4 border border-destructive/30 rounded-lg bg-destructive/5">
+        Failed to load team. {(error as Error).message}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div>
