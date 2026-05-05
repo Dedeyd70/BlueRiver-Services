@@ -687,26 +687,31 @@ const BookService = () => {
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Select Time *</label>
                       <div className="grid grid-cols-2 gap-2">
                         {timeSlots.map((slot) => {
+                          const cfg = configFromSettings(siteSettings);
                           const isBooked = bookedSlots?.includes(slot);
+                          const isBlocked = !isBooked && isSlotBlocked(slot, bookedSlots, cfg);
+                          const disabled = isBooked || isBlocked;
                           return (
                             <button
                               key={slot}
                               type="button"
-                              onClick={() => !isBooked && setSelectedSlot(slot)}
-                              disabled={isBooked}
+                              onClick={() => !disabled && setSelectedSlot(slot)}
+                              disabled={disabled}
+                              title={isBlocked ? `Within ${cfg.bufferMinutes}-min buffer of another booking` : undefined}
                               className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                                isBooked
+                                disabled
                                   ? "bg-muted border-border text-muted-foreground cursor-not-allowed line-through opacity-60"
                                   : selectedSlot === slot
                                     ? "bg-primary text-primary-foreground border-primary"
                                     : "bg-card border-border text-foreground hover:border-primary/50"
                               }`}
                             >
-                              {slot}{isBooked ? " (Booked)" : ""}
+                              {slot}{isBooked ? " (Booked)" : isBlocked ? " (Buffer)" : ""}
                             </button>
                           );
                         })}
                       </div>
+                      <p className="text-xs text-muted-foreground mt-1.5">Slots adjacent to existing bookings are reserved as travel/setup buffer.</p>
                     </div>
                   )}
                   {selectedDate && timeSlots.length === 0 && (
