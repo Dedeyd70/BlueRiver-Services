@@ -4,12 +4,22 @@ import { format } from "date-fns";
 interface BrandingMap { [key: string]: string }
 interface SettingsMap { [key: string]: string }
 
-// ---- BlueRiver theme ----
+// ---- BlueRiver theme (defaults; brand color overridable via site_settings.brand_color_hex) ----
 const NAVY: [number, number, number] = [15, 23, 42];       // #0F172A
-const PRIMARY: [number, number, number] = [30, 58, 138];   // #1E3A8A
+const DEFAULT_PRIMARY: [number, number, number] = [30, 58, 138]; // #1E3A8A
 const SLATE_300: [number, number, number] = [203, 213, 225];
 const SLATE_500: [number, number, number] = [100, 116, 139];
 const SLATE_100: [number, number, number] = [241, 245, 249];
+
+const hexToRgb = (hex?: string): [number, number, number] | null => {
+  if (!hex) return null;
+  const m = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(m)) return null;
+  return [parseInt(m.slice(0, 2), 16), parseInt(m.slice(2, 4), 16), parseInt(m.slice(4, 6), 16)];
+};
+
+const resolvePrimary = (settings: SettingsMap): [number, number, number] =>
+  hexToRgb(settings?.brand_color_hex) ?? DEFAULT_PRIMARY;
 
 const drawLetterhead = (
   doc: jsPDF,
