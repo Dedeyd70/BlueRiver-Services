@@ -221,6 +221,8 @@ Deno.serve(async (req) => {
       }));
     }
 
+    console.log("[send-transactional-email]", body.type, "->", recipient, "subject:", subject);
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {

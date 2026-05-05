@@ -238,15 +238,22 @@ const RequestQuote = () => {
         address: form.address.trim(),
         message: form.description?.trim?.(),
       };
-      supabase.functions.invoke("send-transactional-email", {
-        body: { type: "quote_received", to: form.email.trim(), data: quoteData },
-      }).catch((err) => console.error("Quote ack email failed:", err));
-      supabase.functions.invoke("send-transactional-email", {
-        body: {
-          type: "admin_new_submission",
-          data: { ...quoteData, kind: "Quote", dashboardUrl: `${window.location.origin}/admin/quotes` },
-        },
-      }).catch((err) => console.error("Admin quote alert failed:", err));
+      Promise.allSettled([
+        supabase.functions.invoke("send-transactional-email", {
+          body: { type: "quote_received", to: form.email.trim(), data: quoteData },
+        }),
+        supabase.functions.invoke("send-transactional-email", {
+          body: {
+            type: "admin_new_submission",
+            to: "info@blueriverservices.co",
+            data: { ...quoteData, kind: "Quote", dashboardUrl: `${window.location.origin}/admin/quotes` },
+          },
+        }),
+      ]).then((results) => {
+        results.forEach((r, i) => {
+          if (r.status === "rejected") console.error(`[admin-email] quote ${i === 0 ? "customer" : "admin"} failed:`, r.reason);
+        });
+      });
 
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
