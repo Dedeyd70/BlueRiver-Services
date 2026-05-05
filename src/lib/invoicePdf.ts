@@ -4,12 +4,22 @@ import { format } from "date-fns";
 interface BrandingMap { [key: string]: string }
 interface SettingsMap { [key: string]: string }
 
-// ---- BlueRiver theme ----
+// ---- BlueRiver theme (defaults; brand color overridable via site_settings.brand_color_hex) ----
 const NAVY: [number, number, number] = [15, 23, 42];       // #0F172A
-const PRIMARY: [number, number, number] = [30, 58, 138];   // #1E3A8A
+const DEFAULT_PRIMARY: [number, number, number] = [30, 58, 138]; // #1E3A8A
 const SLATE_300: [number, number, number] = [203, 213, 225];
 const SLATE_500: [number, number, number] = [100, 116, 139];
 const SLATE_100: [number, number, number] = [241, 245, 249];
+
+const hexToRgb = (hex?: string): [number, number, number] | null => {
+  if (!hex) return null;
+  const m = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(m)) return null;
+  return [parseInt(m.slice(0, 2), 16), parseInt(m.slice(2, 4), 16), parseInt(m.slice(4, 6), 16)];
+};
+
+const resolvePrimary = (settings: SettingsMap): [number, number, number] =>
+  hexToRgb(settings?.brand_color_hex) ?? DEFAULT_PRIMARY;
 
 const drawLetterhead = (
   doc: jsPDF,
@@ -17,6 +27,7 @@ const drawLetterhead = (
   branding: BrandingMap,
   settings: SettingsMap
 ): number => {
+  const PRIMARY = resolvePrimary(settings);
   const bandH = 28;
   // Navy band
   doc.setFillColor(...NAVY);
@@ -45,7 +56,9 @@ const drawLetterhead = (
   doc.setTextColor(...SLATE_300);
   const tagline = settings.footer_tagline || "Professional cleaning services";
   doc.text(tagline, badgeX + badgeSize + 6, 18.5);
-  const contactLine = [settings.phone, settings.email].filter(Boolean).join("  ·  ");
+  const contactLine = [settings.phone, settings.email, settings.company_address]
+    .filter(Boolean)
+    .join("  ·  ");
   if (contactLine) {
     doc.text(contactLine, badgeX + badgeSize + 6, 23);
   }
@@ -73,6 +86,7 @@ const buildInvoiceDoc = (
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 20;
+  const PRIMARY = resolvePrimary(settings);
   let y = drawLetterhead(doc, pageW, branding, settings);
 
   // Invoice header
@@ -246,25 +260,30 @@ const buildInvoiceDoc = (
     y += 5;
   }
 
-  // Payment Instructions (Zelle, non-transactional)
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...PRIMARY);
-  doc.text("Payment Instructions", margin, y);
-  doc.setTextColor(0, 0, 0);
-  y += 5;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  const payLines = [
-    "Pay via Zelle to: info@blueriverservices.co",
-    `Memo: Invoice #${invoiceNum}`,
-    "Cash also accepted on-site.",
-  ];
-  payLines.forEach((line) => {
-    doc.text(line, margin, y);
+  // Payment Instructions — sourced from site_settings.payment_methods (CMS-driven)
+  const isPaid = inv.payment_status === "paid";
+  if (!isPaid) {
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...PRIMARY);
+    doc.text("Payment Instructions", margin, y);
+    doc.setTextColor(0, 0, 0);
     y += 5;
-  });
-  y += 4;
-
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const dynamicPay = String(
+      settings.payment_methods ||
+        "Pay via Zelle to info@blueriverservices.co. Cash also accepted on-site."
+    );
+    const payLines = [
+      ...doc.splitTextToSize(dynamicPay, pageW - margin * 2),
+      `Memo: Invoice #${invoiceNum}`,
+    ];
+    payLines.forEach((line: string) => {
+      doc.text(line, margin, y);
+      y += 5;
+    });
+    y += 4;
+  }
   // Footer thank-you
   doc.setTextColor(...PRIMARY);
   doc.setFont("helvetica", "bold");
