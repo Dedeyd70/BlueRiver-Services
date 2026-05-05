@@ -251,7 +251,9 @@ export function computeQuote(
   });
 
   const subtotal = items.reduce((s, i) => s + intify(i.total_price), 0);
-  const tax = Math.round(subtotal * (Number(taxRate) || 0)) / 100;
+  // WA tax compliance: only apply tax when the service is flagged taxable.
+  const effectiveTaxRate = matchedService?.tax_applies ? (Number(taxRate) || 0) : 0;
+  const tax = Math.round(subtotal * effectiveTaxRate) / 100;
   const total = Math.round(subtotal + tax);
 
   return { lineItems: items, subtotal, tax: Math.round(tax), total };
