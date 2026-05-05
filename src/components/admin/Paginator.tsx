@@ -18,13 +18,8 @@ const Paginator = ({ page, pageSize, total, onChange }: Props) => {
   const end = Math.min(total, safePage * pageSize);
 
   return (
-    <div className="flex items-center justify-between mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground">
-      <span>
-        Showing <span className="font-medium text-foreground">{start}</span>–
-        <span className="font-medium text-foreground">{end}</span> of{" "}
-        <span className="font-medium text-foreground">{total}</span>
-      </span>
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col items-center justify-center gap-2 mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground">
+      <div className="flex items-center justify-center gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -47,6 +42,11 @@ const Paginator = ({ page, pageSize, total, onChange }: Props) => {
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
       </div>
+      <span className="hidden sm:block">
+        Showing <span className="font-medium text-foreground">{start}</span>–
+        <span className="font-medium text-foreground">{end}</span> of{" "}
+        <span className="font-medium text-foreground">{total}</span>
+      </span>
     </div>
   );
 };

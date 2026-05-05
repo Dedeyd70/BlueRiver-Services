@@ -229,18 +229,24 @@ const RequestQuote = () => {
 
       await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, insertedQuote?.id, "quote");
 
-      // Fire-and-forget customer confirmation email via Resend.
+      // Fire-and-forget: customer ack + admin alert.
+      const quoteData = {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone?.trim(),
+        service: form.service,
+        address: form.address.trim(),
+        message: form.description?.trim?.(),
+      };
+      supabase.functions.invoke("send-transactional-email", {
+        body: { type: "quote_received", to: form.email.trim(), data: quoteData },
+      }).catch((err) => console.error("Quote ack email failed:", err));
       supabase.functions.invoke("send-transactional-email", {
         body: {
-          type: "quote_received",
-          to: form.email.trim(),
-          data: {
-            name: form.name.trim(),
-            service: form.service,
-            address: form.address.trim(),
-          },
+          type: "admin_new_submission",
+          data: { ...quoteData, kind: "Quote", dashboardUrl: `${window.location.origin}/admin/quotes` },
         },
-      }).catch((err) => console.error("Confirmation email failed:", err));
+      }).catch((err) => console.error("Admin quote alert failed:", err));
 
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
