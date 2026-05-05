@@ -1,98 +1,126 @@
-# Contact / Messages CRM Overhaul
 
-## Diagnostics — Why activity doesn't truly log
+## Goal
 
-`contact_submissions` has **no dedicated activity-log table**. `MessagesAdmin` fakes a log by appending stamped strings into the single `admin_notes` text column and parsing them back. As a result:
-
-- Status changes (Mark Read / Mark Responded / Convert) don't write anywhere — the UI updates `status` only, no audit trail.
-- There is no `actor_id`, so `RecordActivityPanel` always shows "Admin user".
-- Replies to customers don't exist as a feature, so nothing logs them.
-
-Fix: introduce a real `contact_activity_logs` table that mirrors `booking_activity_logs`, and write to it from every admin action (status change, note, reply, conversion).
+Fix the two reported bugs (admin "New Request" emails not arriving, "Mark as Paid" RLS error) and ship the requested permission overhaul + Team Management UI in a single pass.
 
 ---
 
-## 1. Backend — `contact_activity_logs` + RPC
+## 1. Permission Bundles (Functional Roles)
 
-New migration:
+Introduce four bundle keys in `permission_registry` and a helper that expands a bundle into the granular `permissions` JSONB the rest of the app already consumes. Granular keys stay (no breaking change), bundles are syntactic sugar.
 
-- `contact_activity_logs` table: `id`, `contact_id` (FK contact_submissions), `actor_id`, `action` (`status_change` | `note` | `reply_sent` | `converted`), `previous_status`, `new_status`, `notes`, `details`, `created_at`. RLS: insert/select for admins + `can_manage_messages`.
-- `log_contact_activity(p_contact_id, p_action, p_previous_status, p_new_status, p_notes, p_details)` SECURITY DEFINER RPC — sets `actor_id := auth.uid()` and inserts. Used by all client mutations so the actor is always real.
-- Backfill: parse existing `admin_notes` per row into `note` entries (best-effort, single migration pass).
+Bundles:
+- **operations** → `can_manage_bookings`, `can_manage_quotes`, `can_manage_messages`, `can_edit_availability`
+- **finance** → `can_manage_invoices`, `can_manage_payment`, `can_edit_pricing`
+- **content** → `can_manage_gallery`, `can_manage_testimonials`, `can_manage_site_content`, `can_manage_legal`, `can_manage_settings` (FAQs/Areas live behind this)
+- **system_admin** → `can_manage_business_rules`, `can_manage_socials`, plus full operations + finance + content
 
-## 2. Smart Reply (transactional email + log)
+Implementation:
+- Migration: insert 4 rows into `permission_registry` (`bundle.operations`, etc.) with descriptions.
+- New file `src/lib/permissionBundles.ts` exports `BUNDLES` map + `applyBundle(perms, bundle, on)` and `getBundleState(perms)` so the UI can show toggles without changing the storage shape.
+- `useHasPermission` is unchanged — code keeps reading granular keys.
 
-In the expanded contact card, add a **Reply** section:
+## 2. confirm_invoice_payment RPC (fixes RLS error)
 
-- Quick Templates dropdown — populated from a small constant map: `Standard Intro`, `Schedule a Site Visit`, `Commercial Inquiry Follow-up`, `Pricing Follow-up`, `Closing / Thank-you`. Selecting a template fills the textarea (admin can still edit).
-- Subject input (default: `Re: Your inquiry to BlueRiver Services`).
-- Body textarea.
-- **Send Reply** button →
-  - Calls existing `send-transactional-email` edge function with `type: "custom"`, `to: contact.email`, branded HTML wrapper around the typed body, `reply_to: info@blueriverservices.co` (already the function default).
-  - On success: `log_contact_activity(action='reply_sent', notes=<body>, details=<subject>)` and auto-bumps status from `pending` → `read` (or `read` → `responded` if admin opts).
-  - Failure surfaces a toast and is NOT logged.
+Root cause: `applyPayment` does `update(...).select("id").maybeSingle()` then throws `"Update blocked by permissions or RLS"` when `data` is null. Staff with only `can_manage_invoices` cannot UPDATE because the existing `invoices` UPDATE policy requires role admin/manager only, not the permission key. Frontend also writes `payment_status='partial'` directly which is what trips RLS for non-admins.
 
-The edge function already sets `reply_to: info@blueriverservices.co`, so customer replies route to the shared inbox. No webhook ingestion (out of scope; documented in the lifecycle summary).
+Fix:
 
-## 3. One-click Convert to Quote with prefill
+```sql
+CREATE OR REPLACE FUNCTION public.confirm_invoice_payment(
+  p_invoice_id uuid,
+  p_amount numeric,
+  p_method text,
+  p_reference text DEFAULT NULL,
+  p_payment_date date DEFAULT CURRENT_DATE
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE
+  inv invoices%ROWTYPE;
+  v_new_paid numeric;
+  v_status text;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'NOT_AUTHORIZED: Sign in required.'; END IF;
+  IF NOT (has_role(auth.uid(),'admin'::app_role)
+       OR has_permission(auth.uid(),'can_manage_invoices')
+       OR has_permission(auth.uid(),'can_manage_payment')
+       OR has_permission(auth.uid(),'can_manage_bookings')) THEN
+    RAISE EXCEPTION 'NOT_AUTHORIZED: You need Finance or Operations permission to record payments.';
+  END IF;
+  IF p_amount IS NULL OR p_amount <= 0 THEN RAISE EXCEPTION 'INVALID_AMOUNT'; END IF;
 
-Refactor existing Convert dialog so the button instead **navigates to `/admin/quotes?prefillFromContact=<id>`** (or routes to the existing CreateQuote flow). `QuotesAdmin` reads the query param, fetches the contact row, and pre-fills Name / Email / Phone / Service / Description in the new-quote dialog. On save, it calls `log_contact_activity(action='converted', new_status='converted')` and updates the contact status. Existing in-line dialog stays as a fallback for the simple flow.
+  SELECT * INTO inv FROM invoices WHERE id=p_invoice_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'INVOICE_NOT_FOUND'; END IF;
 
-## 4. Status workflow: New | In Progress | Quoted | Archived
+  v_new_paid := round(coalesce(inv.amount_paid,0) + p_amount, 2);
+  v_status := CASE WHEN v_new_paid >= inv.total_amount THEN 'paid'
+                   WHEN v_new_paid > 0 THEN 'partial'
+                   ELSE 'unpaid' END;
 
-- Add a status `<Select>` in the card header replacing the loose buttons. Values map to existing column: `pending`→New, `read`→In Progress, `converted`→Quoted, `responded`→Archived. (Keeps schema/RLS unchanged; just relabels.)
-- Every change calls `log_contact_activity(action='status_change', previous_status, new_status)`.
-- Active vs Archived tabs key off the new mapping (Archived = `responded` + `converted`, same as today).
+  UPDATE invoices SET
+    amount_paid = v_new_paid,
+    payment_method = p_method,
+    payment_date = p_payment_date,
+    payment_reference = p_reference,
+    payment_status = v_status,
+    paid_at = CASE WHEN v_status='paid' THEN now() ELSE paid_at END,
+    updated_at = now()
+  WHERE id = p_invoice_id;
 
-## 5. Admin UX uniformity
+  IF v_status = 'paid' THEN PERFORM public.create_receipt(p_invoice_id); END IF;
 
-- Replace the fake parsed-notes feed with `RecordActivityPanel` driven by real `contact_activity_logs` rows (matches BookingsAdmin exactly).
-- Wire `useAdminUserNames` so `actor_id` resolves to a real name.
-- Action labels map: `status_change` → "Status changed", `note` → "Note", `reply_sent` → "Reply sent", `converted` → "Converted to quote".
-- Notes stay supported; the Add-note flow now writes to `contact_activity_logs` instead of mutating `admin_notes`. (`admin_notes` column kept for legacy data, no longer written to.)
-
-## 6. Backend integrity / Reply-To
-
-- All outbound replies use the existing `send-transactional-email` function which already sets `reply_to: info@blueriverservices.co` and the verified `From`. Customer email replies land in the shared inbox naturally.
-- True inbound-email tracking (parsing replies back into the activity log) requires Mailgun/Resend inbound webhooks + a parsing function — flagged as out of scope; the plan documents the workaround (Reply-To routing).
-
----
-
-## Files
-
-- **New**: `supabase/migrations/<ts>_contact_activity_logs.sql`
-- **New**: `src/components/admin/ContactReplyComposer.tsx` (template dropdown + subject + body + send)
-- **Edit**: `src/pages/admin/MessagesAdmin.tsx` (real activity log fetch, status select, reply composer, convert nav)
-- **Edit**: `src/pages/admin/QuotesAdmin.tsx` (read `?prefillFromContact=` and open prefilled new-quote dialog; emit `converted` log)
-- **Edit**: `src/integrations/supabase/types.ts` (auto-regen)
-
-## Out of scope
-
-- Inbound email parsing (would need Mailgun/Resend inbound webhook + parser function).
-- Schema rename of `contact_submissions.status` enum values; we keep the existing values and remap labels in the UI.
-
-## Lifecycle summary (to deliver after execution)
-
-```text
-Submit (Contact.tsx)
-  → row inserted into contact_submissions (status=pending)
-  → notifyAdmins() → notifications row → bell badge
-  → customer gets branded ack email (Resend)
-
-Admin opens MessagesAdmin
-  → status=pending shown as "New"
-  → Admin picks template + edits body → Send Reply
-      → send-transactional-email (reply_to info@blueriverservices.co)
-      → log_contact_activity(action=reply_sent)
-      → status auto → "In Progress"
-  → Admin clicks Convert to Quote
-      → /admin/quotes?prefillFromContact=<id>
-      → New quote dialog opens prefilled (name/email/phone/service/desc)
-      → On save: quote_requests row + log_contact_activity(action=converted)
-      → contact status → "Quoted"
-  → If no further action needed: status → "Archived"
-
-Audit trail (contact_activity_logs) shows: who, what, when, with real admin name.
+  RETURN jsonb_build_object('id', p_invoice_id, 'status', v_status, 'amount_paid', v_new_paid);
+END $$;
 ```
 
-Reply **approve** to execute.
+Also add an RLS policy `Operations can view linked invoices` on `invoices` so users with `can_manage_bookings` can SELECT invoices (read-only) — needed for booking detail screens to display invoice status.
+
+`InvoicesAdmin.tsx` `applyPayment` is replaced with a single `supabase.rpc('confirm_invoice_payment', {...})` call. The two-step UPDATE + `mark_invoice_paid` is removed.
+
+## 3. Reliable Admin Notifications
+
+The frontend code in `BookService.tsx`, `RequestQuote.tsx`, `Contact.tsx` already issues two `send-transactional-email` calls (customer + admin). The edge function already hardcodes `ADMIN_INBOX = "info@blueriverservices.co"` for `admin_new_submission`. Audit found these are correct but use `.catch` only — silent failures. Hardening:
+
+- Add `await Promise.allSettled([...])` so the network error surfaces in console with explicit `[admin-email]` tag.
+- Edge function: log a single line `console.log("admin alert ->", recipient, kind)` so we can verify in `edge_function_logs`.
+- Verify in the BookingsAdmin confirm flow it also fires `admin_new_submission` only for new entries, not status changes (already correct — leave alone).
+
+No other behavioral change needed; the bug report is most likely a Resend deliverability issue (spam folder). After the patch we will pull `edge_function_logs` to confirm 200 responses for admin sends.
+
+## 4. Team Management UI
+
+New tab in `SettingsAdmin.tsx` → `Team Management` (admin-only). Component `src/components/admin/TeamManagementSettings.tsx`:
+
+- Calls existing `list-admin-users` edge function to load users.
+- Per row: shows email, role, and 4 bundle switches (Operations / Finance / Content / System Admin).
+- Toggling a bundle calls a new edge function `update-user-permissions` (or reuses existing user-permissions update path) that merges granular keys via `applyBundle`. We will use direct Supabase update on `user_roles.permissions` (admin-gated by RLS already).
+- Read-only badge for current role (admin/manager/staff/user).
+
+## 5. Verification Step
+
+Migration includes:
+```sql
+UPDATE public.user_roles
+SET permissions = permissions
+  || '{"can_manage_invoices":true,"can_manage_payment":true,"can_edit_pricing":true}'::jsonb
+WHERE user_id = (SELECT id FROM auth.users WHERE email='joshuaquao@gmail.com');
+```
+(joshuaquao is already `admin` so this is belt-and-suspenders; ensures any future role downgrade still keeps Finance.)
+
+After deploy, call `confirm_invoice_payment` with a test invoice via SQL to prove it works.
+
+---
+
+## Files Changed
+
+- **NEW** `supabase/migrations/<ts>_permission_bundles_and_payment_rpc.sql`
+- **NEW** `src/lib/permissionBundles.ts`
+- **NEW** `src/components/admin/TeamManagementSettings.tsx`
+- `src/pages/admin/InvoicesAdmin.tsx` — replace `applyPayment` with RPC call
+- `src/pages/admin/SettingsAdmin.tsx` — add Team Management tab (admin only)
+- `src/pages/BookService.tsx`, `src/pages/RequestQuote.tsx`, `src/pages/Contact.tsx` — wrap two email calls in `Promise.allSettled` with `[admin-email]` logging
+- `supabase/functions/send-transactional-email/index.ts` — add admin-route log line
+- Deploy `send-transactional-email`
+
+## Out of Scope
+No changes to existing granular permission keys, no removal of `mark_invoice_paid` (kept for backwards compat / receipt creation path).

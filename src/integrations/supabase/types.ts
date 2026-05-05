@@ -1301,6 +1301,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      confirm_invoice_payment: {
+        Args: {
+          p_amount: number
+          p_invoice_id: string
+          p_method: string
+          p_payment_date?: string
+          p_reference?: string
+        }
+        Returns: Json
+      }
       convert_quote_to_booking: {
         Args: {
           p_booking_date: string
