@@ -651,21 +651,27 @@ const BookService = () => {
                     </>
                   )}
 
-                  {/* Add-ons selection */}
-                  {form.service && addons.length > 0 && (
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-2 block">Optional Add-Ons</label>
-                      <div className="space-y-2">
-                        {addons.map((a) => (
-                          <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
-                            <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
-                            <span className="flex-1 text-sm font-medium text-foreground">{a.title}</span>
-                            {a.price_starting && <span className="text-sm text-primary font-medium">{a.price_starting}</span>}
-                          </label>
-                        ))}
+                  {/* Add-ons selection — residential add-ons hidden for Commercial services */}
+                  {form.service && (() => {
+                    const visible = isCommercialService(form.service)
+                      ? addons.filter((a) => !RESIDENTIAL_ADDON_PATTERN.test(a.title))
+                      : addons;
+                    if (!visible.length) return null;
+                    return (
+                      <div>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Optional Add-Ons</label>
+                        <div className="space-y-2">
+                          {visible.map((a) => (
+                            <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
+                              <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
+                              <span className="flex-1 text-sm font-medium text-foreground">{a.title}</span>
+                              {a.price_starting && <span className="text-sm text-primary font-medium">{a.price_starting}</span>}
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Price summary — driven by authoritative pricing engine */}
                   {form.service && computed.total > 0 && (
@@ -686,6 +692,7 @@ const BookService = () => {
                         <span className="text-foreground">Estimated Total</span>
                         <span className="text-primary">${computed.total.toFixed(2)}</span>
                       </div>
+                      <p className="text-xs text-muted-foreground pt-1">Final price may vary based on on-site assessment of size, condition, and scope.</p>
                     </div>
                   )}
 
