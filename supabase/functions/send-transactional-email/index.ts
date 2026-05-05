@@ -13,9 +13,17 @@ const REPLY_TO = "info@blueriverservices.co";
 
 type Attachment = { filename: string; content: string };
 
+const ADMIN_INBOX = "info@blueriverservices.co";
+
 type Payload = {
-  type: "booking_confirmation" | "quote_received" | "custom";
-  to: string;
+  type:
+    | "booking_received"      // user — "we got your request"
+    | "booking_confirmed"     // user — "your booking is confirmed"
+    | "booking_confirmation"  // legacy alias of booking_received
+    | "quote_received"        // user — "we got your quote"
+    | "admin_new_submission"  // admin alert to ADMIN_INBOX
+    | "custom";
+  to?: string;
   data?: Record<string, unknown>;
   subject?: string;
   html?: string;
