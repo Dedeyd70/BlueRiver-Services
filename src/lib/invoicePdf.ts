@@ -260,25 +260,30 @@ const buildInvoiceDoc = (
     y += 5;
   }
 
-  // Payment Instructions (Zelle, non-transactional)
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...PRIMARY);
-  doc.text("Payment Instructions", margin, y);
-  doc.setTextColor(0, 0, 0);
-  y += 5;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  const payLines = [
-    "Pay via Zelle to: info@blueriverservices.co",
-    `Memo: Invoice #${invoiceNum}`,
-    "Cash also accepted on-site.",
-  ];
-  payLines.forEach((line) => {
-    doc.text(line, margin, y);
+  // Payment Instructions — sourced from site_settings.payment_methods (CMS-driven)
+  const isPaid = inv.payment_status === "paid";
+  if (!isPaid) {
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...PRIMARY);
+    doc.text("Payment Instructions", margin, y);
+    doc.setTextColor(0, 0, 0);
     y += 5;
-  });
-  y += 4;
-
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const dynamicPay = String(
+      settings.payment_methods ||
+        "Pay via Zelle to info@blueriverservices.co. Cash also accepted on-site."
+    );
+    const payLines = [
+      ...doc.splitTextToSize(dynamicPay, pageW - margin * 2),
+      `Memo: Invoice #${invoiceNum}`,
+    ];
+    payLines.forEach((line: string) => {
+      doc.text(line, margin, y);
+      y += 5;
+    });
+    y += 4;
+  }
   // Footer thank-you
   doc.setTextColor(...PRIMARY);
   doc.setFont("helvetica", "bold");
