@@ -51,6 +51,7 @@ const drawLetterhead = (
   branding: BrandingMap,
   settings: SettingsMap
 ): number => {
+  const PRIMARY = resolvePrimary(settings);
   const bandH = 28;
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, pageW, bandH, "F");
