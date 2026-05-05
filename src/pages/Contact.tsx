@@ -120,7 +120,7 @@ const Contact = () => {
 
   const phone = settings?.phone || "(206) 317-8300";
   const phoneLink = settings?.phone_link || "+12063178300";
-  const email = settings?.email || "joshuaquao@gmail.com";
+  const email = settings?.email || "info@blueriverservices.co";
   const serviceArea = settings?.service_area || "Serving Washington State";
   const callAvailability = settings?.call_availability || "7:00 AM – 5:00 PM";
   const businessHoursMF = settings?.business_hours_mf || "Monday – Friday: 7:00 AM – 7:00 PM";
