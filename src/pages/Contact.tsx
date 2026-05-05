@@ -109,7 +109,7 @@ const Contact = () => {
             name: form.name.trim(),
             email: form.email.trim(),
             phone: form.phone?.trim(),
-            service: form.service_type,
+            service: form.service,
             message: form.message?.trim(),
             dashboardUrl: `${window.location.origin}/admin/messages`,
           },
