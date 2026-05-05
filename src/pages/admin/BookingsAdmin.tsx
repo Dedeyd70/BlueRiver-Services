@@ -932,13 +932,18 @@ const BookingsAdmin = () => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">New time slot</label>
-              <Input
-                placeholder="e.g. 10:00 AM"
-                value={rescheduleSlot}
-                onChange={(e) => setRescheduleSlot(e.target.value)}
-              />
+              <Select value={rescheduleSlot} onValueChange={setRescheduleSlot}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RESCHEDULE_TIME_SLOTS.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                Slot collisions are checked automatically before saving.
+                30-minute intervals from 8:00 AM to 6:00 PM. Slot collisions are checked automatically before saving.
               </p>
             </div>
           </div>
