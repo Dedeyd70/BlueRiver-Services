@@ -88,9 +88,23 @@ const detailRow = (k: string, v: unknown) =>
     ? `<tr><td style="padding:6px 0;color:#64748b;font-size:14px;">${esc(k)}</td><td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:500;">${esc(v)}</td></tr>`
     : "";
 
-function bookingTemplate(d: Record<string, unknown>) {
+function bookingReceivedTemplate(d: Record<string, unknown>) {
   const inner = `
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Hi ${esc(d.name) || "there"}, thanks for booking with BlueRiver Services! We've received your request and will confirm shortly.</p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Hi ${esc(d.name) || "there"}, <strong>we have received your request</strong>. Our team will review the details and confirm your booking within 24 hours.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      ${detailRow("Service", d.service)}
+      ${detailRow("Requested date", d.date)}
+      ${detailRow("Requested time", d.timeSlot)}
+      ${detailRow("Address", d.address)}
+      ${d.total ? detailRow("Estimated total", `$${Number(d.total).toFixed(2)}`) : ""}
+    </table>
+    <p style="margin:16px 0 0;font-size:14px;color:#64748b;">You'll get a separate confirmation email once we lock in your slot.</p>`;
+  return { subject: "We've received your booking request", html: wrap("Booking received", inner) };
+}
+
+function bookingConfirmedTemplate(d: Record<string, unknown>) {
+  const inner = `
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Hi ${esc(d.name) || "there"}, great news — <strong>your booking is confirmed</strong>.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0;">
       ${detailRow("Service", d.service)}
       ${detailRow("Date", d.date)}
@@ -98,8 +112,8 @@ function bookingTemplate(d: Record<string, unknown>) {
       ${detailRow("Address", d.address)}
       ${d.total ? detailRow("Estimated total", `$${Number(d.total).toFixed(2)}`) : ""}
     </table>
-    <p style="margin:16px 0 0;font-size:14px;color:#64748b;">A team member will reach out within 24 hours to confirm details.</p>`;
-  return { subject: "Your BlueRiver booking request", html: wrap("Booking received", inner) };
+    <p style="margin:16px 0 0;font-size:14px;color:#64748b;">Need to reschedule or have questions? Just reply to this email.</p>`;
+  return { subject: `Your BlueRiver booking is confirmed${d.date ? ` — ${esc(d.date)}` : ""}`, html: wrap("Booking confirmed", inner) };
 }
 
 function quoteTemplate(d: Record<string, unknown>) {
@@ -110,6 +124,25 @@ function quoteTemplate(d: Record<string, unknown>) {
       ${detailRow("Address", d.address)}
     </table>`;
   return { subject: "Your BlueRiver quote request", html: wrap("Quote request received", inner) };
+}
+
+function adminAlertTemplate(d: Record<string, unknown>) {
+  const kind = String(d.kind || "Submission");
+  const title = `New ${kind} Request Received - Check Dashboard`;
+  const inner = `
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">A new <strong>${esc(kind)}</strong> was just submitted on blueriverservices.co.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      ${detailRow("Customer", d.name)}
+      ${detailRow("Email", d.email)}
+      ${detailRow("Phone", d.phone)}
+      ${detailRow("Service", d.service)}
+      ${detailRow("Date", d.date)}
+      ${detailRow("Time", d.timeSlot)}
+      ${detailRow("Address", d.address)}
+      ${detailRow("Message", d.message)}
+    </table>
+    <p style="margin:16px 0 0;font-size:14px;">${d.dashboardUrl ? `<a href="${esc(d.dashboardUrl)}" style="background:#1e40af;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600;">Open Admin Dashboard</a>` : "Log in to the admin dashboard to review."}</p>`;
+  return { subject: title, html: wrap(title, inner) };
 }
 
 Deno.serve(async (req) => {
