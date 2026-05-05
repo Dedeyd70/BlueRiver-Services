@@ -413,21 +413,26 @@ const BookService = () => {
 
       await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
 
-      // Fire-and-forget customer confirmation email via Resend.
+      // Fire-and-forget: customer "received" email + admin alert.
+      const bookingData = {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone?.trim(),
+        service: form.service,
+        date: format(selectedDate, "MMM d, yyyy"),
+        timeSlot: selectedSlot,
+        address: form.address.trim(),
+        total: computed.total,
+      };
+      supabase.functions.invoke("send-transactional-email", {
+        body: { type: "booking_received", to: form.email.trim(), data: bookingData },
+      }).catch((err) => console.error("Booking received email failed:", err));
       supabase.functions.invoke("send-transactional-email", {
         body: {
-          type: "booking_confirmation",
-          to: form.email.trim(),
-          data: {
-            name: form.name.trim(),
-            service: form.service,
-            date: format(selectedDate, "MMM d, yyyy"),
-            timeSlot: selectedSlot,
-            address: form.address.trim(),
-            total: computed.total,
-          },
+          type: "admin_new_submission",
+          data: { ...bookingData, kind: "Booking", dashboardUrl: `${window.location.origin}/admin/bookings` },
         },
-      }).catch((err) => console.error("Confirmation email failed:", err));
+      }).catch((err) => console.error("Admin booking alert failed:", err));
 
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
