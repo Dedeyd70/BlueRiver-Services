@@ -200,6 +200,34 @@ Deno.serve(async (req) => {
       });
     }
 
+    // CAN-SPAM compliance: append physical mailing address + unsubscribe note.
+    try {
+      const supaUrl = Deno.env.get("SUPABASE_URL");
+      const supaKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
+      if (supaUrl && supaKey) {
+        const r = await fetch(
+          `${supaUrl}/rest/v1/site_settings?select=setting_key,setting_value&setting_key=in.(company_address)`,
+          { headers: { apikey: supaKey, Authorization: `Bearer ${supaKey}` } },
+        );
+        const rows = (await r.json()) as Array<{ setting_key: string; setting_value: string }>;
+        const address = rows?.find((x) => x.setting_key === "company_address")?.setting_value || "";
+        const isMarketing = body.type === "custom" && /review|unsubscribe|marketing/i.test(`${subject} ${html}`);
+        const footer = `
+          <div style="max-width:560px;margin:16px auto 0;padding:0 16px;text-align:center;font-size:12px;color:#94a3b8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+            ${address ? `<p style="margin:0 0 4px;">BlueRiver Services · ${esc(address)}</p>` : ""}
+            ${isMarketing ? `<p style="margin:0;">Don't want future review or marketing emails? Reply <strong>UNSUBSCRIBE</strong> and we'll remove you.</p>` : ""}
+          </div>`;
+        if (/<\/body>/i.test(html)) {
+          html = html.replace(/<\/body>/i, `${footer}</body>`);
+        } else {
+          html = `${html}${footer}`;
+        }
+      }
+    } catch (e) {
+      console.warn("CAN-SPAM footer injection failed:", e);
+    }
+
+
     const attCheck = validateAttachments(body.attachments);
     if (!attCheck.ok) {
       console.error("Attachment validation failed:", attCheck.error);
