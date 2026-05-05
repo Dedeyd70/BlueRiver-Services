@@ -9,7 +9,7 @@ const LocalBusinessSchema = () => {
     name: settings?.company_name || "BlueRiver Services",
     description: settings?.hero_subheadline || "Professional residential and commercial cleaning services in Washington State.",
     telephone: settings?.phone || "(206) 317-8300",
-    email: settings?.email || "joshuaquao@gmail.com",
+    email: settings?.email || "info@blueriverservices.co",
     areaServed: {
       "@type": "State",
       name: "Washington",
