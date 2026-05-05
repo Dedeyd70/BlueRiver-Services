@@ -424,15 +424,22 @@ const BookService = () => {
         address: form.address.trim(),
         total: computed.total,
       };
-      supabase.functions.invoke("send-transactional-email", {
-        body: { type: "booking_received", to: form.email.trim(), data: bookingData },
-      }).catch((err) => console.error("Booking received email failed:", err));
-      supabase.functions.invoke("send-transactional-email", {
-        body: {
-          type: "admin_new_submission",
-          data: { ...bookingData, kind: "Booking", dashboardUrl: `${window.location.origin}/admin/bookings` },
-        },
-      }).catch((err) => console.error("Admin booking alert failed:", err));
+      Promise.allSettled([
+        supabase.functions.invoke("send-transactional-email", {
+          body: { type: "booking_received", to: form.email.trim(), data: bookingData },
+        }),
+        supabase.functions.invoke("send-transactional-email", {
+          body: {
+            type: "admin_new_submission",
+            to: "info@blueriverservices.co",
+            data: { ...bookingData, kind: "Booking", dashboardUrl: `${window.location.origin}/admin/bookings` },
+          },
+        }),
+      ]).then((results) => {
+        results.forEach((r, i) => {
+          if (r.status === "rejected") console.error(`[admin-email] booking ${i === 0 ? "customer" : "admin"} failed:`, r.reason);
+        });
+      });
 
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
