@@ -281,7 +281,8 @@ const BookingsAdmin = () => {
           <p>Thanks for choosing BlueRiver Services for your <strong>${serviceLabel}</strong>${dateLabel ? ` on <strong>${dateLabel}</strong>` : ""}! We'd love to hear how it went.</p>
           <p style="margin:20px 0;"><a href="${reviewLink}" style="background:#1e40af;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Leave a Review</a></p>
           <p>It only takes a minute and really helps our small team.</p>
-          <p>— The BlueRiver Team</p>`;
+          <p>— The BlueRiver Team</p>
+          <p style="font-size:12px;color:#94a3b8;margin-top:24px;">Prefer not to receive review or marketing emails? Reply <strong>UNSUBSCRIBE</strong> to this message and we'll remove you.</p>`;
         supabase.functions.invoke("send-transactional-email", {
           body: {
             type: "custom",
