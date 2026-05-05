@@ -170,45 +170,21 @@ const InvoicesAdmin = () => {
   });
 
   // Single source of truth for ALL payment recording (full or partial).
+  // Routes through confirm_invoice_payment RPC (SECURITY DEFINER) so non-admin
+  // staff with Finance/Operations permission can record payments without RLS errors.
   const applyPayment = useMutation({
     mutationFn: async (args: { id: string; amount: number; method: string; date: string; reference: string }) => {
-      const inv = invoices?.find((i) => i.id === args.id);
-      if (!inv) throw new Error("Invoice not found");
       if (!args.method) throw new Error("Payment method is required");
       if (!args.amount || args.amount <= 0) throw new Error("Amount must be greater than zero");
 
-      const newPaid = +(Number(inv.amount_paid) + args.amount).toFixed(2);
-      const total = Number(inv.total_amount);
-      const isFullyPaid = newPaid >= total;
-
-      // SAFE-MODE: never write payment_status from the frontend.
-      // Only write the non-status payment metadata (running total + method/date/ref).
-      // Status flip + paid_at + receipt creation are owned exclusively by the RPC.
-      const metaPatch: Record<string, any> = {
-        amount_paid: newPaid,
-        payment_method: args.method,
-        payment_date: args.date,
-        payment_reference: args.reference || null,
-      };
-      // Partial payments still need to reflect the "partial" badge in the UI;
-      // when fully paid, the RPC below will overwrite this to "paid".
-      if (!isFullyPaid && newPaid > 0) metaPatch.payment_status = "partial";
-
-      const { data, error } = await supabase
-        .from("invoices")
-        .update(metaPatch as any)
-        .eq("id", args.id)
-        .select("id")
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) throw new Error("Update blocked by permissions or RLS");
-
-      if (isFullyPaid) {
-        const { error: paidError } = await (supabase as any).rpc("mark_invoice_paid", {
-          p_invoice_id: args.id,
-        });
-        if (paidError) throw paidError;
-      }
+      const { error } = await (supabase as any).rpc("confirm_invoice_payment", {
+        p_invoice_id: args.id,
+        p_amount: args.amount,
+        p_method: args.method,
+        p_reference: args.reference || null,
+        p_payment_date: args.date,
+      });
+      if (error) throw new Error(error.message || "Payment failed");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-invoices"] });

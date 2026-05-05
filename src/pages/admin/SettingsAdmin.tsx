@@ -8,9 +8,12 @@ import PricingMultipliersSettings from "@/components/admin/PricingMultipliersSet
 import SocialLinksSettings from "@/components/admin/SocialLinksSettings";
 import ContentManagementSettings from "@/components/admin/ContentManagementSettings";
 import ServiceAreasSettings from "@/components/admin/ServiceAreasSettings";
+import TeamManagementSettings from "@/components/admin/TeamManagementSettings";
 import { useHasPermission } from "@/hooks/usePermissions";
+import { useAuth } from "@/hooks/useAuth";
 
 const SettingsAdmin = () => {
+  const { role } = useAuth();
   const canManageSettings = useHasPermission("can_manage_settings");
   const canManageBusinessRules = useHasPermission("can_manage_business_rules");
   const canEditAvailability = useHasPermission("can_edit_availability");
@@ -28,6 +31,7 @@ const SettingsAdmin = () => {
     { value: "socials", label: "Social Media", allowed: canManageSocials, content: <SocialLinksSettings /> },
     { value: "content", label: "Content Management", allowed: canManageSettings, content: <ContentManagementSettings /> },
     { value: "areas", label: "Service Areas", allowed: canManageSettings, content: <ServiceAreasSettings /> },
+    { value: "team", label: "Team Management", allowed: role === "admin", content: <TeamManagementSettings /> },
   ].filter((t) => t.allowed);
 
   return (

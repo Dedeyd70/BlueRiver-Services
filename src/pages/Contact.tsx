@@ -93,28 +93,35 @@ const Contact = () => {
         <p>Hi ${form.name.trim() || "there"},</p>
         <p>Thanks for reaching out to BlueRiver Services. We've received your message and will respond within 24 hours.</p>
         <p>— The BlueRiver Team</p>`;
-      supabase.functions.invoke("send-transactional-email", {
-        body: {
-          type: "custom",
-          to: form.email.trim(),
-          subject: "We received your message - BlueRiver Services",
-          html,
-        },
-      }).catch((err) => console.error("Contact confirmation email failed:", err));
-      supabase.functions.invoke("send-transactional-email", {
-        body: {
-          type: "admin_new_submission",
-          data: {
-            kind: "Contact",
-            name: form.name.trim(),
-            email: form.email.trim(),
-            phone: form.phone?.trim(),
-            service: form.service,
-            message: form.message?.trim(),
-            dashboardUrl: `${window.location.origin}/admin/messages`,
+      Promise.allSettled([
+        supabase.functions.invoke("send-transactional-email", {
+          body: {
+            type: "custom",
+            to: form.email.trim(),
+            subject: "We received your message - BlueRiver Services",
+            html,
           },
-        },
-      }).catch((err) => console.error("Admin contact alert failed:", err));
+        }),
+        supabase.functions.invoke("send-transactional-email", {
+          body: {
+            type: "admin_new_submission",
+            to: "info@blueriverservices.co",
+            data: {
+              kind: "Contact",
+              name: form.name.trim(),
+              email: form.email.trim(),
+              phone: form.phone?.trim(),
+              service: form.service,
+              message: form.message?.trim(),
+              dashboardUrl: `${window.location.origin}/admin/messages`,
+            },
+          },
+        }),
+      ]).then((results) => {
+        results.forEach((r, i) => {
+          if (r.status === "rejected") console.error(`[admin-email] contact ${i === 0 ? "customer" : "admin"} failed:`, r.reason);
+        });
+      });
 
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
