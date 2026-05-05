@@ -27,6 +27,7 @@ const drawLetterhead = (
   branding: BrandingMap,
   settings: SettingsMap
 ): number => {
+  const PRIMARY = resolvePrimary(settings);
   const bandH = 28;
   // Navy band
   doc.setFillColor(...NAVY);
