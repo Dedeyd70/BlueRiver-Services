@@ -17,8 +17,23 @@ import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
 import { useServiceAreas } from "@/hooks/useServiceAreas";
 
-const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail"];
+const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail", "Other"];
+const RESIDENTIAL_PROPERTY_TYPES = ["House", "Apartment", "Townhome", "Other"];
+const RESIDENTIAL_ADDON_PATTERN = /\b(oven|fridge|refrigerator|inside\s+cabinet|laundry|dishwash)/i;
 const isCommercialService = (s: string) => /commercial/i.test(s ?? "");
+const SERVICE_EXPECTATIONS: Record<string, string> = {
+  "standard": "Routine cleaning of all standard rooms — typically 2–3 hrs for an average home.",
+  "deep": "Detailed top-to-bottom cleaning. Plan for 4–6 hrs depending on size and condition.",
+  "move": "Empty-property turnover, includes inside cabinets and appliances. Allow a half-day.",
+  "post-construction": "Heavy debris/dust removal. Requires assessment — final price may vary.",
+  "commercial": "Scheduled office/facility cleaning. We'll confirm scope before the first visit.",
+  "airbnb": "Fast turnover cleaning between guests, ~1.5–2 hrs typical.",
+};
+const expectationFor = (name: string): string => {
+  const k = (name || "").toLowerCase();
+  for (const key of Object.keys(SERVICE_EXPECTATIONS)) if (k.includes(key)) return SERVICE_EXPECTATIONS[key];
+  return "We'll review your details and provide a tailored estimate.";
+};
 
 // Keys that map to typed columns on quote_requests; everything else goes into custom_fields.
 const TYPED_FIELD_KEYS = new Set([
