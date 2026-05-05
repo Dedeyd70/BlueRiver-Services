@@ -31,6 +31,7 @@ const SettingsAdmin = () => {
     { value: "socials", label: "Social Media", allowed: canManageSocials, content: <SocialLinksSettings /> },
     { value: "content", label: "Content Management", allowed: canManageSettings, content: <ContentManagementSettings /> },
     { value: "areas", label: "Service Areas", allowed: canManageSettings, content: <ServiceAreasSettings /> },
+    { value: "team", label: "Team Management", allowed: role === "admin", content: <TeamManagementSettings /> },
   ].filter((t) => t.allowed);
 
   return (
