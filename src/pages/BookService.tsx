@@ -396,7 +396,9 @@ const BookService = () => {
         notes: form.notes.trim() || null,
         consent_given: consent,
         status: initialStatus,
-        property_type: form.property_type || null,
+        property_type: form.property_type === "Other" && form.property_type_other.trim()
+          ? `Other: ${form.property_type_other.trim()}`
+          : (form.property_type || null),
         square_footage: form.square_footage || null,
         floor_type: form.floor_type || null,
         condition_level: form.condition_level || null,
