@@ -67,7 +67,7 @@ const esc = (v: unknown) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-const wrap = (title: string, inner: string) => `
+const wrap = (title: string, inner: string, opts: { address?: string; unsubscribe?: boolean } = {}) => `
 <!doctype html><html><body style="margin:0;background:#f4f7fb;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
   <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
     <div style="background:#1e40af;color:#fff;padding:20px 24px;border-radius:12px 12px 0 0;">
@@ -78,8 +78,10 @@ const wrap = (title: string, inner: string) => `
       ${inner}
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;"/>
       <p style="margin:0;font-size:13px;color:#64748b;">Questions? Reply to this email or contact us at <a href="mailto:info@blueriverservices.co" style="color:#1e40af;">info@blueriverservices.co</a>.</p>
+      ${opts.unsubscribe ? `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">Don't want future review or marketing emails? Reply with "UNSUBSCRIBE" and we'll remove you from these messages.</p>` : ""}
     </div>
-    <p style="text-align:center;font-size:12px;color:#94a3b8;margin:16px 0 0;">© ${new Date().getFullYear()} BlueRiver Services</p>
+    <p style="text-align:center;font-size:12px;color:#94a3b8;margin:16px 0 4px;">© ${new Date().getFullYear()} BlueRiver Services</p>
+    ${opts.address ? `<p style="text-align:center;font-size:12px;color:#94a3b8;margin:0;">${esc(opts.address)}</p>` : ""}
   </div>
 </body></html>`;
 
