@@ -84,6 +84,7 @@ const buildInvoiceDoc = (
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 20;
+  const PRIMARY = resolvePrimary(settings);
   let y = drawLetterhead(doc, pageW, branding, settings);
 
   // Invoice header
