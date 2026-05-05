@@ -77,6 +77,7 @@ const BookService = () => {
     has_pets: false,
     pet_count: "",
     entry_codes: "",
+    property_type_other: "",
   });
   // Dynamic field values keyed by field_key
   const [dynValues, setDynValues] = useState<Record<string, any>>({});
