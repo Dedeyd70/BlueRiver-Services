@@ -371,6 +371,9 @@ const RequestQuote = () => {
                   {!form.service && (
                     <p className="text-xs text-muted-foreground mt-1.5">Choose a service to see relevant details.</p>
                   )}
+                  {form.service && (
+                    <p className="text-xs text-muted-foreground mt-1.5"><strong>What to expect:</strong> {expectationFor(form.service)}</p>
+                  )}
                 </div>
 
                 {form.service && (
@@ -383,10 +386,19 @@ const RequestQuote = () => {
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
                           <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                             <option value="">Select type</option>
-                            {(isCommercialService(form.service) ? COMMERCIAL_PROPERTY_TYPES : ["House", "Apartment", "Office", "Townhome"]).map((t) => (
+                            {(isCommercialService(form.service) ? COMMERCIAL_PROPERTY_TYPES : RESIDENTIAL_PROPERTY_TYPES).map((t) => (
                               <option key={t} value={t}>{t}</option>
                             ))}
                           </select>
+                          {form.property_type === "Other" && (
+                            <Input
+                              className="mt-2"
+                              placeholder="Please specify property type"
+                              value={form.property_type_other}
+                              onChange={update("property_type_other")}
+                              maxLength={100}
+                            />
+                          )}
                         </div>
                         <div>
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
