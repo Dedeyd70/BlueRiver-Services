@@ -101,6 +101,7 @@ const buildQuoteDoc = (
   const doc = new jsPDF({ compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
+  const PRIMARY = resolvePrimary(settings);
   let y = drawLetterhead(doc, pageW, branding, settings);
 
   // Quote header
