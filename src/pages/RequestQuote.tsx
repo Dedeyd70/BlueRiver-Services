@@ -17,8 +17,23 @@ import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
 import { useServiceAreas } from "@/hooks/useServiceAreas";
 
-const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail"];
+const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail", "Other"];
+const RESIDENTIAL_PROPERTY_TYPES = ["House", "Apartment", "Townhome", "Other"];
+const RESIDENTIAL_ADDON_PATTERN = /\b(oven|fridge|refrigerator|inside\s+cabinet|laundry|dishwash)/i;
 const isCommercialService = (s: string) => /commercial/i.test(s ?? "");
+const SERVICE_EXPECTATIONS: Record<string, string> = {
+  "standard": "Routine cleaning of all standard rooms — typically 2–3 hrs for an average home.",
+  "deep": "Detailed top-to-bottom cleaning. Plan for 4–6 hrs depending on size and condition.",
+  "move": "Empty-property turnover, includes inside cabinets and appliances. Allow a half-day.",
+  "post-construction": "Heavy debris/dust removal. Requires assessment — final price may vary.",
+  "commercial": "Scheduled office/facility cleaning. We'll confirm scope before the first visit.",
+  "airbnb": "Fast turnover cleaning between guests, ~1.5–2 hrs typical.",
+};
+const expectationFor = (name: string): string => {
+  const k = (name || "").toLowerCase();
+  for (const key of Object.keys(SERVICE_EXPECTATIONS)) if (k.includes(key)) return SERVICE_EXPECTATIONS[key];
+  return "We'll review your details and provide a tailored estimate.";
+};
 
 // Keys that map to typed columns on quote_requests; everything else goes into custom_fields.
 const TYPED_FIELD_KEYS = new Set([
@@ -47,6 +62,7 @@ const RequestQuote = () => {
     condition_level: "",
     floor_type: "",
     is_empty_property: false,
+    property_type_other: "",
   });
   // Dynamic field values keyed by field_key
   const [dynValues, setDynValues] = useState<Record<string, any>>({});
@@ -205,7 +221,9 @@ const RequestQuote = () => {
         preferred_contact: form.preferred_contact,
         attachment_url: attachmentUrl || null,
         consent_given: consent,
-        property_type: form.property_type || null,
+        property_type: form.property_type === "Other" && form.property_type_other.trim()
+          ? `Other: ${form.property_type_other.trim()}`
+          : (form.property_type || null),
         square_footage: form.square_footage || null,
         floor_type: form.floor_type || null,
         condition_level: form.condition_level || null,
@@ -355,6 +373,9 @@ const RequestQuote = () => {
                   {!form.service && (
                     <p className="text-xs text-muted-foreground mt-1.5">Choose a service to see relevant details.</p>
                   )}
+                  {form.service && (
+                    <p className="text-xs text-muted-foreground mt-1.5"><strong>What to expect:</strong> {expectationFor(form.service)}</p>
+                  )}
                 </div>
 
                 {form.service && (
@@ -367,10 +388,19 @@ const RequestQuote = () => {
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Property Type</label>
                           <select value={form.property_type} onChange={update("property_type")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                             <option value="">Select type</option>
-                            {(isCommercialService(form.service) ? COMMERCIAL_PROPERTY_TYPES : ["House", "Apartment", "Office", "Townhome"]).map((t) => (
+                            {(isCommercialService(form.service) ? COMMERCIAL_PROPERTY_TYPES : RESIDENTIAL_PROPERTY_TYPES).map((t) => (
                               <option key={t} value={t}>{t}</option>
                             ))}
                           </select>
+                          {form.property_type === "Other" && (
+                            <Input
+                              className="mt-2"
+                              placeholder="Please specify property type"
+                              value={form.property_type_other}
+                              onChange={update("property_type_other")}
+                              maxLength={100}
+                            />
+                          )}
                         </div>
                         <div>
                           <label className="text-sm font-medium text-foreground mb-1.5 block">Approx. Sq Ft</label>
@@ -452,21 +482,28 @@ const RequestQuote = () => {
                   </>
                 )}
 
-                {/* Add-ons as requested extras */}
-                {form.service && addons.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">Interested in Add-Ons? (optional)</label>
-                    <p className="text-xs text-muted-foreground mb-3">Select any extras you'd like us to consider. Final pricing will be provided in your quote.</p>
-                    <div className="space-y-2">
-                      {addons.map((a) => (
-                        <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
-                          <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
-                          <span className="text-sm font-medium text-foreground">{a.title}</span>
-                        </label>
-                      ))}
+                {/* Add-ons — residential add-ons hidden for Commercial services */}
+                {form.service && (() => {
+                  const visible = isCommercialService(form.service)
+                    ? addons.filter((a) => !RESIDENTIAL_ADDON_PATTERN.test(a.title))
+                    : addons;
+                  if (!visible.length) return null;
+                  return (
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">Interested in Add-Ons? (optional)</label>
+                      <p className="text-xs text-muted-foreground mb-3">Select any extras you'd like us to consider. Final pricing will be provided in your quote.</p>
+                      <div className="space-y-2">
+                        {visible.map((a) => (
+                          <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
+                            <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
+                            <span className="text-sm font-medium text-foreground">{a.title}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">Final price may vary based on on-site assessment of size, condition, and scope.</p>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Description of Request *</label>
