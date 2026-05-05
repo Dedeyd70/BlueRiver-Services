@@ -76,7 +76,9 @@ const drawLetterhead = (
   doc.setTextColor(...SLATE_300);
   const tagline = settings.footer_tagline || "Professional cleaning services";
   doc.text(tagline, badgeX + badgeSize + 6, 18.5);
-  const contactLine = [settings.phone, settings.email].filter(Boolean).join("  ·  ");
+  const contactLine = [settings.phone, settings.email, settings.company_address]
+    .filter(Boolean)
+    .join("  ·  ");
   if (contactLine) {
     doc.text(contactLine, badgeX + badgeSize + 6, 23);
   }
