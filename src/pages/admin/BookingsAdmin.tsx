@@ -196,7 +196,7 @@ const BookingsAdmin = () => {
       // Send branded confirmation email via Resend (fire-and-forget).
       supabase.functions.invoke("send-transactional-email", {
         body: {
-          type: "booking_confirmation",
+          type: "booking_confirmed",
           to: b.email,
           data: {
             name: b.name,
