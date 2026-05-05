@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
 
     const resendBody: Record<string, unknown> = {
       from: FROM,
-      to: [body.to],
+      to: [recipient],
       reply_to: REPLY_TO,
       subject,
       html,
