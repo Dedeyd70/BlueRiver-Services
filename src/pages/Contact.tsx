@@ -101,6 +101,20 @@ const Contact = () => {
           html,
         },
       }).catch((err) => console.error("Contact confirmation email failed:", err));
+      supabase.functions.invoke("send-transactional-email", {
+        body: {
+          type: "admin_new_submission",
+          data: {
+            kind: "Contact",
+            name: form.name.trim(),
+            email: form.email.trim(),
+            phone: form.phone?.trim(),
+            service: form.service_type,
+            message: form.message?.trim(),
+            dashboardUrl: `${window.location.origin}/admin/messages`,
+          },
+        },
+      }).catch((err) => console.error("Admin contact alert failed:", err));
 
       setCooldown(true);
       setTimeout(() => setCooldown(false), 30000);
