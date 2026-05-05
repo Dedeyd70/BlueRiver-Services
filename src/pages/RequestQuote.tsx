@@ -480,21 +480,28 @@ const RequestQuote = () => {
                   </>
                 )}
 
-                {/* Add-ons as requested extras */}
-                {form.service && addons.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">Interested in Add-Ons? (optional)</label>
-                    <p className="text-xs text-muted-foreground mb-3">Select any extras you'd like us to consider. Final pricing will be provided in your quote.</p>
-                    <div className="space-y-2">
-                      {addons.map((a) => (
-                        <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
-                          <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
-                          <span className="text-sm font-medium text-foreground">{a.title}</span>
-                        </label>
-                      ))}
+                {/* Add-ons — residential add-ons hidden for Commercial services */}
+                {form.service && (() => {
+                  const visible = isCommercialService(form.service)
+                    ? addons.filter((a) => !RESIDENTIAL_ADDON_PATTERN.test(a.title))
+                    : addons;
+                  if (!visible.length) return null;
+                  return (
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">Interested in Add-Ons? (optional)</label>
+                      <p className="text-xs text-muted-foreground mb-3">Select any extras you'd like us to consider. Final pricing will be provided in your quote.</p>
+                      <div className="space-y-2">
+                        {visible.map((a) => (
+                          <label key={a.title} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedAddons.includes(a.title) ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
+                            <Checkbox checked={selectedAddons.includes(a.title)} onCheckedChange={() => toggleAddon(a.title)} />
+                            <span className="text-sm font-medium text-foreground">{a.title}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">Final price may vary based on on-site assessment of size, condition, and scope.</p>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Description of Request *</label>
