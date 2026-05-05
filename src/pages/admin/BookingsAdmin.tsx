@@ -375,14 +375,22 @@ const BookingsAdmin = () => {
       }, 0);
     }
     const total = totalNum.toFixed(2);
+    const isPaid = inv.payment_status === "paid";
+    const docLabel = isPaid ? "Receipt" : "Invoice";
+    const subject = isPaid
+      ? `Receipt for your cleaning service — ${inv.invoice_number ?? ""}`
+      : `Invoice ${inv.invoice_number ?? ""} from BlueRiver Services`;
+    const paymentInstructions =
+      pdfSettings?.payment_methods ||
+      "Pay via Zelle to info@blueriverservices.co. Cash also accepted on-site.";
     const html = `
       <p>Hi ${customerName},</p>
-      <p>Thank you for choosing BlueRiver Services. Your invoice <strong>${inv.invoice_number ?? ""}</strong> is attached as a PDF.</p>
-      <p><strong>Amount due:</strong> $${total}</p>
+      <p>Thank you for choosing BlueRiver Services. Your ${docLabel.toLowerCase()} <strong>${inv.invoice_number ?? ""}</strong> is attached as a PDF.</p>
+      <p><strong>${isPaid ? "Amount paid" : "Amount due"}:</strong> $${total}</p>
+      ${isPaid ? "" : `
       <h3 style="margin:20px 0 6px;color:#1e40af;">Payment Instructions</h3>
-      <p style="margin:0 0 4px;">Pay via <strong>Zelle</strong> to <a href="mailto:info@blueriverservices.co">info@blueriverservices.co</a>.</p>
-      <p style="margin:0 0 4px;">Memo: Invoice #${inv.invoice_number ?? ""}</p>
-      <p style="margin:0 0 16px;">Cash also accepted on-site.</p>
+      <p style="margin:0 0 4px;">${paymentInstructions}</p>
+      <p style="margin:0 0 16px;">Memo: Invoice #${inv.invoice_number ?? ""}</p>`}
       <p>Please reply to this email if you have any questions.</p>
       <p>— The BlueRiver Team</p>`;
     try {
@@ -391,7 +399,7 @@ const BookingsAdmin = () => {
         body: {
           type: "custom",
           to: recipient,
-          subject: `Invoice ${inv.invoice_number ?? ""} from BlueRiver Services`,
+          subject,
           html,
           attachments: [{ filename, content: base64 }],
         },
