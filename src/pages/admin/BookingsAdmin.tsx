@@ -405,10 +405,10 @@ const BookingsAdmin = () => {
         },
       });
       if (error) throw error;
-      toast({ title: "Invoice emailed", description: `Sent to ${recipient}` });
+      toast({ title: `${docLabel} emailed`, description: `Sent to ${recipient}` });
       if (b?.id) {
         await logBookingActivity(b.id, "note", {
-          notes: `Invoice ${inv.invoice_number ?? ""} sent to ${recipient}`,
+          notes: `${docLabel} ${inv.invoice_number ?? ""} sent to ${recipient}`,
         });
         qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
       }
