@@ -8,9 +8,12 @@ import PricingMultipliersSettings from "@/components/admin/PricingMultipliersSet
 import SocialLinksSettings from "@/components/admin/SocialLinksSettings";
 import ContentManagementSettings from "@/components/admin/ContentManagementSettings";
 import ServiceAreasSettings from "@/components/admin/ServiceAreasSettings";
+import TeamManagementSettings from "@/components/admin/TeamManagementSettings";
 import { useHasPermission } from "@/hooks/usePermissions";
+import { useAuth } from "@/hooks/useAuth";
 
 const SettingsAdmin = () => {
+  const { role } = useAuth();
   const canManageSettings = useHasPermission("can_manage_settings");
   const canManageBusinessRules = useHasPermission("can_manage_business_rules");
   const canEditAvailability = useHasPermission("can_edit_availability");
