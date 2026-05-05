@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { createInvoiceFromBooking } from "@/lib/createInvoiceFromBooking";
@@ -23,6 +24,18 @@ import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 import { recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
+
+const RESCHEDULE_TIME_SLOTS: string[] = (() => {
+  const out: string[] = [];
+  for (let m = 8 * 60; m <= 18 * 60; m += 30) {
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    out.push(`${h12}:${mm.toString().padStart(2, "0")} ${ampm}`);
+  }
+  return out;
+})();
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -196,7 +209,7 @@ const BookingsAdmin = () => {
       // Send branded confirmation email via Resend (fire-and-forget).
       supabase.functions.invoke("send-transactional-email", {
         body: {
-          type: "booking_confirmation",
+          type: "booking_confirmed",
           to: b.email,
           data: {
             name: b.name,
@@ -931,13 +944,18 @@ const BookingsAdmin = () => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">New time slot</label>
-              <Input
-                placeholder="e.g. 10:00 AM"
-                value={rescheduleSlot}
-                onChange={(e) => setRescheduleSlot(e.target.value)}
-              />
+              <Select value={rescheduleSlot} onValueChange={setRescheduleSlot}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RESCHEDULE_TIME_SLOTS.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                Slot collisions are checked automatically before saving.
+                30-minute intervals from 8:00 AM to 6:00 PM. Slot collisions are checked automatically before saving.
               </p>
             </div>
           </div>

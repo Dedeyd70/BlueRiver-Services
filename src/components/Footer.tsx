@@ -16,7 +16,7 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
 
   const phone = settings?.phone || "(206) 317-8300";
   const phoneLink = settings?.phone_link || "+12063178300";
-  const email = settings?.email || "joshuaquao@gmail.com";
+  const email = settings?.email || "info@blueriverservices.co";
   const serviceArea = settings?.service_area || "Serving Washington State";
   const tagline = settings?.footer_tagline || "Professional cleaning services for homes and businesses. Trusted by our community.";
 
