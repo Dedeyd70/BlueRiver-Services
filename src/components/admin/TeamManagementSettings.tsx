@@ -21,13 +21,25 @@ const TeamManagementSettings = () => {
   const qc = useQueryClient();
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  const { data: users, isLoading } = useQuery({
+  const { data: users, isLoading, error } = useQuery({
     queryKey: ["team-management-users"],
     queryFn: async (): Promise<TeamUser[]> => {
-      const { data, error } = await supabase.functions.invoke("list-admin-users");
-      if (error) throw error;
-      return (data?.users ?? []) as TeamUser[];
+      const res = await supabase.functions.invoke("list-admin-users");
+      if (res.error) {
+        // Fall back to user_roles only — still functional for permission editing.
+        const { data, error: rErr } = await supabase.from("user_roles").select("*");
+        if (rErr) throw rErr;
+        return (data ?? []).map((r: any) => ({
+          user_id: r.user_id,
+          email: null,
+          full_name: null,
+          role: r.role,
+          permissions: r.permissions ?? {},
+        }));
+      }
+      return (res.data?.users ?? []) as TeamUser[];
     },
+    retry: 1,
   });
 
   const toggleBundle = useMutation({
@@ -52,6 +64,14 @@ const TeamManagementSettings = () => {
     return (
       <div className="flex items-center justify-center py-12 text-muted-foreground">
         <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading team…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-sm text-destructive p-4 border border-destructive/30 rounded-lg bg-destructive/5">
+        Failed to load team. {(error as Error).message}
       </div>
     );
   }

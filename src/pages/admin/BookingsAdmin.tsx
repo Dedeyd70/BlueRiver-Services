@@ -18,6 +18,8 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { ChevronDown, ChevronUp, Clock, FileText, Send, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf, generateInvoicePdfBase64 } from "@/lib/invoicePdf";
+import { configFromSettings, isSlotBlocked } from "@/lib/availability";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { friendlyRpcError } from "@/lib/friendlyRpcError";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
 import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
@@ -92,6 +94,18 @@ const BookingsAdmin = () => {
   // Modify Items dialog state
   const [modifyTarget, setModifyTarget] = useState<any>(null);
   const [modifyItems, setModifyItems] = useState<LineItem[]>([]);
+  const { data: siteSettings } = useSiteSettings();
+
+  // Booked slots for the date currently selected in the Reschedule modal — used
+  // to disable conflicting time options.
+  const { data: rescheduleBookedSlots } = useQuery({
+    queryKey: ["reschedule-booked-slots", rescheduleDate],
+    enabled: !!rescheduleDate,
+    queryFn: async () => {
+      const { data } = await (supabase as any).rpc("get_booked_slots", { p_date: rescheduleDate });
+      return (data ?? []).map((r: any) => r.time_slot) as string[];
+    },
+  });
 
   useEffect(() => {
     if (focusId) setExpandedId(focusId);
@@ -949,13 +963,24 @@ const BookingsAdmin = () => {
                   <SelectValue placeholder="Select a time" />
                 </SelectTrigger>
                 <SelectContent>
-                  {RESCHEDULE_TIME_SLOTS.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
+                  {RESCHEDULE_TIME_SLOTS.map((s) => {
+                    const cfg = configFromSettings(siteSettings);
+                    const isSame = rescheduleTarget?.booking_date === rescheduleDate && rescheduleTarget?.time_slot === s;
+                    const isBooked = !isSame && rescheduleBookedSlots?.includes(s);
+                    const isBlocked = !isSame && !isBooked && isSlotBlocked(s, rescheduleBookedSlots, cfg);
+                    const disabled = !!(isBooked || isBlocked);
+                    return (
+                      <SelectItem key={s} value={s} disabled={disabled}>
+                        <span className={disabled ? "line-through text-muted-foreground" : ""}>
+                          {s}{isBooked ? " — Booked" : isBlocked ? " — Buffer" : ""}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                30-minute intervals from 8:00 AM to 6:00 PM. Slot collisions are checked automatically before saving.
+                30-minute intervals from 8:00 AM to 6:00 PM. Slots in the {configFromSettings(siteSettings).bufferMinutes}-min buffer of an existing booking are disabled.
               </p>
             </div>
           </div>
