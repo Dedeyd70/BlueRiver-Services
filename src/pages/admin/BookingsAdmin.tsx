@@ -251,27 +251,24 @@ const BookingsAdmin = () => {
       if (updErr) throw updErr;
       if (!updData) throw new Error("Update blocked by permissions or RLS");
 
-      const invoice = await createInvoiceFromBooking(b, user?.id);
-
+      // Phase C: invoice generation is decoupled from completion.
+      // 'Mark Completed' now only updates status + sends review email.
       await logBookingActivity(b.id, "completed", {
         previous_status: b.status,
         new_status: "completed",
-        details: invoice?.invoice_number ? `Invoice ${invoice.invoice_number} generated` : undefined,
       });
 
       await notifyAdmins(
         "booking_completed",
-        `Booking for ${b.name} completed. Invoice ${invoice?.invoice_number ?? ""} generated.`,
-        invoice?.id,
-        "invoice"
+        `Booking for ${b.name} marked completed.`,
+        b.id,
+        "booking"
       );
 
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
-      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
-      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
       qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
-      toast({ title: `Marked completed. Invoice ${invoice?.invoice_number ?? ""} created.` });
+      toast({ title: "Booking marked completed. Use Generate Invoice when ready to bill." });
 
       // Fire-and-forget: ask the customer for a review
       if (b.email) {
@@ -378,14 +375,22 @@ const BookingsAdmin = () => {
       }, 0);
     }
     const total = totalNum.toFixed(2);
+    const isPaid = inv.payment_status === "paid";
+    const docLabel = isPaid ? "Receipt" : "Invoice";
+    const subject = isPaid
+      ? `Receipt for your cleaning service — ${inv.invoice_number ?? ""}`
+      : `Invoice ${inv.invoice_number ?? ""} from BlueRiver Services`;
+    const paymentInstructions =
+      pdfSettings?.payment_methods ||
+      "Pay via Zelle to info@blueriverservices.co. Cash also accepted on-site.";
     const html = `
       <p>Hi ${customerName},</p>
-      <p>Thank you for choosing BlueRiver Services. Your invoice <strong>${inv.invoice_number ?? ""}</strong> is attached as a PDF.</p>
-      <p><strong>Amount due:</strong> $${total}</p>
+      <p>Thank you for choosing BlueRiver Services. Your ${docLabel.toLowerCase()} <strong>${inv.invoice_number ?? ""}</strong> is attached as a PDF.</p>
+      <p><strong>${isPaid ? "Amount paid" : "Amount due"}:</strong> $${total}</p>
+      ${isPaid ? "" : `
       <h3 style="margin:20px 0 6px;color:#1e40af;">Payment Instructions</h3>
-      <p style="margin:0 0 4px;">Pay via <strong>Zelle</strong> to <a href="mailto:info@blueriverservices.co">info@blueriverservices.co</a>.</p>
-      <p style="margin:0 0 4px;">Memo: Invoice #${inv.invoice_number ?? ""}</p>
-      <p style="margin:0 0 16px;">Cash also accepted on-site.</p>
+      <p style="margin:0 0 4px;">${paymentInstructions}</p>
+      <p style="margin:0 0 16px;">Memo: Invoice #${inv.invoice_number ?? ""}</p>`}
       <p>Please reply to this email if you have any questions.</p>
       <p>— The BlueRiver Team</p>`;
     try {
@@ -394,16 +399,16 @@ const BookingsAdmin = () => {
         body: {
           type: "custom",
           to: recipient,
-          subject: `Invoice ${inv.invoice_number ?? ""} from BlueRiver Services`,
+          subject,
           html,
           attachments: [{ filename, content: base64 }],
         },
       });
       if (error) throw error;
-      toast({ title: "Invoice emailed", description: `Sent to ${recipient}` });
+      toast({ title: `${docLabel} emailed`, description: `Sent to ${recipient}` });
       if (b?.id) {
         await logBookingActivity(b.id, "note", {
-          notes: `Invoice ${inv.invoice_number ?? ""} sent to ${recipient}`,
+          notes: `${docLabel} ${inv.invoice_number ?? ""} sent to ${recipient}`,
         });
         qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
       }

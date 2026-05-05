@@ -28,12 +28,22 @@ export interface QuoteDraft {
 interface BrandingMap { [key: string]: string }
 interface SettingsMap { [key: string]: string }
 
-// ---- BlueRiver theme ----
+// ---- BlueRiver theme (defaults; brand color overridable via site_settings.brand_color_hex) ----
 const NAVY: [number, number, number] = [15, 23, 42];
-const PRIMARY: [number, number, number] = [30, 58, 138];
+const DEFAULT_PRIMARY: [number, number, number] = [30, 58, 138];
 const SLATE_300: [number, number, number] = [203, 213, 225];
 const SLATE_500: [number, number, number] = [100, 116, 139];
 const SLATE_100: [number, number, number] = [241, 245, 249];
+
+const hexToRgb = (hex?: string): [number, number, number] | null => {
+  if (!hex) return null;
+  const m = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(m)) return null;
+  return [parseInt(m.slice(0, 2), 16), parseInt(m.slice(2, 4), 16), parseInt(m.slice(4, 6), 16)];
+};
+
+const resolvePrimary = (settings: SettingsMap): [number, number, number] =>
+  hexToRgb(settings?.brand_color_hex) ?? DEFAULT_PRIMARY;
 
 const drawLetterhead = (
   doc: jsPDF,
@@ -41,6 +51,7 @@ const drawLetterhead = (
   branding: BrandingMap,
   settings: SettingsMap
 ): number => {
+  const PRIMARY = resolvePrimary(settings);
   const bandH = 28;
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, pageW, bandH, "F");
@@ -65,7 +76,9 @@ const drawLetterhead = (
   doc.setTextColor(...SLATE_300);
   const tagline = settings.footer_tagline || "Professional cleaning services";
   doc.text(tagline, badgeX + badgeSize + 6, 18.5);
-  const contactLine = [settings.phone, settings.email].filter(Boolean).join("  ·  ");
+  const contactLine = [settings.phone, settings.email, settings.company_address]
+    .filter(Boolean)
+    .join("  ·  ");
   if (contactLine) {
     doc.text(contactLine, badgeX + badgeSize + 6, 23);
   }
@@ -90,6 +103,7 @@ const buildQuoteDoc = (
   const doc = new jsPDF({ compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
+  const PRIMARY = resolvePrimary(settings);
   let y = drawLetterhead(doc, pageW, branding, settings);
 
   // Quote header
