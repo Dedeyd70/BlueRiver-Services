@@ -153,8 +153,8 @@ Deno.serve(async (req) => {
     if (!apiKey) throw new Error("RESEND_API_KEY not configured");
 
     const body = (await req.json()) as Payload;
-    if (!body?.to || !body?.type) {
-      return new Response(JSON.stringify({ error: "Missing 'to' or 'type'" }), {
+    if (!body?.type) {
+      return new Response(JSON.stringify({ error: "Missing 'type'" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -163,13 +163,30 @@ Deno.serve(async (req) => {
     let subject = body.subject ?? "";
     let html = body.html ?? "";
     const data = body.data ?? {};
+    // admin_new_submission ALWAYS routes to the shared admin inbox.
+    const recipient = body.type === "admin_new_submission" ? ADMIN_INBOX : body.to;
 
-    if (body.type === "booking_confirmation") {
-      const t = bookingTemplate(data);
+    if (!recipient) {
+      return new Response(JSON.stringify({ error: "Missing 'to'" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.type === "booking_received" || body.type === "booking_confirmation") {
+      const t = bookingReceivedTemplate(data);
+      subject ||= t.subject;
+      html ||= t.html;
+    } else if (body.type === "booking_confirmed") {
+      const t = bookingConfirmedTemplate(data);
       subject ||= t.subject;
       html ||= t.html;
     } else if (body.type === "quote_received") {
       const t = quoteTemplate(data);
+      subject ||= t.subject;
+      html ||= t.html;
+    } else if (body.type === "admin_new_submission") {
+      const t = adminAlertTemplate(data);
       subject ||= t.subject;
       html ||= t.html;
     }
