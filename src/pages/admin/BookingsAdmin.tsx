@@ -273,9 +273,12 @@ const BookingsAdmin = () => {
       // Fire-and-forget: ask the customer for a review
       if (b.email) {
         const reviewLink = `${window.location.origin}/review/${b.id}?email=${encodeURIComponent(b.email)}`;
+        const serviceLabel = b.service_type || "cleaning";
+        const dateLabel = b.booking_date ? format(new Date(b.booking_date), "MMM d, yyyy") : null;
+        const reviewSubject = `How was your BlueRiver ${serviceLabel}${dateLabel ? ` on ${dateLabel}` : ""}?`;
         const reviewHtml = `
           <p>Hi ${b.name || "there"},</p>
-          <p>Thanks for choosing BlueRiver Services! We'd love to hear how it went.</p>
+          <p>Thanks for choosing BlueRiver Services for your <strong>${serviceLabel}</strong>${dateLabel ? ` on <strong>${dateLabel}</strong>` : ""}! We'd love to hear how it went.</p>
           <p style="margin:20px 0;"><a href="${reviewLink}" style="background:#1e40af;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Leave a Review</a></p>
           <p>It only takes a minute and really helps our small team.</p>
           <p>— The BlueRiver Team</p>`;
@@ -283,7 +286,7 @@ const BookingsAdmin = () => {
           body: {
             type: "custom",
             to: b.email,
-            subject: "How was your BlueRiver cleaning?",
+            subject: reviewSubject,
             html: reviewHtml,
           },
         }).catch((err) => console.error("Review request email failed:", err));
