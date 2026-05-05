@@ -13,6 +13,7 @@ export interface ServiceType {
   id: string;
   name: string;
   base_price: number;
+  tax_applies?: boolean | null;
 }
 
 export interface PricingRule {
