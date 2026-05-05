@@ -251,27 +251,24 @@ const BookingsAdmin = () => {
       if (updErr) throw updErr;
       if (!updData) throw new Error("Update blocked by permissions or RLS");
 
-      const invoice = await createInvoiceFromBooking(b, user?.id);
-
+      // Phase C: invoice generation is decoupled from completion.
+      // 'Mark Completed' now only updates status + sends review email.
       await logBookingActivity(b.id, "completed", {
         previous_status: b.status,
         new_status: "completed",
-        details: invoice?.invoice_number ? `Invoice ${invoice.invoice_number} generated` : undefined,
       });
 
       await notifyAdmins(
         "booking_completed",
-        `Booking for ${b.name} completed. Invoice ${invoice?.invoice_number ?? ""} generated.`,
-        invoice?.id,
-        "invoice"
+        `Booking for ${b.name} marked completed.`,
+        b.id,
+        "booking"
       );
 
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-bookings-sub"] });
-      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
-      qc.invalidateQueries({ queryKey: ["admin-invoices-by-booking"] });
       qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
-      toast({ title: `Marked completed. Invoice ${invoice?.invoice_number ?? ""} created.` });
+      toast({ title: "Booking marked completed. Use Generate Invoice when ready to bill." });
 
       // Fire-and-forget: ask the customer for a review
       if (b.email) {
