@@ -28,7 +28,7 @@ const AdminLogin = () => {
     if (error) {
       toast({ title: "Login failed", description: error, variant: "destructive" });
     } else {
-      navigate("/admin", { replace: true });
+      navigate("/onpass-useradmin-blueriveracess052026", { replace: true });
     }
   };
 
@@ -73,7 +73,7 @@ const AdminLogin = () => {
                 <p className="text-xs text-muted-foreground mt-0.5">{getRoleLabel(role)}</p>
               )}
             </div>
-            <Button className="w-full" onClick={() => navigate("/admin")}>
+            <Button className="w-full" onClick={() => navigate("/onpass-useradmin-blueriveracess052026")}>
               Continue to Dashboard
             </Button>
             <Button variant="ghost" className="w-full text-muted-foreground" onClick={handleSwitchAccount}>

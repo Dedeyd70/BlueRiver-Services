@@ -136,11 +136,11 @@ const QuotesAdmin = () => {
         qc.invalidateQueries({ queryKey: ["admin-quotes"] });
         qc.invalidateQueries({ queryKey: ["admin-contact-messages"] });
         qc.invalidateQueries({ queryKey: ["contact-activity-logs"] });
-        navigate(`/admin/quotes?focus=${inserted.id}`, { replace: true });
+        navigate(`/onpass-useradmin-blueriveracess052026/quotes?focus=${inserted.id}`, { replace: true });
         setExpandedId(inserted.id);
       } catch (e: any) {
         toast({ title: "Convert failed", description: e?.message || String(e), variant: "destructive" });
-        navigate(`/admin/quotes`, { replace: true });
+        navigate(`/onpass-useradmin-blueriveracess052026/quotes`, { replace: true });
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
