@@ -278,7 +278,6 @@ const BookService = () => {
       pet_count: form.has_pets ? Number(form.pet_count) || 0 : 0,
       is_empty_property: form.is_empty_property,
       floor_type: form.floor_type || null,
-      frequency: form.frequency || null,
       property_type: form.property_type || null,
       custom_fields: dynValues,
     };
