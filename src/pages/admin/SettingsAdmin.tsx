@@ -1,14 +1,14 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import BusinessInfoSettings from "@/components/onpass-useradmin-blueriveracess052026/BusinessInfoSettings";
-import BusinessRulesSettings from "@/components/onpass-useradmin-blueriveracess052026/BusinessRulesSettings";
-import AvailabilitySettings from "@/components/onpass-useradmin-blueriveracess052026/AvailabilitySettings";
-import PaymentSettings from "@/components/onpass-useradmin-blueriveracess052026/PaymentSettings";
-import PricingSettings from "@/components/onpass-useradmin-blueriveracess052026/PricingSettings";
-import PricingMultipliersSettings from "@/components/onpass-useradmin-blueriveracess052026/PricingMultipliersSettings";
-import SocialLinksSettings from "@/components/onpass-useradmin-blueriveracess052026/SocialLinksSettings";
-import ContentManagementSettings from "@/components/onpass-useradmin-blueriveracess052026/ContentManagementSettings";
-import ServiceAreasSettings from "@/components/onpass-useradmin-blueriveracess052026/ServiceAreasSettings";
-import TeamManagementSettings from "@/components/onpass-useradmin-blueriveracess052026/TeamManagementSettings";
+import BusinessInfoSettings from "@/components/admin/BusinessInfoSettings";
+import BusinessRulesSettings from "@/components/admin/BusinessRulesSettings";
+import AvailabilitySettings from "@/components/admin/AvailabilitySettings";
+import PaymentSettings from "@/components/admin/PaymentSettings";
+import PricingSettings from "@/components/admin/PricingSettings";
+import PricingMultipliersSettings from "@/components/admin/PricingMultipliersSettings";
+import SocialLinksSettings from "@/components/admin/SocialLinksSettings";
+import ContentManagementSettings from "@/components/admin/ContentManagementSettings";
+import ServiceAreasSettings from "@/components/admin/ServiceAreasSettings";
+import TeamManagementSettings from "@/components/admin/TeamManagementSettings";
 import { useHasPermission } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
 

@@ -14,12 +14,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { generateQuotePdf, generateQuotePdfBase64 } from "@/lib/quotePdf";
 import { notifyAdmins } from "@/lib/notifications";
 import { computeQuote, recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
-import DynamicQuoteSummary from "@/components/onpass-useradmin-blueriveracess052026/DynamicQuoteSummary";
+import DynamicQuoteSummary from "@/components/admin/DynamicQuoteSummary";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import HasPermission from "@/components/HasPermission";
-import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/onpass-useradmin-blueriveracess052026/Paginator";
-import CollapsibleRecordCard from "@/components/onpass-useradmin-blueriveracess052026/CollapsibleRecordCard";
-import RecordActivityPanel, { ActivityEntry } from "@/components/onpass-useradmin-blueriveracess052026/RecordActivityPanel";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
+import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
+import RecordActivityPanel, { ActivityEntry } from "@/components/admin/RecordActivityPanel";
 
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
@@ -136,11 +136,11 @@ const QuotesAdmin = () => {
         qc.invalidateQueries({ queryKey: ["admin-quotes"] });
         qc.invalidateQueries({ queryKey: ["admin-contact-messages"] });
         qc.invalidateQueries({ queryKey: ["contact-activity-logs"] });
-        navigate(`/onpass-useradmin-blueriveracess052026/quotes?focus=${inserted.id}`, { replace: true });
+        navigate(`/admin/quotes?focus=${inserted.id}`, { replace: true });
         setExpandedId(inserted.id);
       } catch (e: any) {
         toast({ title: "Convert failed", description: e?.message || String(e), variant: "destructive" });
-        navigate(`/onpass-useradmin-blueriveracess052026/quotes`, { replace: true });
+        navigate(`/admin/quotes`, { replace: true });
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

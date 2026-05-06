@@ -113,7 +113,7 @@ const Contact = () => {
               phone: form.phone?.trim(),
               service: form.service,
               message: form.message?.trim(),
-              dashboardUrl: `${window.location.origin}/onpass-useradmin-blueriveracess052026/messages`,
+              dashboardUrl: `${window.location.origin}/admin/messages`,
             },
           },
         }),
