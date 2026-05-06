@@ -828,13 +828,24 @@ const BookingsAdmin = () => {
                     </Button>
                   </PermissionGate>
                 )}
-                {showLifecycle && b.status === "confirmed" && !archived && (
-                  <PermissionGate permission="can_manage_bookings">
-                    <Button variant="outline" size="sm" onClick={() => handleCompleted(b)}>
-                      Mark Completed
-                    </Button>
-                  </PermissionGate>
-                )}
+                {showLifecycle && b.status === "confirmed" && !archived && (() => {
+                  const canComplete = !!linkedInvoice && linkedInvoice.payment_status === "paid";
+                  return (
+                    <PermissionGate permission="can_manage_bookings">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!canComplete}
+                        onClick={() => handleCompleted(b)}
+                        title={canComplete
+                          ? "Mark this booking as completed and send the review request."
+                          : "Generate the invoice and mark it paid before completing."}
+                      >
+                        Mark Completed
+                      </Button>
+                    </PermissionGate>
+                  );
+                })()}
 
                 {showLifecycle && (
                   <PermissionGate permission="can_manage_bookings">
