@@ -220,7 +220,7 @@ const MessagesAdmin = () => {
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => navigate(`/admin/quotes?prefillFromContact=${m.id}`)}
+                onClick={() => navigate(`/onpass-useradmin-blueriveracess052026/quotes?prefillFromContact=${m.id}`)}
               >
                 <ArrowRight className="w-4 h-4 mr-1" /> Convert to Quote
               </Button>
