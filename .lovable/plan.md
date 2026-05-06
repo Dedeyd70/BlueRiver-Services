@@ -1,79 +1,82 @@
-## Investigation findings
+## Goal
 
-**Bug 1 — Pets & Square Footage not reflecting in pricing**
+Add a single **Documents & PDF** settings tab that consolidates every value used by the invoice / quote / receipt PDF generators, expose two fields that currently have no UI (`company_address`, `brand_color_hex`), and add two new optional footer fields (`invoice_footer_note`, `invoice_terms`). Keep all existing security in place — no route changes, no new public endpoints, no new RPCs.
 
-The pricing multipliers exist in the database and are correctly configured:
-- `has_pets` / key=`true` / +$25 flat
-- `square_footage` / key=`0-1000`, `1001-1500`, etc. / band-based flat amounts
+## 1. Security preservation (no changes, just verification)
 
-However, in `src/pages/BookService.tsx` (line 270), the `pricingRequest` only passes:
+- New tab is rendered inside `SettingsAdmin.tsx`, which lives under `AdminLayout` and the existing `AdminGuard` at `/onpass-useradmin-blueriveracess052026/...`. No new routes or exports.
+- Tab gated by the same `useHasPermission("can_manage_settings")` already used by the Business Info tab.
+- All reads/writes go through `supabase.from("site_settings").select/upsert(...)` — parameterized via the SDK, never string-concatenated.
+- No `dangerouslySetInnerHTML`. All field values render through standard React text nodes / `value` props.
+- Color and address inputs validated client-side: hex must match `/^#[0-9a-fA-F]{6}$/`; address truncated at 200 chars; footer note / terms truncated at 300 chars.
+- No DB migration required — `site_settings` is already a key/value table with admin RLS.
+
+## 2. New panel: `src/components/admin/DocumentsPdfSettings.tsx`
+
+Sections:
+
+1. **Letterhead (read-only mirror)**
+   - Business name — pulled from `branding_settings.business_name`, shown as static text with a "Edit in Branding →" link.
+   - Logo — small thumbnail of `branding_settings.logo_url`, same link.
+
+2. **Brand color**
+   - `brand_color_hex` — `<input type="color">` + text field, validated. Empty value falls back to default navy in PDFs.
+
+3. **Contact block (these write to `site_settings` and stay in sync with Business Info)**
+   - `phone`
+   - `email`
+   - `company_address` — `<Textarea>`, multi-line.
+
+4. **Footer**
+   - `invoice_footer_note` — `<Textarea>`, optional. Printed at bottom of every invoice/receipt if non-empty.
+   - `invoice_terms` — `<Input>`, optional one-liner (e.g. "Net 7 — please pay within 7 days").
+
+5. **Live PDF letterhead preview**
+   - Inline mock styled as a navy band + brand-color badge + business name + tagline + contact line. Updates instantly as the user edits color/address/phone/email. Pure DOM, no PDF rendering.
+
+Implementation pattern mirrors `BusinessInfoSettings.tsx`:
+- `useQuery` for `site_settings` and `branding_settings`.
+- Local `form` state, "Save" button calls `supabase.from("site_settings").upsert({ setting_key, setting_value }, { onConflict: "setting_key" })` for each editable key.
+- On success, invalidate `["admin-settings"]`, `["site-settings"]`, `["admin-branding"]`, `["public-branding"]` so Business Info, Branding, and the public site all reflect the change immediately.
+
+## 3. Register the tab in `SettingsAdmin.tsx`
+
+Add one entry to the `tabs` array (between Business Info and Business Rules):
+
 ```ts
-{ service_type_id, service_type, condition_level, selected_addons, custom_fields: dynValues }
+{ value: "documents-pdf", label: "Documents & PDF",
+  allowed: canManageSettings,
+  content: <DocumentsPdfSettings /> }
 ```
 
-`dynValues` only contains the dynamic `service_fields` (bedrooms, bathrooms, etc.). The form-level fields `square_footage`, `has_pets`, and `pet_count` live in `form` state and are **never sent to `computeQuote`**. So `pricingEngine.readField('has_pets')` and `readField('square_footage')` both return undefined, and the multipliers never match.
+## 4. PDF generator updates
 
-**Bug 2 — Double "invoice" confusion**
+### `src/lib/invoicePdf.ts`
 
-Currently `Mark Completed` is enabled as soon as the booking is `confirmed`, even before any invoice/payment. Workflow needs to be: Confirm → Generate Invoice → Mark Paid (auto-creates Receipt) → Mark Completed (sends review email + archives). Right now the review email can fire before payment, and customers receive an invoice PDF and then later a receipt PDF that look duplicative.
+- `drawLetterhead` already reads `settings.company_address` ✅ — no change needed there; setting it via the new tab will make it appear automatically.
+- `resolvePrimary` already reads `settings.brand_color_hex` ✅ — same.
+- After the existing "Payment Instructions" block (around line 286), before the thank-you, add an **optional terms** line if `settings.invoice_terms` is non-empty.
+- Replace the hard-coded thank-you with: if `settings.invoice_footer_note` is set, render that wrapped in `splitTextToSize`; otherwise keep the current "Thank you for choosing BlueRiver Services." default.
 
----
+### `src/lib/quotePdf.ts`
 
-## Plan
+- Same `drawLetterhead` already supports `company_address` and `brand_color_hex` ✅.
+- After the existing "Notes" block, before "Availability", render `invoice_terms` as a small "Terms" line if present.
+- Replace the final "Thank you…" line with `invoice_footer_note` when set.
 
-### Part 1 — Pricing fix (BookService + RequestQuote live estimate)
+(Both files already pass `settings` end-to-end from the callers, which load `site_settings` via `useSiteSettings`. No caller changes needed.)
 
-Update `src/pages/BookService.tsx` `computed` memo so the `pricingRequest` includes the form-level fields the multipliers key on:
+## 5. Data integrity / sync
 
-```ts
-const pricingRequest = {
-  service_type_id, service_type, condition_level,
-  selected_addons,
-  square_footage: form.square_footage || null,
-  has_pets: form.has_pets ? "true" : "false",
-  pet_count: form.has_pets ? Number(form.pet_count) || 0 : 0,
-  is_empty_property: form.is_empty_property,
-  floor_type: form.floor_type || null,
-  frequency: form.frequency || null,
-  custom_fields: dynValues,
-};
-```
+Because `phone`, `email`, and `company_address` are all stored as rows in the single `site_settings` table keyed by `setting_key`:
 
-Add `form.square_footage, form.has_pets, form.pet_count, form.is_empty_property, form.floor_type, form.frequency` to the memo deps.
+- Editing them in **Documents & PDF** writes the same rows used by **Business Info**, the public footer, and the email templates — they cannot drift.
+- After save, invalidating `["admin-settings"]` and `["site-settings"]` causes Business Info and the public site to re-fetch and show the new values without reload.
 
-Verify `src/components/admin/DynamicQuoteSummary.tsx` does the same for admin-side recompute (read file first; patch if it has the same gap).
+## 6. Verification
 
-No engine changes needed — `pricingEngine.matchMultiplier` already supports band matches like `1501-2500` and exact-string matches for `has_pets=true`.
-
-### Part 2 — Workflow gating in BookingsAdmin
-
-In `src/pages/admin/BookingsAdmin.tsx`:
-
-- Compute `const invoice = invoicesByBooking[b.id]` (already loaded elsewhere — confirm).
-- Disable the **Mark Completed** button when:
-  - no invoice exists for the booking, OR
-  - `invoice.payment_status !== 'paid'`
-- Show a tooltip: *"Generate invoice and mark it paid before completing."*
-- Keep the existing handler logic (status update + review email) unchanged.
-- Order the action buttons so the flow reads: Confirm → Generate Invoice → Mark Paid → Mark Completed.
-
-This guarantees the customer gets exactly: **Invoice email → Receipt email (on payment) → Review request (on completion)** — no overlap.
-
-### Part 3 — Admin documentation PDFs
-
-Generate two downloadable PDFs to `/mnt/documents/`:
-
-1. **`BlueRiver_Admin_Reference.pdf`** — comprehensive reference covering every admin tab:
-   Dashboard, Submissions inbox (Quotes/Bookings/Contacts), Bookings lifecycle, Quotes & drafts, Invoices & receipts, Payments, Services & pricing rules, Pricing multipliers, Service fields, Availability & blocked dates, Gallery & before/after, Homepage CMS, Legal pages, Testimonials/Reviews, Branding, Site settings, Service areas, Social links, Team management, Permissions & roles, Notifications.
-
-2. **`BlueRiver_Admin_Walkthrough.pdf`** — step-by-step guided walkthrough of the **end-to-end customer journey** from the admin's perspective: receiving a quote → preparing a draft → converting to booking → confirming → generating invoice → recording payment → marking completed → review captured. Includes the new gating rules from Part 2 and screenshots-style numbered steps.
-
-Implementation: write Markdown source files to `/tmp/`, convert with `pandoc` (already available) using a clean PDF engine. Output saved to `/mnt/documents/` and surfaced via `<lov-artifact>` tags so the user can download them.
-
----
-
-## Verification
-
-- Run a manual computeQuote scenario with `square_footage=1800, has_pets=true` and confirm both line items appear in the booking summary.
-- Open Bookings admin, confirm `Mark Completed` is greyed out until invoice is `paid`.
-- Inspect both generated PDFs page-by-page (convert to images for QA) before delivering.
+1. Open Settings → **Documents & PDF**, set a brand color (e.g. `#2563eb`), a `company_address`, and a footer note. Save.
+2. Reopen **Business Info** — confirm `phone`, `email` are unchanged and that editing them there still works.
+3. Generate an invoice PDF from a booking — confirm the letterhead band uses the new brand color, the address appears in the contact line, and the footer shows the custom note.
+4. Generate a quote PDF — same checks.
+5. Confirm the admin route is still `/onpass-useradmin-blueriveracess052026/...` and that signing out makes `/onpass-useradmin-blueriveracess052026/settings` render the standard 404 page.
