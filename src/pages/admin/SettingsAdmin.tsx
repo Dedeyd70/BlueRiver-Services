@@ -24,6 +24,7 @@ const SettingsAdmin = () => {
 
   const tabs = [
     { value: "business-info", label: "Business Info", allowed: canManageSettings, content: <BusinessInfoSettings /> },
+    { value: "documents-pdf", label: "Documents & PDF", allowed: canManageSettings, content: <DocumentsPdfSettings /> },
     { value: "business-rules", label: "Business Rules", allowed: canManageBusinessRules, content: <BusinessRulesSettings /> },
     { value: "availability", label: "Availability", allowed: canEditAvailability, content: <AvailabilitySettings /> },
     { value: "payment", label: "Payment", allowed: canManagePayment, content: <PaymentSettings /> },
