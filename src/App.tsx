@@ -43,6 +43,7 @@ import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
 import SiteContentAdmin from "./pages/admin/SiteContentAdmin";
 import LeaveReview from "./pages/LeaveReview";
 import LocalBusinessSchema from "./components/LocalBusinessSchema";
+import AdminGuard from "./components/admin/AdminGuard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,7 +69,7 @@ const App = () => (
             {/* Admin routes */}
             <Route path="/onpass-useradmin-blueriveracess052026/login" element={<AdminLogin />} />
             <Route path="/onpass-useradmin-blueriveracess052026/reset-password" element={<ResetPassword />} />
-            <Route path="/onpass-useradmin-blueriveracess052026" element={<AdminLayout />}>
+            <Route path="/onpass-useradmin-blueriveracess052026" element={<AdminGuard><AdminLayout /></AdminGuard>}>
               <Route index element={<Dashboard />} />
               <Route path="submissions" element={<Submissions />} />
               <Route path="services" element={<ServicesAdmin />} />
