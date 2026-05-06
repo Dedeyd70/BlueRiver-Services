@@ -66,9 +66,9 @@ const App = () => (
           <BackToTop />
           <Routes>
             {/* Admin routes */}
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/reset-password" element={<ResetPassword />} />
-            <Route path="/admin" element={<AdminLayout />}>
+            <Route path="/onpass-useradmin-blueriveracess052026/login" element={<AdminLogin />} />
+            <Route path="/onpass-useradmin-blueriveracess052026/reset-password" element={<ResetPassword />} />
+            <Route path="/onpass-useradmin-blueriveracess052026" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="submissions" element={<Submissions />} />
               <Route path="services" element={<ServicesAdmin />} />
