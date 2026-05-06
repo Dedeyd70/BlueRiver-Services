@@ -107,6 +107,20 @@ const AdminLayout = () => {
 
   useEffect(() => setSheetOpen(false), [location]);
 
+  // Inject noindex, nofollow meta into document head while admin layout is mounted
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex, nofollow, noarchive, nosnippet";
+    document.head.appendChild(meta);
+    const prevTitle = document.title;
+    document.title = "BlueRiver";
+    return () => {
+      document.head.removeChild(meta);
+      document.title = prevTitle;
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/50">
