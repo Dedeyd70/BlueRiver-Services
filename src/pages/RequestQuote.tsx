@@ -264,7 +264,7 @@ const RequestQuote = () => {
           body: {
             type: "admin_new_submission",
             to: "info@blueriverservices.co",
-            data: { ...quoteData, kind: "Quote", dashboardUrl: `${window.location.origin}/admin/quotes` },
+            data: { ...quoteData, kind: "Quote", dashboardUrl: `${window.location.origin}/onpass-useradmin-blueriveracess052026/quotes` },
           },
         }),
       ]).then((results) => {

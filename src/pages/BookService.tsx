@@ -451,7 +451,7 @@ const BookService = () => {
           body: {
             type: "admin_new_submission",
             to: "info@blueriverservices.co",
-            data: { ...bookingData, kind: "Booking", dashboardUrl: `${window.location.origin}/admin/bookings` },
+            data: { ...bookingData, kind: "Booking", dashboardUrl: `${window.location.origin}/onpass-useradmin-blueriveracess052026/bookings` },
           },
         }),
       ]).then((results) => {

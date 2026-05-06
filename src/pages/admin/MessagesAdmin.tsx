@@ -9,11 +9,11 @@ import { format } from "date-fns";
 import { Mail, ArrowRight } from "lucide-react";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import PermissionGate from "@/components/PermissionGate";
-import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
-import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
-import RecordActivityPanel, { ActivityEntry } from "@/components/admin/RecordActivityPanel";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/onpass-useradmin-blueriveracess052026/Paginator";
+import CollapsibleRecordCard from "@/components/onpass-useradmin-blueriveracess052026/CollapsibleRecordCard";
+import RecordActivityPanel, { ActivityEntry } from "@/components/onpass-useradmin-blueriveracess052026/RecordActivityPanel";
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
-import ContactReplyComposer from "@/components/admin/ContactReplyComposer";
+import ContactReplyComposer from "@/components/onpass-useradmin-blueriveracess052026/ContactReplyComposer";
 
 interface ContactSubmission {
   id: string;
@@ -220,7 +220,7 @@ const MessagesAdmin = () => {
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => navigate(`/admin/quotes?prefillFromContact=${m.id}`)}
+                onClick={() => navigate(`/onpass-useradmin-blueriveracess052026/quotes?prefillFromContact=${m.id}`)}
               >
                 <ArrowRight className="w-4 h-4 mr-1" /> Convert to Quote
               </Button>

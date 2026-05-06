@@ -19,28 +19,28 @@ import TermsOfService from "./pages/TermsOfService";
 import LiabilityDisclaimer from "./pages/LiabilityDisclaimer";
 import CancellationPolicy from "./pages/CancellationPolicy";
 import NotFound from "./pages/NotFound";
-import AdminLogin from "./pages/admin/Login";
-import AdminLayout from "./pages/admin/AdminLayout";
-import Dashboard from "./pages/admin/Dashboard";
-import Submissions from "./pages/admin/Submissions";
-import ServicesAdmin from "./pages/admin/ServicesAdmin";
-import GalleryAdmin from "./pages/admin/GalleryAdmin";
-import TestimonialsAdmin from "./pages/admin/TestimonialsAdmin";
-import SettingsAdmin from "./pages/admin/SettingsAdmin";
-import AccountSettings from "./pages/admin/AccountSettings";
-import ResetPassword from "./pages/admin/ResetPassword";
-import PrivacyPolicyAdmin from "./pages/admin/PrivacyPolicyAdmin";
-import BookingsAdmin from "./pages/admin/BookingsAdmin";
-import QuotesAdmin from "./pages/admin/QuotesAdmin";
-import TermsAdmin from "./pages/admin/TermsAdmin";
-import LegalAdmin from "./pages/admin/LegalAdmin";
-import InvoicesAdmin from "./pages/admin/InvoicesAdmin";
-import MessagesAdmin from "./pages/admin/MessagesAdmin";
-import BrandingAdmin from "./pages/admin/BrandingAdmin";
-import UserManagement from "./pages/admin/UserManagement";
-import PermissionsAdmin from "./pages/admin/PermissionsAdmin";
-import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
-import SiteContentAdmin from "./pages/admin/SiteContentAdmin";
+import AdminLogin from "./pages/onpass-useradmin-blueriveracess052026/Login";
+import AdminLayout from "./pages/onpass-useradmin-blueriveracess052026/AdminLayout";
+import Dashboard from "./pages/onpass-useradmin-blueriveracess052026/Dashboard";
+import Submissions from "./pages/onpass-useradmin-blueriveracess052026/Submissions";
+import ServicesAdmin from "./pages/onpass-useradmin-blueriveracess052026/ServicesAdmin";
+import GalleryAdmin from "./pages/onpass-useradmin-blueriveracess052026/GalleryAdmin";
+import TestimonialsAdmin from "./pages/onpass-useradmin-blueriveracess052026/TestimonialsAdmin";
+import SettingsAdmin from "./pages/onpass-useradmin-blueriveracess052026/SettingsAdmin";
+import AccountSettings from "./pages/onpass-useradmin-blueriveracess052026/AccountSettings";
+import ResetPassword from "./pages/onpass-useradmin-blueriveracess052026/ResetPassword";
+import PrivacyPolicyAdmin from "./pages/onpass-useradmin-blueriveracess052026/PrivacyPolicyAdmin";
+import BookingsAdmin from "./pages/onpass-useradmin-blueriveracess052026/BookingsAdmin";
+import QuotesAdmin from "./pages/onpass-useradmin-blueriveracess052026/QuotesAdmin";
+import TermsAdmin from "./pages/onpass-useradmin-blueriveracess052026/TermsAdmin";
+import LegalAdmin from "./pages/onpass-useradmin-blueriveracess052026/LegalAdmin";
+import InvoicesAdmin from "./pages/onpass-useradmin-blueriveracess052026/InvoicesAdmin";
+import MessagesAdmin from "./pages/onpass-useradmin-blueriveracess052026/MessagesAdmin";
+import BrandingAdmin from "./pages/onpass-useradmin-blueriveracess052026/BrandingAdmin";
+import UserManagement from "./pages/onpass-useradmin-blueriveracess052026/UserManagement";
+import PermissionsAdmin from "./pages/onpass-useradmin-blueriveracess052026/PermissionsAdmin";
+import HomepageImagesAdmin from "./pages/onpass-useradmin-blueriveracess052026/HomepageImagesAdmin";
+import SiteContentAdmin from "./pages/onpass-useradmin-blueriveracess052026/SiteContentAdmin";
 import LeaveReview from "./pages/LeaveReview";
 import LocalBusinessSchema from "./components/LocalBusinessSchema";
 
@@ -66,9 +66,9 @@ const App = () => (
           <BackToTop />
           <Routes>
             {/* Admin routes */}
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/reset-password" element={<ResetPassword />} />
-            <Route path="/admin" element={<AdminLayout />}>
+            <Route path="/onpass-useradmin-blueriveracess052026/login" element={<AdminLogin />} />
+            <Route path="/onpass-useradmin-blueriveracess052026/reset-password" element={<ResetPassword />} />
+            <Route path="/onpass-useradmin-blueriveracess052026" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="submissions" element={<Submissions />} />
               <Route path="services" element={<ServicesAdmin />} />
