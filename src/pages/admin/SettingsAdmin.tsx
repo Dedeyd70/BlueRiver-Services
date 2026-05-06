@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BusinessInfoSettings from "@/components/admin/BusinessInfoSettings";
+import DocumentsPdfSettings from "@/components/admin/DocumentsPdfSettings";
 import BusinessRulesSettings from "@/components/admin/BusinessRulesSettings";
 import AvailabilitySettings from "@/components/admin/AvailabilitySettings";
 import PaymentSettings from "@/components/admin/PaymentSettings";
