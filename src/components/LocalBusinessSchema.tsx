@@ -38,11 +38,11 @@ const LocalBusinessSchema = () => {
     url: typeof window !== "undefined" ? window.location.origin : "",
   };
 
+  // Static, server-defined schema only — no user-fetched data is interpolated.
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
+    <script type="application/ld+json">
+      {JSON.stringify(schema)}
+    </script>
   );
 };
 
