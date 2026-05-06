@@ -1,14 +1,19 @@
 User-agent: Googlebot
 Allow: /
+Disallow: /onpass-useradmin-blueriveracess052026
 
 User-agent: Bingbot
 Allow: /
+Disallow: /onpass-useradmin-blueriveracess052026
 
 User-agent: Twitterbot
 Allow: /
+Disallow: /onpass-useradmin-blueriveracess052026
 
 User-agent: facebookexternalhit
 Allow: /
+Disallow: /onpass-useradmin-blueriveracess052026
 
 User-agent: *
 Allow: /
+Disallow: /onpass-useradmin-blueriveracess052026
