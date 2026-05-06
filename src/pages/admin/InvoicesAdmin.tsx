@@ -13,8 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import HasPermission from "@/components/HasPermission";
 import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { generateInvoicePdf } from "@/lib/invoicePdf";
-import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/onpass-useradmin-blueriveracess052026/Paginator";
-import CollapsibleRecordCard from "@/components/onpass-useradmin-blueriveracess052026/CollapsibleRecordCard";
+import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
+import CollapsibleRecordCard from "@/components/admin/CollapsibleRecordCard";
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
 const statusColors: Record<string, string> = {
