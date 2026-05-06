@@ -36,9 +36,9 @@ const statusColors: Record<string, string> = {
 
 const linkForEntry = (entry: UnifiedEntry) => {
   const base =
-    entry.type === "Booking" ? "/admin/bookings" :
-    entry.type === "Quote"   ? "/admin/quotes"   :
-                               "/admin/messages";
+    entry.type === "Booking" ? "/onpass-useradmin-blueriveracess052026/bookings" :
+    entry.type === "Quote"   ? "/onpass-useradmin-blueriveracess052026/quotes"   :
+                               "/onpass-useradmin-blueriveracess052026/messages";
   // ?focus= triggers scroll-to + ring highlight + auto-expand on the target page
   return `${base}?focus=${entry.id}`;
 };

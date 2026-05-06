@@ -92,7 +92,7 @@ const AdminLayout = () => {
   // Redirect to login only when auth is fully resolved and there is no user
   useEffect(() => {
     if (!loading && !user) {
-      navigate("/admin/login");
+      navigate("/onpass-useradmin-blueriveracess052026/login");
     }
   }, [user, loading, navigate]);
 
@@ -100,7 +100,7 @@ const AdminLayout = () => {
   useEffect(() => {
     if (!loading && user && role) {
       if (!canAccessPath(role, location.pathname, permissions)) {
-        navigate("/admin");
+        navigate("/onpass-useradmin-blueriveracess052026");
       }
     }
   }, [loading, user, role, permissions, location.pathname, navigate]);

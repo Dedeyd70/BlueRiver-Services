@@ -25,33 +25,33 @@ export const NAV_GROUPS = [
 
 export const NAV_PERMISSIONS: NavPermission[] = [
   // Main
-  { label: "Dashboard", path: "/admin", roles: ["admin", "manager"], group: "main", permission: "__dashboard__" },
+  { label: "Dashboard", path: "/onpass-useradmin-blueriveracess052026", roles: ["admin", "manager"], group: "main", permission: "__dashboard__" },
 
   // Operations
-  { label: "Bookings", path: "/admin/bookings", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_bookings" },
-  { label: "Quotes", path: "/admin/quotes", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_quotes" },
-  { label: "Messages", path: "/admin/messages", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_messages" },
-  { label: "Submissions", path: "/admin/submissions", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_messages" },
+  { label: "Bookings", path: "/onpass-useradmin-blueriveracess052026/bookings", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_bookings" },
+  { label: "Quotes", path: "/onpass-useradmin-blueriveracess052026/quotes", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_quotes" },
+  { label: "Messages", path: "/onpass-useradmin-blueriveracess052026/messages", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_messages" },
+  { label: "Submissions", path: "/onpass-useradmin-blueriveracess052026/submissions", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_messages" },
 
   // Finance
-  { label: "Invoices", path: "/admin/invoices", roles: ["admin", "manager"], group: "finance", permission: "can_manage_invoices" },
+  { label: "Invoices", path: "/onpass-useradmin-blueriveracess052026/invoices", roles: ["admin", "manager"], group: "finance", permission: "can_manage_invoices" },
 
   // Website
-  { label: "Services", path: "/admin/services", roles: ["admin", "manager"], group: "website" },
-  { label: "Gallery", path: "/admin/gallery", roles: ["admin", "manager"], group: "website", permission: "can_manage_gallery" },
-  { label: "Testimonials", path: "/admin/testimonials", roles: ["admin", "manager"], group: "website", permission: "can_manage_testimonials" },
-  { label: "Homepage Images", path: "/admin/homepage-images", roles: ["admin"], group: "website" },
-  { label: "Branding", path: "/admin/branding", roles: ["admin"], group: "website" },
-  { label: "Site Content", path: "/admin/site-content", roles: ["admin"], group: "website", permission: "can_manage_site_content" },
-  { label: "Privacy Policy", path: "/admin/privacy-policy", roles: ["admin"], group: "website" },
-  { label: "Terms of Service", path: "/admin/terms", roles: ["admin"], group: "website" },
-  { label: "Legal Pages", path: "/admin/legal", roles: ["admin"], group: "website" },
+  { label: "Services", path: "/onpass-useradmin-blueriveracess052026/services", roles: ["admin", "manager"], group: "website" },
+  { label: "Gallery", path: "/onpass-useradmin-blueriveracess052026/gallery", roles: ["admin", "manager"], group: "website", permission: "can_manage_gallery" },
+  { label: "Testimonials", path: "/onpass-useradmin-blueriveracess052026/testimonials", roles: ["admin", "manager"], group: "website", permission: "can_manage_testimonials" },
+  { label: "Homepage Images", path: "/onpass-useradmin-blueriveracess052026/homepage-images", roles: ["admin"], group: "website" },
+  { label: "Branding", path: "/onpass-useradmin-blueriveracess052026/branding", roles: ["admin"], group: "website" },
+  { label: "Site Content", path: "/onpass-useradmin-blueriveracess052026/site-content", roles: ["admin"], group: "website", permission: "can_manage_site_content" },
+  { label: "Privacy Policy", path: "/onpass-useradmin-blueriveracess052026/privacy-policy", roles: ["admin"], group: "website" },
+  { label: "Terms of Service", path: "/onpass-useradmin-blueriveracess052026/terms", roles: ["admin"], group: "website" },
+  { label: "Legal Pages", path: "/onpass-useradmin-blueriveracess052026/legal", roles: ["admin"], group: "website" },
 
   // System
-  { label: "Settings", path: "/admin/settings", roles: ["admin"], group: "system", permission: "__settings__" },
-  { label: "Users", path: "/admin/users", roles: ["admin"], group: "system" },
-  { label: "Permissions", path: "/admin/permissions", roles: ["admin"], group: "system" },
-  { label: "Account", path: "/admin/account", roles: ["admin", "manager", "staff"], group: "system" },
+  { label: "Settings", path: "/onpass-useradmin-blueriveracess052026/settings", roles: ["admin"], group: "system", permission: "__settings__" },
+  { label: "Users", path: "/onpass-useradmin-blueriveracess052026/users", roles: ["admin"], group: "system" },
+  { label: "Permissions", path: "/onpass-useradmin-blueriveracess052026/permissions", roles: ["admin"], group: "system" },
+  { label: "Account", path: "/onpass-useradmin-blueriveracess052026/account", roles: ["admin", "manager", "staff"], group: "system" },
 ];
 
 /** Visibility precedence:
