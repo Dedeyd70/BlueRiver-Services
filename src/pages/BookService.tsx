@@ -272,6 +272,13 @@ const BookService = () => {
       service_type: form.service || null,
       condition_level: form.condition_level || null,
       selected_addons: selectedAddonObjects,
+      // Top-level form fields the multipliers key on (square_footage band, has_pets, etc.)
+      square_footage: form.square_footage || null,
+      has_pets: form.has_pets ? "true" : "false",
+      pet_count: form.has_pets ? Number(form.pet_count) || 0 : 0,
+      is_empty_property: form.is_empty_property,
+      floor_type: form.floor_type || null,
+      property_type: form.property_type || null,
       custom_fields: dynValues,
     };
 
@@ -292,7 +299,7 @@ const BookService = () => {
       serviceFields ?? [],
       pricingMultipliers ?? [],
     );
-  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons, pricingMultipliers]);
+  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, form.square_footage, form.has_pets, form.pet_count, form.is_empty_property, form.floor_type, form.property_type, addons, pricingMultipliers]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
