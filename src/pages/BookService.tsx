@@ -299,7 +299,7 @@ const BookService = () => {
       serviceFields ?? [],
       pricingMultipliers ?? [],
     );
-  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, addons, pricingMultipliers]);
+  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, form.square_footage, form.has_pets, form.pet_count, form.is_empty_property, form.floor_type, form.property_type, addons, pricingMultipliers]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
