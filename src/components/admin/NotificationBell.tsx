@@ -8,10 +8,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { formatDistanceToNow } from "date-fns";
 
 const referenceRoutes: Record<string, string> = {
-  booking: "/admin/bookings",
-  quote: "/admin/quotes",
-  contact: "/admin/messages",
-  invoice: "/admin/invoices",
+  booking: "/onpass-useradmin-blueriveracess052026/bookings",
+  quote: "/onpass-useradmin-blueriveracess052026/quotes",
+  contact: "/onpass-useradmin-blueriveracess052026/messages",
+  invoice: "/onpass-useradmin-blueriveracess052026/invoices",
 };
 
 const NotificationBell = () => {
