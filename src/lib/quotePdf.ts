@@ -326,11 +326,28 @@ const buildQuoteDoc = (
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...SLATE_500);
   doc.text(`This quote is valid for ${validityDays} days.`, margin, y);
-  y += 10;
+  y += 6;
+
+  if (settings.invoice_terms) {
+    doc.setFont("helvetica", "italic");
+    const termLines = doc.splitTextToSize(String(settings.invoice_terms), pageW - margin * 2);
+    termLines.forEach((line: string) => {
+      doc.text(line, margin, y);
+      y += 4.5;
+    });
+    y += 4;
+  } else {
+    y += 4;
+  }
 
   doc.setTextColor(...PRIMARY);
   doc.setFont("helvetica", "bold");
-  doc.text("Thank you for choosing BlueRiver Services.", margin, y);
+  const footerNote = settings.invoice_footer_note || "Thank you for choosing BlueRiver Services.";
+  const footerLines = doc.splitTextToSize(String(footerNote), pageW - margin * 2);
+  footerLines.forEach((line: string) => {
+    doc.text(line, margin, y);
+    y += 5;
+  });
   doc.setTextColor(0, 0, 0);
 
   return doc;

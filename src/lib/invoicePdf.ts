@@ -284,10 +284,31 @@ const buildInvoiceDoc = (
     });
     y += 4;
   }
-  // Footer thank-you
+  // Optional terms line (set in Settings → Documents & PDF)
+  if (settings.invoice_terms) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(...SLATE_500);
+    const termLines = doc.splitTextToSize(String(settings.invoice_terms), pageW - margin * 2);
+    termLines.forEach((line: string) => {
+      doc.text(line, margin, y);
+      y += 4.5;
+    });
+    y += 2;
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+  }
+
+  // Footer thank-you (or custom note from settings)
   doc.setTextColor(...PRIMARY);
   doc.setFont("helvetica", "bold");
-  doc.text("Thank you for choosing BlueRiver Services.", margin, Math.min(y + 4, pageH - 20));
+  const footerNote = settings.invoice_footer_note || "Thank you for choosing BlueRiver Services.";
+  const footerLines = doc.splitTextToSize(String(footerNote), pageW - margin * 2);
+  let footerY = Math.min(y + 4, pageH - 20 - (footerLines.length - 1) * 5);
+  footerLines.forEach((line: string) => {
+    doc.text(line, margin, footerY);
+    footerY += 5;
+  });
   doc.setTextColor(0, 0, 0);
 
   // PAID watermark — applied LAST so it overlays content with low opacity
