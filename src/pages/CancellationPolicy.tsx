@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
+import LegalContent from "@/components/LegalContent";
 
 const defaultContent = `Booking Confirmation
 
@@ -31,21 +32,21 @@ Service Provider Right
 BlueRiver Services reserves the right to cancel or reschedule appointments due to unforeseen circumstances such as emergencies, safety concerns, or operational constraints.`;
 
 const CancellationPolicy = () => {
-  const { data: content, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["page-content", "cancellation-policy"],
     queryFn: async () => {
       const { data } = await supabase
         .from("page_content")
-        .select("content")
+        .select("content, updated_at")
         .eq("page_name", "cancellation-policy")
         .eq("section_key", "main")
         .maybeSingle();
-      return (data?.content as { body?: string }) ?? null;
+      return data;
     },
     staleTime: 1000 * 60 * 5,
   });
 
-  const body = content?.body || defaultContent;
+  const body = (data?.content as { body?: string })?.body || defaultContent;
 
   return (
     <div>
@@ -63,15 +64,7 @@ const CancellationPolicy = () => {
           {isLoading ? (
             <p className="text-muted-foreground text-center">Loading...</p>
           ) : (
-            <div className="prose prose-sm sm:prose max-w-none text-foreground/90 leading-relaxed space-y-4">
-              {body.split("\n\n").map((block: string, i: number) => {
-                const trimmed = block.trim();
-                if (!trimmed) return null;
-                const isHeading = trimmed.length < 80 && (trimmed === trimmed.toUpperCase() || /^\d+\./.test(trimmed) || /^[A-Z][A-Za-z\s&]+$/.test(trimmed));
-                if (isHeading) return <h3 key={i} className="text-lg font-display font-bold text-foreground mt-6 mb-2">{trimmed}</h3>;
-                return <p key={i} className="text-muted-foreground whitespace-pre-line">{trimmed}</p>;
-              })}
-            </div>
+            <LegalContent body={body} updatedAt={data?.updated_at} />
           )}
         </div>
       </section>
