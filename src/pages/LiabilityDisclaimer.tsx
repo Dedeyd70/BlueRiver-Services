@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
+import LegalContent from "@/components/LegalContent";
 
 const defaultContent = `General Information
 
@@ -38,21 +39,21 @@ Governing Law
 This disclaimer is governed by the laws applicable within the United States, specifically the state in which services are rendered.`;
 
 const LiabilityDisclaimer = () => {
-  const { data: content, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["page-content", "liability-disclaimer"],
     queryFn: async () => {
       const { data } = await supabase
         .from("page_content")
-        .select("content")
+        .select("content, updated_at")
         .eq("page_name", "liability-disclaimer")
         .eq("section_key", "main")
         .maybeSingle();
-      return (data?.content as { body?: string }) ?? null;
+      return data;
     },
     staleTime: 1000 * 60 * 5,
   });
 
-  const body = content?.body || defaultContent;
+  const body = (data?.content as { body?: string })?.body || defaultContent;
 
   return (
     <div>
@@ -70,15 +71,7 @@ const LiabilityDisclaimer = () => {
           {isLoading ? (
             <p className="text-muted-foreground text-center">Loading...</p>
           ) : (
-            <div className="prose prose-sm sm:prose max-w-none text-foreground/90 leading-relaxed space-y-4">
-              {body.split("\n\n").map((block: string, i: number) => {
-                const trimmed = block.trim();
-                if (!trimmed) return null;
-                const isHeading = trimmed.length < 80 && (trimmed === trimmed.toUpperCase() || /^\d+\./.test(trimmed) || /^[A-Z][A-Za-z\s&]+$/.test(trimmed));
-                if (isHeading) return <h3 key={i} className="text-lg font-display font-bold text-foreground mt-6 mb-2">{trimmed}</h3>;
-                return <p key={i} className="text-muted-foreground whitespace-pre-line">{trimmed}</p>;
-              })}
-            </div>
+            <LegalContent body={body} updatedAt={data?.updated_at} />
           )}
         </div>
       </section>
