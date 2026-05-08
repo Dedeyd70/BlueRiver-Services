@@ -1,82 +1,66 @@
-## Goal
 
-Add a single **Documents & PDF** settings tab that consolidates every value used by the invoice / quote / receipt PDF generators, expose two fields that currently have no UI (`company_address`, `brand_color_hex`), and add two new optional footer fields (`invoice_footer_note`, `invoice_terms`). Keep all existing security in place — no route changes, no new public endpoints, no new RPCs.
+# Professional Legal Pages Renderer — Frontend Only
 
-## 1. Security preservation (no changes, just verification)
+## Files
 
-- New tab is rendered inside `SettingsAdmin.tsx`, which lives under `AdminLayout` and the existing `AdminGuard` at `/onpass-useradmin-blueriveracess052026/...`. No new routes or exports.
-- Tab gated by the same `useHasPermission("can_manage_settings")` already used by the Business Info tab.
-- All reads/writes go through `supabase.from("site_settings").select/upsert(...)` — parameterized via the SDK, never string-concatenated.
-- No `dangerouslySetInnerHTML`. All field values render through standard React text nodes / `value` props.
-- Color and address inputs validated client-side: hex must match `/^#[0-9a-fA-F]{6}$/`; address truncated at 200 chars; footer note / terms truncated at 300 chars.
-- No DB migration required — `site_settings` is already a key/value table with admin RLS.
+**New:** `src/components/LegalContent.tsx` — pure presentation component.
 
-## 2. New panel: `src/components/admin/DocumentsPdfSettings.tsx`
+**Modified (presentation only):**
+- `src/pages/PrivacyPolicy.tsx`
+- `src/pages/TermsOfService.tsx`
+- `src/pages/LiabilityDisclaimer.tsx`
+- `src/pages/CancellationPolicy.tsx`
 
-Sections:
+**Untouched:** all admin pages, `page_content` schema, RLS, routes, hero sections, Navbar, Footer.
 
-1. **Letterhead (read-only mirror)**
-   - Business name — pulled from `branding_settings.business_name`, shown as static text with a "Edit in Branding →" link.
-   - Logo — small thumbnail of `branding_settings.logo_url`, same link.
+## Why this is safe
 
-2. **Brand color**
-   - `brand_color_hex` — `<input type="color">` + text field, validated. Empty value falls back to default navy in PDFs.
+- Admin keeps the same plain-text `Textarea` writing `{ body: string }` to `page_content.content`. No new fields, no markdown requirement.
+- Pure read-path change. No DB migration, no API change.
+- No `dangerouslySetInnerHTML`. All content rendered as React text nodes inside semantic tags — XSS posture unchanged.
+- Worst-case parser misclassification = a heading where a paragraph was expected. No content is ever lost or hidden.
+- Empty body → `"Content not available"`. Loading → existing loader preserved.
+- Existing Privacy Policy contact card (email/phone) stays intact below the rendered body.
 
-3. **Contact block (these write to `site_settings` and stay in sync with Business Info)**
-   - `phone`
-   - `email`
-   - `company_address` — `<Textarea>`, multi-line.
+## Renderer behavior
 
-4. **Footer**
-   - `invoice_footer_note` — `<Textarea>`, optional. Printed at bottom of every invoice/receipt if non-empty.
-   - `invoice_terms` — `<Input>`, optional one-liner (e.g. "Net 7 — please pay within 7 days").
+Input is split on blank lines into **blocks**. Each block is classified in order:
 
-5. **Live PDF letterhead preview**
-   - Inline mock styled as a navy band + brand-color badge + business name + tagline + contact line. Updates instantly as the user edits color/address/phone/email. Pure DOM, no PDF rendering.
+1. **List block** — every non-empty line matches a marker:
+   - `-`, `*`, `•` → `<ul>`
+   - `1.`, `1)`, `a)` → `<ol>`
+   - Markers stripped; rendered as `<li>`.
+2. **Heading block** — single short line:
+   - Matches `^\d+(\.\d+)*[.)]?\s` (e.g. `1.`, `2.3`, `1.1`) → `<h3>`.
+   - Otherwise short title-like (≤ 70 chars, ≤ 10 words, no terminal `.,;:?!`) → `<h2>`.
+3. **Paragraph block** — default. Internal line breaks preserved via `whitespace-pre-line`.
 
-Implementation pattern mirrors `BusinessInfoSettings.tsx`:
-- `useQuery` for `site_settings` and `branding_settings`.
-- Local `form` state, "Save" button calls `supabase.from("site_settings").upsert({ setting_key, setting_value }, { onConflict: "setting_key" })` for each editable key.
-- On success, invalidate `["admin-settings"]`, `["site-settings"]`, `["admin-branding"]`, `["public-branding"]` so Business Info, Branding, and the public site all reflect the change immediately.
+**Last updated:** if `updatedAt` provided, shows muted `Last updated: <localized date>` directly under the page hero / above the body. Hidden if missing.
 
-## 3. Register the tab in `SettingsAdmin.tsx`
+## Design
 
-Add one entry to the `tabs` array (between Business Info and Business Rules):
+- Container: `max-w-3xl mx-auto`.
+- Wrapper: `prose prose-slate max-w-none space-y-5` using semantic tokens (`text-foreground`, `text-muted-foreground`, `border-border`).
+- `<h2>`: `mt-10 mb-3 text-2xl font-display font-bold text-foreground` (first heading gets `mt-0`).
+- `<h3>`: `mt-6 mb-2 text-lg font-display font-semibold text-foreground`.
+- `<p>`: `leading-relaxed text-foreground/85 whitespace-pre-line`.
+- `<ul>` / `<ol>`: `pl-6 space-y-2 marker:text-primary` with `list-disc` / `list-decimal`.
+- Hero sections of each page remain unchanged (sole `<h1>`).
 
-```ts
-{ value: "documents-pdf", label: "Documents & PDF",
-  allowed: canManageSettings,
-  content: <DocumentsPdfSettings /> }
+## Page integration
+
+Each public page becomes:
+
+```tsx
+<LegalContent body={content?.body} updatedAt={data?.updated_at} />
 ```
 
-## 4. PDF generator updates
+Public queries change `select("content")` → `select("content, updated_at")` (no schema change — column already exists).
 
-### `src/lib/invoicePdf.ts`
+## Technical notes
 
-- `drawLetterhead` already reads `settings.company_address` ✅ — no change needed there; setting it via the new tab will make it appear automatically.
-- `resolvePrimary` already reads `settings.brand_color_hex` ✅ — same.
-- After the existing "Payment Instructions" block (around line 286), before the thank-you, add an **optional terms** line if `settings.invoice_terms` is non-empty.
-- Replace the hard-coded thank-you with: if `settings.invoice_footer_note` is set, render that wrapped in `splitTextToSize`; otherwise keep the current "Thank you for choosing BlueRiver Services." default.
+- ~120-line component, no new dependencies.
+- Pure function; memoized parser keyed on `body`.
+- All Tailwind classes use existing design tokens — no hardcoded colors.
 
-### `src/lib/quotePdf.ts`
-
-- Same `drawLetterhead` already supports `company_address` and `brand_color_hex` ✅.
-- After the existing "Notes" block, before "Availability", render `invoice_terms` as a small "Terms" line if present.
-- Replace the final "Thank you…" line with `invoice_footer_note` when set.
-
-(Both files already pass `settings` end-to-end from the callers, which load `site_settings` via `useSiteSettings`. No caller changes needed.)
-
-## 5. Data integrity / sync
-
-Because `phone`, `email`, and `company_address` are all stored as rows in the single `site_settings` table keyed by `setting_key`:
-
-- Editing them in **Documents & PDF** writes the same rows used by **Business Info**, the public footer, and the email templates — they cannot drift.
-- After save, invalidating `["admin-settings"]` and `["site-settings"]` causes Business Info and the public site to re-fetch and show the new values without reload.
-
-## 6. Verification
-
-1. Open Settings → **Documents & PDF**, set a brand color (e.g. `#2563eb`), a `company_address`, and a footer note. Save.
-2. Reopen **Business Info** — confirm `phone`, `email` are unchanged and that editing them there still works.
-3. Generate an invoice PDF from a booking — confirm the letterhead band uses the new brand color, the address appears in the contact line, and the footer shows the custom note.
-4. Generate a quote PDF — same checks.
-5. Confirm the admin route is still `/onpass-useradmin-blueriveracess052026/...` and that signing out makes `/onpass-useradmin-blueriveracess052026/settings` render the standard 404 page.
+Ready to implement after approval.
