@@ -132,11 +132,14 @@ const LegalContent = ({ body, updatedAt, className }: LegalContentProps) => {
             </ol>
           );
         }
-        return (
-          <p key={i} className="leading-relaxed text-foreground/85 whitespace-pre-line">
-            {block.text}
-          </p>
-        );
+        if (block.type === "p") {
+          return (
+            <p key={i} className="leading-relaxed text-foreground/85 whitespace-pre-line">
+              {block.text}
+            </p>
+          );
+        }
+        return null;
       })}
     </article>
   );
