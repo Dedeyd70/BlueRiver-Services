@@ -1,21 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
+import LegalContent from "@/components/LegalContent";
 
 const TermsOfService = () => {
-  const { data: content, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["page-content", "terms-of-service"],
     queryFn: async () => {
       const { data } = await supabase
         .from("page_content")
-        .select("content")
+        .select("content, updated_at")
         .eq("page_name", "terms-of-service")
         .eq("section_key", "main")
         .maybeSingle();
-      return (data?.content as { body?: string }) ?? null;
+      return data;
     },
     staleTime: 1000 * 60 * 5,
   });
+
+  const content = (data?.content as { body?: string }) ?? null;
 
   return (
     <div>
@@ -32,18 +35,8 @@ const TermsOfService = () => {
         <div className="container max-w-3xl mx-auto">
           {isLoading ? (
             <p className="text-muted-foreground text-center">Loading...</p>
-          ) : content?.body ? (
-            <div className="prose prose-sm sm:prose max-w-none text-foreground/90 leading-relaxed space-y-4">
-              {content.body.split("\n\n").map((block: string, i: number) => {
-                const trimmed = block.trim();
-                if (!trimmed) return null;
-                const isHeading = trimmed.length < 80 && (trimmed === trimmed.toUpperCase() || /^\d+\./.test(trimmed) || /^[A-Z][A-Za-z\s&]+$/.test(trimmed));
-                if (isHeading) return <h3 key={i} className="text-lg font-display font-bold text-foreground mt-6 mb-2">{trimmed}</h3>;
-                return <p key={i} className="text-muted-foreground">{trimmed}</p>;
-              })}
-            </div>
           ) : (
-            <p className="text-muted-foreground text-center">Terms of Service content has not been configured yet.</p>
+            <LegalContent body={content?.body} updatedAt={data?.updated_at} />
           )}
         </div>
       </section>
