@@ -136,13 +136,14 @@ const buildQuoteDoc = (
   quote: QuoteData,
   branding: BrandingMap,
   settings: SettingsMap,
-  draft: QuoteDraft
+  draft: QuoteDraft,
+  logoDataUrl: string | null
 ): jsPDF => {
   const doc = new jsPDF({ compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
   const PRIMARY = resolvePrimary(settings);
-  let y = drawLetterhead(doc, pageW, branding, settings);
+  let y = drawLetterhead(doc, pageW, branding, settings, logoDataUrl);
 
   // Quote header
   const validityDays = draft.validity_days ?? 7;
