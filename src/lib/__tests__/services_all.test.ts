@@ -32,8 +32,7 @@ describe("Service archetypes — every service produces a positive subtotal", ()
       { service_type_id: svc.id, bedrooms: 2, full_bathrooms: 1 },
       SERVICES,
       RULES,
-      [],
-      0,
+            0,
       FIELDS,
       []
     );
@@ -49,8 +48,7 @@ describe("Recurring Cleaning — base $90 + frequency discount", () => {
       { service_type_id: "svc-recurring" },
       SERVICES,
       RULES,
-      [],
-      0,
+            0,
       [],
       []
     );
@@ -75,8 +73,7 @@ describe("Recurring Cleaning — base $90 + frequency discount", () => {
       { service_type_id: "svc-recurring", custom_fields: { frequency: "weekly" } },
       SERVICES,
       RULES,
-      [],
-      0,
+            0,
       [],
       multipliers
     );
@@ -102,8 +99,7 @@ describe("Recurring Cleaning — base $90 + frequency discount", () => {
       { service_type_id: "svc-recurring", custom_fields: { frequency: "monthly" } },
       SERVICES,
       RULES,
-      [],
-      0,
+            0,
       [],
       multipliers
     );
