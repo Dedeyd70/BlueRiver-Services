@@ -504,7 +504,7 @@ const QuotesAdmin = () => {
       return;
     }
     if (!branding || !settings) return;
-    generateQuotePdf(q, branding, settings, draft);
+    await generateQuotePdf(q, branding, settings, draft);
     await logActivity(q.id, "Quote PDF downloaded");
     qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
   };
@@ -531,7 +531,7 @@ const QuotesAdmin = () => {
       <p>Reply to this email if you have any questions or to confirm scheduling.</p>
       <p>— The BlueRiver Team</p>`;
     try {
-      const { filename, base64 } = generateQuotePdfBase64(q, branding, settings, draft);
+      const { filename, base64 } = await generateQuotePdfBase64(q, branding, settings, draft);
       const { error } = await supabase.functions.invoke("send-transactional-email", {
         body: {
           type: "custom",

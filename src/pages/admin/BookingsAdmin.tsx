@@ -352,7 +352,7 @@ const BookingsAdmin = () => {
       toast({ title: "Loading branding…", description: "Please try again in a moment." });
       return;
     }
-    generateInvoicePdf(inv, branding, pdfSettings);
+    await generateInvoicePdf(inv, branding, pdfSettings);
     if (b?.id) {
       await logBookingActivity(b.id, "note", {
         notes: `Invoice ${inv.invoice_number ?? ""} PDF downloaded`,
@@ -398,7 +398,7 @@ const BookingsAdmin = () => {
       <p>Please reply to this email if you have any questions.</p>
       <p>— The BlueRiver Team</p>`;
     try {
-      const { filename, base64 } = generateInvoicePdfBase64(inv, branding, pdfSettings);
+      const { filename, base64 } = await generateInvoicePdfBase64(inv, branding, pdfSettings);
       const { error } = await supabase.functions.invoke("send-transactional-email", {
         body: {
           type: "custom",
