@@ -328,36 +328,7 @@ const PricingSettings = () => {
         )}
       </section>
 
-      {/* Conditions */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">Condition Surcharges</h2>
-          <Button size="sm" onClick={() => saveConditions.mutate()} disabled={saveConditions.isPending}>
-            {saveConditions.isPending ? "Saving..." : "Save Surcharges"}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Fixed integer surcharge per condition level. Applied after subtotal — separate from field pricing.
-        </p>
-        <div className="border border-border rounded-lg divide-y divide-border">
-          {(conditions ?? []).map((c: any) => (
-            <div key={c.id} className="flex items-center justify-between gap-3 p-3">
-              <span className="font-medium text-sm">{c.name}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground text-sm">$</span>
-                <Input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={condEdits[c.id] ?? 0}
-                  onChange={(e) => setCondEdits({ ...condEdits, [c.id]: intInput(e.target.value) })}
-                  className="w-28 h-9"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Condition surcharges UI removed — replaced by Pricing Multipliers (axis = condition). */}
     </div>
   );
 };
