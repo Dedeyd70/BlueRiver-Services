@@ -233,12 +233,12 @@ const InvoicesAdmin = () => {
     if (!o) setForm({ ...emptyForm });
   };
 
-  const handleDownloadPdf = (inv: any) => {
+  const handleDownloadPdf = async (inv: any) => {
     if (!branding || !pdfSettings) {
       toast({ title: "Loading branding…", description: "Please try again in a moment." });
       return;
     }
-    generateInvoicePdf(inv, branding, pdfSettings);
+    await generateInvoicePdf(inv, branding, pdfSettings);
   };
 
   return (

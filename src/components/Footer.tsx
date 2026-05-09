@@ -90,7 +90,7 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
                 <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>
                   {serviceAreas && serviceAreas.length > 0
-                    ? `Serving ${serviceAreas[0].city}: ${serviceAreas.map((a) => a.zip).join(", ")}`
+                    ? `Serving ${Array.from(new Set(serviceAreas.map((a) => a.city))).join(", ")}`
                     : serviceArea}
                 </span>
               </span>

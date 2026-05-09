@@ -21,11 +21,35 @@ const hexToRgb = (hex?: string): [number, number, number] | null => {
 const resolvePrimary = (settings: SettingsMap): [number, number, number] =>
   hexToRgb(settings?.brand_color_hex) ?? DEFAULT_PRIMARY;
 
+/**
+ * Fetch the brand logo and return it as a data URL suitable for jsPDF
+ * `addImage`. Returns `null` on any failure (network, CORS, missing URL),
+ * which causes the letterhead to fall back to the "BR" placeholder badge.
+ */
+const loadLogoDataUrl = async (url?: string | null): Promise<string | null> => {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () =>
+        resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
 const drawLetterhead = (
   doc: jsPDF,
   pageW: number,
   branding: BrandingMap,
-  settings: SettingsMap
+  settings: SettingsMap,
+  logoDataUrl: string | null
 ): number => {
   const PRIMARY = resolvePrimary(settings);
   const bandH = 28;
@@ -33,16 +57,33 @@ const drawLetterhead = (
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, pageW, bandH, "F");
 
-  // Logo placeholder badge ("BR")
   const badgeX = 14;
   const badgeY = 6;
   const badgeSize = 16;
-  doc.setFillColor(...PRIMARY);
-  doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 3, 3, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("BR", badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 1.5, { align: "center" });
+
+  if (logoDataUrl) {
+    // Use the uploaded brand logo. `'FAST'` keeps file size down; the image
+    // mime is auto-detected from the data URL header.
+    try {
+      doc.addImage(logoDataUrl, "PNG", badgeX, badgeY, badgeSize, badgeSize, undefined, "FAST");
+    } catch {
+      // If addImage rejects the format, fall back to the placeholder badge.
+      doc.setFillColor(...PRIMARY);
+      doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 3, 3, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("BR", badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 1.5, { align: "center" });
+    }
+  } else {
+    // Placeholder badge ("BR") fallback when no logo is configured.
+    doc.setFillColor(...PRIMARY);
+    doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 3, 3, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("BR", badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 1.5, { align: "center" });
+  }
 
   // Business name
   doc.setFont("helvetica", "bold");
@@ -80,14 +121,15 @@ const drawLetterhead = (
 const buildInvoiceDoc = (
   inv: any,
   branding: BrandingMap,
-  settings: SettingsMap
+  settings: SettingsMap,
+  logoDataUrl: string | null
 ): jsPDF => {
   const doc = new jsPDF({ compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 20;
   const PRIMARY = resolvePrimary(settings);
-  let y = drawLetterhead(doc, pageW, branding, settings);
+  let y = drawLetterhead(doc, pageW, branding, settings, logoDataUrl);
 
   // Invoice header
   const invoiceNum = inv.invoice_number || `BR-${inv.id?.slice(0, 8).toUpperCase()}`;
@@ -332,12 +374,13 @@ const buildInvoiceDoc = (
   return doc;
 };
 
-export const generateInvoicePdf = (
+export const generateInvoicePdf = async (
   inv: any,
   branding: BrandingMap,
   settings: SettingsMap
 ) => {
-  const doc = buildInvoiceDoc(inv, branding, settings);
+  const logoDataUrl = await loadLogoDataUrl(branding?.logo_url);
+  const doc = buildInvoiceDoc(inv, branding, settings, logoDataUrl);
   const invoiceNum = inv.invoice_number || `BR-${inv.id?.slice(0, 8).toUpperCase()}`;
   doc.save(`invoice-${invoiceNum}.pdf`);
 };
@@ -346,12 +389,13 @@ export const generateInvoicePdf = (
  * Builds the invoice PDF and returns a base64 string + filename suitable
  * for the `attachments` array of `send-transactional-email`.
  */
-export const generateInvoicePdfBase64 = (
+export const generateInvoicePdfBase64 = async (
   inv: any,
   branding: BrandingMap,
   settings: SettingsMap
-): { filename: string; base64: string } => {
-  const doc = buildInvoiceDoc(inv, branding, settings);
+): Promise<{ filename: string; base64: string }> => {
+  const logoDataUrl = await loadLogoDataUrl(branding?.logo_url);
+  const doc = buildInvoiceDoc(inv, branding, settings, logoDataUrl);
   const idPart = (inv.invoice_number || inv.id?.slice(0, 8) || "INV").toString();
   const filename = `BlueRiver_Invoice_${idPart}.pdf`;
   const dataUri = doc.output("datauristring");

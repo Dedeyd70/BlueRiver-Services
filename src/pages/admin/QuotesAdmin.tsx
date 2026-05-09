@@ -213,13 +213,7 @@ const QuotesAdmin = () => {
     },
   });
 
-  const { data: conditionSettings } = useQuery({
-    queryKey: ["condition-settings"],
-    queryFn: async () => {
-      const { data } = await (supabase as any).from("condition_settings").select("*");
-      return (data ?? []) as any[];
-    },
-  });
+  // `condition_settings` is soft-hidden — handled by pricing_multipliers now.
 
   const { data: pricingMultipliers } = useQuery({
     queryKey: ["pricing-multipliers"],
@@ -456,7 +450,7 @@ const QuotesAdmin = () => {
     if (existing) {
       const existingItems: LineItem[] = Array.isArray(existing.line_items) && existing.line_items.length > 0
         ? existing.line_items
-        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], Number(existing.tax_rate) || defaultTax, pricingFields ?? [], pricingMultipliers ?? []).lineItems;
+        : computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], Number(existing.tax_rate) || defaultTax, pricingFields ?? [], pricingMultipliers ?? []).lineItems;
       setDraftForm({
         service_type: existing.service_type ?? "",
         scope: existing.scope ?? "",
@@ -470,7 +464,7 @@ const QuotesAdmin = () => {
       });
     } else {
       const submittedAddons = Array.isArray((q as any).selected_addons) ? (q as any).selected_addons : [];
-      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], conditionSettings ?? [], defaultTax, pricingFields ?? [], pricingMultipliers ?? []);
+      const computed = computeQuote(q, pricingServiceTypes ?? [], pricingRules ?? [], defaultTax, pricingFields ?? [], pricingMultipliers ?? []);
       const baseItem = computed.lineItems.find((i) => i.type === "base");
       // Resolve add-on prices from the services table when the public form
       // didn't carry pricing through (which is the common case).
@@ -510,7 +504,7 @@ const QuotesAdmin = () => {
       return;
     }
     if (!branding || !settings) return;
-    generateQuotePdf(q, branding, settings, draft);
+    await generateQuotePdf(q, branding, settings, draft);
     await logActivity(q.id, "Quote PDF downloaded");
     qc.invalidateQueries({ queryKey: ["admin-quote-notes"] });
   };
@@ -537,7 +531,7 @@ const QuotesAdmin = () => {
       <p>Reply to this email if you have any questions or to confirm scheduling.</p>
       <p>— The BlueRiver Team</p>`;
     try {
-      const { filename, base64 } = generateQuotePdfBase64(q, branding, settings, draft);
+      const { filename, base64 } = await generateQuotePdfBase64(q, branding, settings, draft);
       const { error } = await supabase.functions.invoke("send-transactional-email", {
         body: {
           type: "custom",

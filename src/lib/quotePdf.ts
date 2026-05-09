@@ -45,11 +45,35 @@ const hexToRgb = (hex?: string): [number, number, number] | null => {
 const resolvePrimary = (settings: SettingsMap): [number, number, number] =>
   hexToRgb(settings?.brand_color_hex) ?? DEFAULT_PRIMARY;
 
+/**
+ * Fetch the brand logo and return it as a data URL suitable for jsPDF
+ * `addImage`. Returns `null` on any failure (network, CORS, missing URL),
+ * which causes the letterhead to fall back to the "BR" placeholder badge.
+ */
+const loadLogoDataUrl = async (url?: string | null): Promise<string | null> => {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () =>
+        resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
 const drawLetterhead = (
   doc: jsPDF,
   pageW: number,
   branding: BrandingMap,
-  settings: SettingsMap
+  settings: SettingsMap,
+  logoDataUrl: string | null
 ): number => {
   const PRIMARY = resolvePrimary(settings);
   const bandH = 28;
@@ -59,12 +83,26 @@ const drawLetterhead = (
   const badgeX = 14;
   const badgeY = 6;
   const badgeSize = 16;
-  doc.setFillColor(...PRIMARY);
-  doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 3, 3, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("BR", badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 1.5, { align: "center" });
+
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, "PNG", badgeX, badgeY, badgeSize, badgeSize, undefined, "FAST");
+    } catch {
+      doc.setFillColor(...PRIMARY);
+      doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 3, 3, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("BR", badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 1.5, { align: "center" });
+    }
+  } else {
+    doc.setFillColor(...PRIMARY);
+    doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 3, 3, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("BR", badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 1.5, { align: "center" });
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
@@ -98,13 +136,14 @@ const buildQuoteDoc = (
   quote: QuoteData,
   branding: BrandingMap,
   settings: SettingsMap,
-  draft: QuoteDraft
+  draft: QuoteDraft,
+  logoDataUrl: string | null
 ): jsPDF => {
   const doc = new jsPDF({ compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
   const PRIMARY = resolvePrimary(settings);
-  let y = drawLetterhead(doc, pageW, branding, settings);
+  let y = drawLetterhead(doc, pageW, branding, settings, logoDataUrl);
 
   // Quote header
   const validityDays = draft.validity_days ?? 7;
@@ -353,13 +392,14 @@ const buildQuoteDoc = (
   return doc;
 };
 
-export const generateQuotePdf = (
+export const generateQuotePdf = async (
   quote: QuoteData,
   branding: BrandingMap,
   settings: SettingsMap,
   draft: QuoteDraft
 ) => {
-  const doc = buildQuoteDoc(quote, branding, settings, draft);
+  const logoDataUrl = await loadLogoDataUrl(branding?.logo_url);
+  const doc = buildQuoteDoc(quote, branding, settings, draft, logoDataUrl);
   const validityDays = draft.validity_days ?? 7;
   const quoteNum = `Q-${format(new Date(quote.created_at), "yyyy")}-${quote.id.slice(0, 4).toUpperCase()}`;
   // validityDays referenced to mirror naming; not used in filename.
@@ -371,13 +411,14 @@ export const generateQuotePdf = (
  * Builds the quote PDF and returns a base64 string + filename for use in
  * the `attachments` array of `send-transactional-email`.
  */
-export const generateQuotePdfBase64 = (
+export const generateQuotePdfBase64 = async (
   quote: QuoteData,
   branding: BrandingMap,
   settings: SettingsMap,
   draft: QuoteDraft
-): { filename: string; base64: string } => {
-  const doc = buildQuoteDoc(quote, branding, settings, draft);
+): Promise<{ filename: string; base64: string }> => {
+  const logoDataUrl = await loadLogoDataUrl(branding?.logo_url);
+  const doc = buildQuoteDoc(quote, branding, settings, draft, logoDataUrl);
   const idPart = quote.id?.slice(0, 8).toUpperCase() ?? "QUOTE";
   const filename = `BlueRiver_Quote_${idPart}.pdf`;
   const dataUri = doc.output("datauristring");

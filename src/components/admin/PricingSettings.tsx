@@ -50,18 +50,10 @@ const PricingSettings = () => {
     },
   });
 
-  const { data: conditions } = useQuery({
-    queryKey: ["admin-conditions"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).from("condition_settings").select("*").order("surcharge_amount");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  // `condition_settings` table is soft-hidden — replaced by pricing_multipliers.
 
   const [stEdits, setStEdits] = useState<Record<string, number>>({});
   const [ruleEdits, setRuleEdits] = useState<Record<string, number>>({});
-  const [condEdits, setCondEdits] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (serviceTypes) {
@@ -82,13 +74,7 @@ const PricingSettings = () => {
     }
   }, [rules]);
 
-  useEffect(() => {
-    if (conditions) {
-      const m: Record<string, number> = {};
-      conditions.forEach((c: any) => (m[c.id] = c.surcharge_amount));
-      setCondEdits(m);
-    }
-  }, [conditions]);
+
 
   // Auto-heal: ensure every number field has a matching pricing rule
   const healingRef = useRef<Set<string>>(new Set());
@@ -161,28 +147,7 @@ const PricingSettings = () => {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const saveConditions = useMutation({
-    mutationFn: async () => {
-      const updates = Object.entries(condEdits).map(([id, amt]) =>
-        (supabase as any)
-          .from("condition_settings")
-          .update({ surcharge_amount: intInput(String(amt)) })
-          .eq("id", id)
-          .select("id")
-          .maybeSingle(),
-      );
-      const results = await Promise.all(updates);
-      const err = results.find((r: any) => r.error);
-      if (err?.error) throw err.error;
-      const blocked = results.find((r: any) => !r.data);
-      if (blocked) throw new Error("Update blocked by permissions or RLS");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-conditions"] });
-      toast({ title: "Condition surcharges saved" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
+
 
   const addField = useMutation({
     mutationFn: async (payload: {
@@ -363,36 +328,7 @@ const PricingSettings = () => {
         )}
       </section>
 
-      {/* Conditions */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">Condition Surcharges</h2>
-          <Button size="sm" onClick={() => saveConditions.mutate()} disabled={saveConditions.isPending}>
-            {saveConditions.isPending ? "Saving..." : "Save Surcharges"}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Fixed integer surcharge per condition level. Applied after subtotal — separate from field pricing.
-        </p>
-        <div className="border border-border rounded-lg divide-y divide-border">
-          {(conditions ?? []).map((c: any) => (
-            <div key={c.id} className="flex items-center justify-between gap-3 p-3">
-              <span className="font-medium text-sm">{c.name}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground text-sm">$</span>
-                <Input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={condEdits[c.id] ?? 0}
-                  onChange={(e) => setCondEdits({ ...condEdits, [c.id]: intInput(e.target.value) })}
-                  className="w-28 h-9"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Condition surcharges UI removed — replaced by Pricing Multipliers (axis = condition). */}
     </div>
   );
 };
