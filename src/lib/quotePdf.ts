@@ -392,13 +392,14 @@ const buildQuoteDoc = (
   return doc;
 };
 
-export const generateQuotePdf = (
+export const generateQuotePdf = async (
   quote: QuoteData,
   branding: BrandingMap,
   settings: SettingsMap,
   draft: QuoteDraft
 ) => {
-  const doc = buildQuoteDoc(quote, branding, settings, draft);
+  const logoDataUrl = await loadLogoDataUrl(branding?.logo_url);
+  const doc = buildQuoteDoc(quote, branding, settings, draft, logoDataUrl);
   const validityDays = draft.validity_days ?? 7;
   const quoteNum = `Q-${format(new Date(quote.created_at), "yyyy")}-${quote.id.slice(0, 4).toUpperCase()}`;
   // validityDays referenced to mirror naming; not used in filename.
@@ -410,13 +411,14 @@ export const generateQuotePdf = (
  * Builds the quote PDF and returns a base64 string + filename for use in
  * the `attachments` array of `send-transactional-email`.
  */
-export const generateQuotePdfBase64 = (
+export const generateQuotePdfBase64 = async (
   quote: QuoteData,
   branding: BrandingMap,
   settings: SettingsMap,
   draft: QuoteDraft
-): { filename: string; base64: string } => {
-  const doc = buildQuoteDoc(quote, branding, settings, draft);
+): Promise<{ filename: string; base64: string }> => {
+  const logoDataUrl = await loadLogoDataUrl(branding?.logo_url);
+  const doc = buildQuoteDoc(quote, branding, settings, draft, logoDataUrl);
   const idPart = quote.id?.slice(0, 8).toUpperCase() ?? "QUOTE";
   const filename = `BlueRiver_Quote_${idPart}.pdf`;
   const dataUri = doc.output("datauristring");
