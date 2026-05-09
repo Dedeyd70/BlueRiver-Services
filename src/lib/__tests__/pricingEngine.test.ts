@@ -5,7 +5,6 @@ import {
   type PricingRule,
   type ServiceField,
   type PricingMultiplier,
-  type ConditionSetting,
 } from "../pricingEngine";
 
 const SERVICE_ID = "svc-1";
@@ -30,12 +29,10 @@ describe("computeQuote — base + dynamic fields", () => {
       { service_type_id: SERVICE_ID, bedrooms: 3, full_bathrooms: 2 },
       services,
       rules,
-      [],
       0,
       fields,
       []
     );
-    // 100 + (3*25) + (2*30) = 100 + 75 + 60 = 235
     expect(result.subtotal).toBe(235);
     expect(result.total).toBe(235);
     expect(result.lineItems.find((i) => i.type === "base")?.total_price).toBe(100);
@@ -46,7 +43,6 @@ describe("computeQuote — base + dynamic fields", () => {
       { service_type_id: SERVICE_ID, bedrooms: 0, full_bathrooms: 1 },
       services,
       rules,
-      [],
       0,
       fields,
       []
@@ -74,12 +70,10 @@ describe("computeQuote — pricing multipliers", () => {
       { service_type_id: SERVICE_ID, bedrooms: 2, condition_level: "Heavy" },
       services,
       rules,
-      [],
       0,
       fields,
       multipliers
     );
-    // base 100 + bedrooms 50 + flat 50 = 200
     expect(result.subtotal).toBe(200);
     expect(result.lineItems.find((i) => i.type === "condition")?.total_price).toBe(50);
   });
@@ -99,12 +93,10 @@ describe("computeQuote — pricing multipliers", () => {
       { service_type_id: SERVICE_ID, bedrooms: 2, condition_level: "Heavy" },
       services,
       rules,
-      [],
       0,
       fields,
       multipliers
     );
-    // base 100 + bedrooms 50 = 150 → +flat 50 = 200 → +10% (20) = 220
     expect(result.subtotal).toBe(220);
   });
 
@@ -117,55 +109,9 @@ describe("computeQuote — pricing multipliers", () => {
     ];
     const result = computeQuote(
       { service_type_id: SERVICE_ID, condition_level: "Heavy" },
-      services, rules, [], 0, fields, multipliers
+      services, rules, 0, fields, multipliers
     );
     expect(result.subtotal).toBe(100);
-  });
-});
-
-describe("computeQuote — legacy condition deduplication", () => {
-  it("ignores legacy condition_settings even when 'Heavy' passed (no multiplier present)", () => {
-    const legacyConditions: ConditionSetting[] = [
-      { id: "c1", name: "Heavy", surcharge_amount: 75 },
-    ];
-    const result = computeQuote(
-      { service_type_id: SERVICE_ID, condition_level: "Heavy" },
-      services,
-      rules,
-      legacyConditions,
-      0,
-      fields,
-      [] // no multipliers
-    );
-    // Only base 100 should remain — legacy surcharge MUST be ignored
-    expect(result.subtotal).toBe(100);
-    expect(result.lineItems.some((i) => i.type === "condition")).toBe(false);
-  });
-
-  it("only the multiplier applies when both legacy and multiplier exist (no double-charge)", () => {
-    const legacyConditions: ConditionSetting[] = [
-      { id: "c1", name: "Heavy", surcharge_amount: 75 },
-    ];
-    const multipliers: PricingMultiplier[] = [
-      {
-        id: "m1", service_type_id: null, axis: "condition", key: "Heavy",
-        modifier_type: "flat_amount", value: 40, display_label: "Heavy", is_active: true,
-      },
-    ];
-    const result = computeQuote(
-      { service_type_id: SERVICE_ID, condition_level: "Heavy" },
-      services,
-      rules,
-      legacyConditions,
-      0,
-      fields,
-      multipliers
-    );
-    // base 100 + multiplier 40 only — legacy 75 ignored
-    expect(result.subtotal).toBe(140);
-    const condItems = result.lineItems.filter((i) => i.type === "condition");
-    expect(condItems).toHaveLength(1);
-    expect(condItems[0].total_price).toBe(40);
   });
 });
 
@@ -173,9 +119,8 @@ describe("computeQuote — tax calculation", () => {
   it("computes tax at given rate and adds to total", () => {
     const result = computeQuote(
       { service_type_id: SERVICE_ID, bedrooms: 4 },
-      services, rules, [], 10, fields, []
+      services, rules, 10, fields, []
     );
-    // subtotal 100 + 100 = 200, tax 10% = 20, total 220
     expect(result.subtotal).toBe(200);
     expect(result.tax).toBe(20);
     expect(result.total).toBe(220);
@@ -184,7 +129,7 @@ describe("computeQuote — tax calculation", () => {
   it("zero tax rate produces zero tax", () => {
     const result = computeQuote(
       { service_type_id: SERVICE_ID, bedrooms: 1 },
-      services, rules, [], 0, fields, []
+      services, rules, 0, fields, []
     );
     expect(result.tax).toBe(0);
     expect(result.total).toBe(result.subtotal);
@@ -193,9 +138,8 @@ describe("computeQuote — tax calculation", () => {
   it("handles fractional tax rates correctly", () => {
     const result = computeQuote(
       { service_type_id: SERVICE_ID, bedrooms: 1 },
-      services, rules, [], 8.25, fields, []
+      services, rules, 8.25, fields, []
     );
-    // subtotal 125, tax = round(125 * 8.25)/100 = round(1031.25)/100 = 10.31 → rounded to 10
     expect(result.subtotal).toBe(125);
     expect(result.tax).toBe(Math.round((125 * 8.25) / 100));
   });
