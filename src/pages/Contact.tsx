@@ -316,7 +316,7 @@ const Contact = () => {
                         <>
                           <p className="text-sm">Serving {serviceAreas[0].city}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            ZIPs: {serviceAreas.map((a) => a.zip).join(", ")}
+                            Cities: {Array.from(new Set(serviceAreas.map((a) => a.city))).join(", ")}
                           </p>
                         </>
                       ) : (

@@ -531,7 +531,7 @@ const BookService = () => {
                     <Input placeholder="Service address" value={form.address} onChange={update("address")} maxLength={300} />
                     {serviceAreas && serviceAreas.length > 0 && (
                       <p className="text-xs text-muted-foreground mt-1.5">
-                        Serving {serviceAreas[0].city}: {serviceAreas.map((a) => a.zip).join(", ")}
+                        Serving {Array.from(new Set(serviceAreas.map((a) => a.city))).join(", ")}
                       </p>
                     )}
                   </div>
