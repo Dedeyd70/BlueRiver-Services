@@ -9,12 +9,14 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, Plus } from "lucide-react";
 
-type Area = { id: string; zip: string; city: string; is_active: boolean };
+// ZIP column is intentionally hidden from the admin UI (soft-delete). It still
+// exists in the database (NOT NULL) so existing data is preserved and the
+// feature can be re-enabled later with no migration. New rows insert "".
+type Area = { id: string; zip?: string; city: string; is_active: boolean };
 
 const ServiceAreasSettings = () => {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [zip, setZip] = useState("");
   const [city, setCity] = useState("Bellevue");
 
   const { data } = useQuery({
@@ -23,7 +25,7 @@ const ServiceAreasSettings = () => {
       const { data, error } = await (supabase as any)
         .from("service_areas")
         .select("*")
-        .order("zip");
+        .order("city");
       if (error) throw error;
       return (data ?? []) as Area[];
     },
@@ -37,15 +39,16 @@ const ServiceAreasSettings = () => {
 
   const add = useMutation({
     mutationFn: async () => {
-      const z = zip.trim();
-      if (!/^\d{5}$/.test(z)) throw new Error("ZIP must be 5 digits");
+      const c = city.trim();
+      if (!c) throw new Error("City is required");
       const { error } = await (supabase as any)
         .from("service_areas")
-        .insert({ zip: z, city: city.trim() || "Bellevue", is_active: true });
+        // `zip` retained as empty string to satisfy NOT NULL; field is hidden.
+        .insert({ zip: "", city: c, is_active: true });
       if (error) throw error;
     },
     onSuccess: () => {
-      setZip("");
+      setCity("Bellevue");
       invalidate();
       toast({ title: "Service area added" });
     },
@@ -80,12 +83,8 @@ const ServiceAreasSettings = () => {
         <h3 className="font-semibold mb-3">Add Service Area</h3>
         <div className="flex flex-wrap gap-3 items-end">
           <div>
-            <Label>ZIP Code</Label>
-            <Input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="98004" maxLength={5} className="w-32" />
-          </div>
-          <div>
             <Label>City</Label>
-            <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Bellevue" className="w-48" />
+            <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Bellevue" className="w-64" />
           </div>
           <Button onClick={() => add.mutate()} disabled={add.isPending}>
             <Plus className="w-4 h-4 mr-1" /> Add
@@ -97,15 +96,14 @@ const ServiceAreasSettings = () => {
         {(data ?? []).map((a) => (
           <Card key={a.id} className="p-3 flex items-center justify-between gap-3">
             <div>
-              <p className="font-mono font-medium">{a.zip}</p>
-              <p className="text-xs text-muted-foreground">{a.city}</p>
+              <p className="font-medium">{a.city}</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <Switch checked={a.is_active} onCheckedChange={() => toggle.mutate(a)} />
                 <Label className="text-xs">Active</Label>
               </div>
-              <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Remove ZIP ${a.zip}?`)) remove.mutate(a.id); }}>
+              <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Remove ${a.city}?`)) remove.mutate(a.id); }}>
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
