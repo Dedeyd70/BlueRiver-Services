@@ -23,11 +23,9 @@ export interface PricingRule {
   unit_price: number;
 }
 
-export interface ConditionSetting {
-  id: string;
-  name: string;
-  surcharge_amount: number;
-}
+// NOTE: legacy `ConditionSetting` interface removed. The `condition_settings`
+// table is left intact in the database (soft-hidden) but no longer read or
+// written by the app — `pricing_multipliers` is the live source of truth.
 
 export interface PricingMultiplier {
   id: string;
@@ -86,7 +84,6 @@ export function computeQuote(
   request: QuoteRequestLike,
   serviceTypes: ServiceType[],
   rules: PricingRule[],
-  conditions: ConditionSetting[],
   taxRate: number = 0,
   fields: ServiceField[] = [],
   multipliers: PricingMultiplier[] = []
@@ -172,12 +169,9 @@ export function computeQuote(
     });
   });
 
-  // NOTE: Condition surcharges are now handled exclusively by the
-  // pricing_multipliers table below. The legacy `condition_settings` path
-  // was retired to eliminate double-charging when both tables defined the
-  // same condition (audit finding §1b). The `conditions` argument is kept
-  // for backward-compat in the function signature but no longer applied.
-  void conditions;
+  // Condition surcharges are handled exclusively by `pricing_multipliers`
+  // (axis = 'condition'). The legacy `condition_settings` table has been
+  // soft-hidden from the app — see audit finding §1b.
 
   // ---- Pricing multipliers (Phase 2 advanced engine) -------------------
   // Filter to active rules that target this service (or are global with NULL service_type_id).

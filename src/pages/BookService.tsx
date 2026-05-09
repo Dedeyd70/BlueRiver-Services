@@ -158,15 +158,7 @@ const BookService = () => {
     enabled: !!matchedServiceType?.id,
   });
 
-  const { data: conditionSettings } = useQuery({
-    queryKey: ["public-condition-settings"],
-    queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("condition_settings")
-        .select("id,name,surcharge_amount");
-      return data ?? [];
-    },
-  });
+  // `condition_settings` is soft-hidden — handled by pricing_multipliers now.
 
   const { data: pricingMultipliers } = useQuery({
     queryKey: ["public-pricing-multipliers"],
@@ -294,12 +286,11 @@ const BookService = () => {
       pricingRequest,
       serviceTypesForEngine,
       pricingRules ?? [],
-      conditionSettings ?? [],
       taxRate ?? 0,
       serviceFields ?? [],
       pricingMultipliers ?? [],
     );
-  }, [matchedServiceType, pricingRules, conditionSettings, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, form.square_footage, form.has_pets, form.pet_count, form.is_empty_property, form.floor_type, form.property_type, addons, pricingMultipliers]);
+  }, [matchedServiceType, pricingRules, taxRate, serviceFields, dynValues, selectedAddons, form.service, form.condition_level, form.square_footage, form.has_pets, form.pet_count, form.is_empty_property, form.floor_type, form.property_type, addons, pricingMultipliers]);
 
   const toggleAddon = (title: string) => {
     setSelectedAddons((prev) => prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]);
