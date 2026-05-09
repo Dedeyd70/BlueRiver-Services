@@ -1,66 +1,87 @@
+# Three Targeted Fixes + Save Legal Plan
 
-# Professional Legal Pages Renderer — Frontend Only
+## 0. Save legal-pages plan for later
 
-## Files
+- **New file:** `.lovable/plans/legal-pages-improvement.md` — verbatim copy of the prior approved Phase 1/Phase 2 legal-pages plan (problems by category A–D, Phase 1 DB fixes, Phase 2 app fixes, source-of-truth analysis, final recommendation).
 
-**New:** `src/components/LegalContent.tsx` — pure presentation component.
+Planning artifact only; no code touched by this step.
 
-**Modified (presentation only):**
-- `src/pages/PrivacyPolicy.tsx`
-- `src/pages/TermsOfService.tsx`
-- `src/pages/LiabilityDisclaimer.tsx`
-- `src/pages/CancellationPolicy.tsx`
+---
 
-**Untouched:** all admin pages, `page_content` schema, RLS, routes, hero sections, Navbar, Footer.
+## 1. Invoice + Quote logo — use uploaded brand logo, not the "BR" placeholder
 
-## Why this is safe
+**Files**
+- `src/lib/invoicePdf.ts` — replace placeholder badge in `drawLetterhead`.
+- `src/lib/quotePdf.ts` — same replacement (identical letterhead with "BR" badge).
 
-- Admin keeps the same plain-text `Textarea` writing `{ body: string }` to `page_content.content`. No new fields, no markdown requirement.
-- Pure read-path change. No DB migration, no API change.
-- No `dangerouslySetInnerHTML`. All content rendered as React text nodes inside semantic tags — XSS posture unchanged.
-- Worst-case parser misclassification = a heading where a paragraph was expected. No content is ever lost or hidden.
-- Empty body → `"Content not available"`. Loading → existing loader preserved.
-- Existing Privacy Policy contact card (email/phone) stays intact below the rendered body.
+**Today's behavior**
+Both PDFs draw a colored rounded-rect with the literal text `"BR"` at top-left (`invoicePdf.ts:36-45`, `quotePdf.ts:67`). `DocumentsPdfSettings.tsx` already renders `branding.logo_url` when set and falls back to "BR" otherwise — but the PDFs never read `logo_url`.
 
-## Renderer behavior
+**Fix**
+1. Add async helper `loadLogoDataUrl(url)`:
+   - Fetch the image (Supabase storage public URL).
+   - Convert to data URL via `FileReader` / `blob.arrayBuffer()`.
+   - Return `null` on failure (network, CORS, missing).
+2. In `buildInvoiceDoc` / `buildQuoteDoc`, accept optional `logoDataUrl: string | null` parameter — keeps the build functions synchronous so existing serialization paths still work.
+3. Make public entry points async: `generateInvoicePdf`, `generateInvoicePdfBase64`, and the `quotePdf.ts` equivalents. They `await` the loader and pass `logoDataUrl` through.
+4. In `drawLetterhead`:
+   - If `logoDataUrl` present → `doc.addImage(logoDataUrl, 'PNG', badgeX, badgeY, badgeSize, badgeSize, undefined, 'FAST')`.
+   - Else → keep current "BR" fallback unchanged.
+5. Update every caller of `generateInvoicePdf*` / `generateQuotePdf*` to `await`.
 
-Input is split on blank lines into **blocks**. Each block is classified in order:
+**Safety**
+- Fallback path preserved → no logo means current behavior.
+- Network/CORS failure → "BR" fallback.
+- Compression budget unchanged (single raster).
+- No DB or schema change.
 
-1. **List block** — every non-empty line matches a marker:
-   - `-`, `*`, `•` → `<ul>`
-   - `1.`, `1)`, `a)` → `<ol>`
-   - Markers stripped; rendered as `<li>`.
-2. **Heading block** — single short line:
-   - Matches `^\d+(\.\d+)*[.)]?\s` (e.g. `1.`, `2.3`, `1.1`) → `<h3>`.
-   - Otherwise short title-like (≤ 70 chars, ≤ 10 words, no terminal `.,;:?!`) → `<h2>`.
-3. **Paragraph block** — default. Internal line breaks preserved via `whitespace-pre-line`.
+---
 
-**Last updated:** if `updatedAt` provided, shows muted `Last updated: <localized date>` directly under the page hero / above the body. Hidden if missing.
+## 2. ZIP code — soft hide (Option A, reversible)
 
-## Design
+ZIPs are **hidden, not deleted**. DB column stays NOT NULL; new rows insert `zip: ""`. Restoring later = re-add the input + swap city back to zip in displays. Existing historical ZIPs are preserved.
 
-- Container: `max-w-3xl mx-auto`.
-- Wrapper: `prose prose-slate max-w-none space-y-5` using semantic tokens (`text-foreground`, `text-muted-foreground`, `border-border`).
-- `<h2>`: `mt-10 mb-3 text-2xl font-display font-bold text-foreground` (first heading gets `mt-0`).
-- `<h3>`: `mt-6 mb-2 text-lg font-display font-semibold text-foreground`.
-- `<p>`: `leading-relaxed text-foreground/85 whitespace-pre-line`.
-- `<ul>` / `<ol>`: `pl-6 space-y-2 marker:text-primary` with `list-disc` / `list-decimal`.
-- Hero sections of each page remain unchanged (sole `<h1>`).
+| File | What's there | Action |
+|---|---|---|
+| `src/lib/validation.ts` | `ZIP_RE`, `isValidZip` | Remove both (no remaining imports). |
+| `src/components/admin/ServiceAreasSettings.tsx` | UI keyed entirely on ZIP | Refactor to **cities only**: drop ZIP input + ZIP column, sort by `city`, drop `^\d{5}$` validator, insert with `zip: ""`. |
+| `src/hooks/useServiceAreas.ts` | `.order("zip")`, `zip` in type | Change to `.order("city")`, mark `zip` optional. |
+| `src/components/Footer.tsx` (line 93) | "Serving Bellevue: 98004…" | Show deduped city list: "Serving Bellevue, Redmond, …". |
+| `src/pages/RequestQuote.tsx` (line 350) | Same ZIP-list string | Same — city list. |
+| `src/pages/BookService.tsx` (line 534) | Same | Same — city list. |
+| `src/pages/Contact.tsx` (line 319) | "ZIPs: 98004…" | Replace with "Cities: …". |
+| `src/components/LocalBusinessSchema.tsx` | `@type: PostalAddress` JSON-LD | **Keep** — schema.org structural type, not a postal code. |
+| `src/integrations/supabase/types.ts` | Auto-generated, contains `zip` column | Do not touch. |
 
-## Page integration
+**Safety** — No customer-facing form collects ZIP; address fields are free-text and untouched; routing/RLS unaffected.
 
-Each public page becomes:
+---
 
-```tsx
-<LegalContent body={content?.body} updatedAt={data?.updated_at} />
-```
+## 3. `condition_settings` — soft hide (Option A, reversible)
 
-Public queries change `select("content")` → `select("content, updated_at")` (no schema change — column already exists).
+Table left intact, just unread/unwritten. Multiplier engine is already the live calculation path.
 
-## Technical notes
+**Files**
+- `src/lib/pricingEngine.ts` — remove `ConditionSetting` interface, `conditions` parameter from `computeQuote`, and the `void conditions;` line.
+- `src/pages/BookService.tsx` (lines 161–165, 297, 302) — drop the `conditionSettings` query and its `useMemo` / `computeQuote` usage.
+- `src/pages/admin/QuotesAdmin.tsx` (lines 216–219, 459, 473) — drop the `conditionSettings` query; stop passing it to `computeQuote`.
+- `src/components/admin/PricingSettings.tsx` — remove the entire "Condition Settings" UI: query (line 56), mutation (line 168), and rendered block. Multipliers UI keeps full control over the `condition` axis.
+- `src/lib/__tests__/pricingEngine.test.ts` — update the two legacy tests (lines 127, 146); since they exist to verify the legacy path is ignored, simplify or remove them now that the parameter is gone.
 
-- ~120-line component, no new dependencies.
-- Pure function; memoized parser keyed on `body`.
-- All Tailwind classes use existing design tokens — no hardcoded colors.
+**Safety** — No other table or RPC references `condition_settings`.
 
-Ready to implement after approval.
+---
+
+## Out of scope (explicit)
+
+- No legal-pages code changes (plan saved separately for next session).
+- No Supabase schema migrations.
+- No design-system or token changes.
+
+## Order of execution
+
+1. Save the legal-pages plan file.
+2. Invoice + quote PDF logo (two files + callers).
+3. ZIP soft-hide sweep (8 files).
+4. `condition_settings` soft-hide (5 files + tests).
+5. Verify: build passes, vitest pricing suite passes, generated invoice logo matches the Documents & PDF preview.
