@@ -260,42 +260,63 @@ export type Database = {
       cleaner_applications: {
         Row: {
           admin_notes: string | null
+          authorized_to_work: boolean | null
           availability: string
           created_at: string
           email: string
           experience: string
           full_name: string
+          has_license: boolean | null
           id: string
           message: string | null
+          middle_name: string | null
+          personality_bio: string | null
           phone: string
+          reference_1: string | null
+          reference_2: string | null
+          reference_3: string | null
           service_type: string
           status: string
           updated_at: string
         }
         Insert: {
           admin_notes?: string | null
+          authorized_to_work?: boolean | null
           availability: string
           created_at?: string
           email: string
           experience: string
           full_name: string
+          has_license?: boolean | null
           id?: string
           message?: string | null
+          middle_name?: string | null
+          personality_bio?: string | null
           phone: string
+          reference_1?: string | null
+          reference_2?: string | null
+          reference_3?: string | null
           service_type: string
           status?: string
           updated_at?: string
         }
         Update: {
           admin_notes?: string | null
+          authorized_to_work?: boolean | null
           availability?: string
           created_at?: string
           email?: string
           experience?: string
           full_name?: string
+          has_license?: boolean | null
           id?: string
           message?: string | null
+          middle_name?: string | null
+          personality_bio?: string | null
           phone?: string
+          reference_1?: string | null
+          reference_2?: string | null
+          reference_3?: string | null
           service_type?: string
           status?: string
           updated_at?: string

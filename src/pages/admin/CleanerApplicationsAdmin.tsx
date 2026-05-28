@@ -24,17 +24,26 @@ type Status = "new" | "reviewed" | "contacted" | "archived";
 interface CleanerApplication {
   id: string;
   full_name: string;
+  middle_name: string | null;
   email: string;
   phone: string;
   availability: string;
   experience: string;
   service_type: string;
+  has_license: boolean | null;
+  authorized_to_work: boolean | null;
+  reference_1: string | null;
+  reference_2: string | null;
+  reference_3: string | null;
+  personality_bio: string | null;
   message: string | null;
   status: Status;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
 }
+
+const yesNo = (v: boolean | null) => (v === true ? "Yes" : v === false ? "No" : "—");
 
 const statusColors: Record<Status, string> = {
   new: "bg-amber-100 text-amber-800",
@@ -206,6 +215,12 @@ const CleanerApplicationsAdmin = () => {
 
                   {isOpen && (
                     <div className="grid sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-border text-sm">
+                      {a.middle_name && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Middle Name</p>
+                          <p className="text-foreground">{a.middle_name}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-xs text-muted-foreground">Availability</p>
                         <p className="text-foreground">{a.availability}</p>
@@ -214,10 +229,26 @@ const CleanerApplicationsAdmin = () => {
                         <p className="text-xs text-muted-foreground">Experience</p>
                         <p className="text-foreground">{a.experience}</p>
                       </div>
-                      {a.message && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Driver's License</p>
+                        <p className="text-foreground">{yesNo(a.has_license)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Authorized to Work (US)</p>
+                        <p className="text-foreground">{yesNo(a.authorized_to_work)}</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-xs text-muted-foreground mb-1">References</p>
+                        <ol className="list-decimal list-inside space-y-1 text-foreground">
+                          <li>{a.reference_1 || <span className="text-muted-foreground">—</span>}</li>
+                          <li>{a.reference_2 || <span className="text-muted-foreground">—</span>}</li>
+                          <li>{a.reference_3 || <span className="text-muted-foreground">—</span>}</li>
+                        </ol>
+                      </div>
+                      {(a.personality_bio || a.message) && (
                         <div className="sm:col-span-2">
-                          <p className="text-xs text-muted-foreground mb-1">About</p>
-                          <p className="text-foreground whitespace-pre-wrap">{a.message}</p>
+                          <p className="text-xs text-muted-foreground mb-1">Personality</p>
+                          <p className="text-foreground whitespace-pre-wrap">{a.personality_bio || a.message}</p>
                         </div>
                       )}
                     </div>
