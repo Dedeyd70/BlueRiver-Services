@@ -58,6 +58,9 @@ const Navbar = () => {
               {link.label}
             </Link>
           ))}
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/become-a-cleaner">Become a Cleaner</Link>
+          </Button>
           <Button variant="nav" size="sm" asChild>
             <Link to="/quote">Request a Quote</Link>
           </Button>
@@ -85,6 +88,9 @@ const Navbar = () => {
                 {link.label}
               </Link>
             ))}
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/become-a-cleaner">Become a Cleaner</Link>
+            </Button>
             <Button variant="nav" size="sm" asChild>
               <Link to="/quote">Request a Quote</Link>
             </Button>
