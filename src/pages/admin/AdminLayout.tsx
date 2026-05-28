@@ -15,6 +15,7 @@ const iconMap: Record<string, any> = {
   Quotes: FileQuestion,
   Messages: Mail,
   Submissions: MessageSquare,
+  "Cleaner Applications": Users,
   Services: Wrench,
   Gallery: Image,
   Testimonials: FileText,

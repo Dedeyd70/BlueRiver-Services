@@ -14,6 +14,8 @@ import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
 import BookService from "./pages/BookService";
 import RequestQuote from "./pages/RequestQuote";
+import BecomeACleaner from "./pages/BecomeACleaner";
+import CleanerApplicationsAdmin from "./pages/admin/CleanerApplicationsAdmin";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import LiabilityDisclaimer from "./pages/LiabilityDisclaimer";
@@ -89,6 +91,7 @@ const App = () => (
               <Route path="users" element={<UserManagement />} />
               <Route path="permissions" element={<PermissionsAdmin />} />
               <Route path="invoices" element={<InvoicesAdmin />} />
+              <Route path="cleaner-applications" element={<CleanerApplicationsAdmin />} />
               <Route path="availability" element={<SettingsAdmin />} />
               <Route path="payment" element={<SettingsAdmin />} />
             </Route>
@@ -102,6 +105,7 @@ const App = () => (
               <Route path="/contact" element={<Contact />} />
               <Route path="/book" element={<BookService />} />
               <Route path="/quote" element={<RequestQuote />} />
+              <Route path="/become-a-cleaner" element={<BecomeACleaner />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/terms-of-service" element={<TermsOfService />} />
               <Route path="/liability-disclaimer" element={<LiabilityDisclaimer />} />

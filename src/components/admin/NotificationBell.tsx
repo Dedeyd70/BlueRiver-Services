@@ -12,6 +12,7 @@ const referenceRoutes: Record<string, string> = {
   quote: "/onpass-useradmin-blueriveracess052026/quotes",
   contact: "/onpass-useradmin-blueriveracess052026/messages",
   invoice: "/onpass-useradmin-blueriveracess052026/invoices",
+  cleaner_application: "/onpass-useradmin-blueriveracess052026/cleaner-applications",
 };
 
 const NotificationBell = () => {
