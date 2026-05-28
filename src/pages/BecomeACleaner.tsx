@@ -116,7 +116,7 @@ const BecomeACleaner = () => {
       .join(" ");
 
     try {
-      const { data: inserted, error } = await supabase
+      const { error } = await supabase
         .from("cleaner_applications" as any)
         .insert([
           {
@@ -135,9 +135,7 @@ const BecomeACleaner = () => {
             personality_bio: parsed.data.personality_bio,
             message: parsed.data.personality_bio,
           },
-        ] as any)
-        .select("id")
-        .maybeSingle();
+        ] as any);
 
       if (error) {
         toast({ title: "Could not submit application.", description: "Please try again shortly.", variant: "destructive" });
@@ -148,7 +146,7 @@ const BecomeACleaner = () => {
         await notifyAdmins(
           "cleaner_application",
           `New cleaner application from ${fullName}`,
-          (inserted as any)?.id,
+          undefined,
           "cleaner_application",
         );
       } catch {}
