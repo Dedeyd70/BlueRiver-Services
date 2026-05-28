@@ -32,6 +32,7 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   { label: "Quotes", path: "/onpass-useradmin-blueriveracess052026/quotes", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_quotes" },
   { label: "Messages", path: "/onpass-useradmin-blueriveracess052026/messages", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_messages" },
   { label: "Submissions", path: "/onpass-useradmin-blueriveracess052026/submissions", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_messages" },
+  { label: "Cleaner Applications", path: "/onpass-useradmin-blueriveracess052026/cleaner-applications", roles: ["admin", "manager", "staff"], group: "operations", permission: "can_manage_applications" },
 
   // Finance
   { label: "Invoices", path: "/onpass-useradmin-blueriveracess052026/invoices", roles: ["admin", "manager"], group: "finance", permission: "can_manage_invoices" },
