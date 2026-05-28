@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -20,27 +20,48 @@ const SERVICE_OPTIONS = [
   "Both House & Roof Cleaning",
 ] as const;
 
+const MAX_BIO_WORDS = 300;
+const countWords = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+
 const applicationSchema = z.object({
-  full_name: z.string().trim().min(2, "Please enter your full name").max(100, "Name is too long"),
+  first_name: z.string().trim().min(1, "First name is required").max(60),
+  middle_name: z.string().trim().max(60).optional(),
+  last_name: z.string().trim().min(1, "Last name is required").max(60),
   email: z.string().trim().email("Please enter a valid email").max(255),
   phone: z.string().trim().min(7, "Please enter a valid phone").max(30),
   availability: z.string().min(1, "Please select your availability"),
   experience: z.string().min(1, "Please select your experience level"),
   service_type: z.enum(SERVICE_OPTIONS, { errorMap: () => ({ message: "Please choose a service type" }) }),
-  message: z.string().trim().max(1000, "Please keep this under 1000 characters").optional(),
+  has_license: z.enum(["yes", "no"], { errorMap: () => ({ message: "Please select an option" }) }),
+  authorized_to_work: z.enum(["yes", "no"], { errorMap: () => ({ message: "Please select an option" }) }),
+  reference_1: z.string().trim().min(3, "Reference is required").max(255),
+  reference_2: z.string().trim().min(3, "Reference is required").max(255),
+  reference_3: z.string().trim().min(3, "Reference is required").max(255),
+  personality_bio: z
+    .string()
+    .trim()
+    .min(1, "Please describe your personality")
+    .refine((v) => countWords(v) <= MAX_BIO_WORDS, `Please keep this under ${MAX_BIO_WORDS} words`),
 });
 
 const COOLDOWN_KEY = "cleaner_application_last_submit";
 const COOLDOWN_MS = 30_000;
 
 const initialForm = {
-  full_name: "",
+  first_name: "",
+  middle_name: "",
+  last_name: "",
   email: "",
   phone: "",
   availability: "",
   experience: "",
   service_type: "" as (typeof SERVICE_OPTIONS)[number] | "",
-  message: "",
+  has_license: "" as "yes" | "no" | "",
+  authorized_to_work: "" as "yes" | "no" | "",
+  reference_1: "",
+  reference_2: "",
+  reference_3: "",
+  personality_bio: "",
 };
 
 const BecomeACleaner = () => {
@@ -55,10 +76,12 @@ const BecomeACleaner = () => {
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((p) => ({ ...p, [key]: e.target.value }));
 
+  const bioWordCount = useMemo(() => countWords(form.personality_bio), [form.personality_bio]);
+  const bioOverLimit = bioWordCount > MAX_BIO_WORDS;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Client cooldown
     const last = Number(localStorage.getItem(COOLDOWN_KEY) || 0);
     if (last && Date.now() - last < COOLDOWN_MS) {
       toast({ title: "Please wait a moment before submitting again.", variant: "destructive" });
@@ -88,18 +111,29 @@ const BecomeACleaner = () => {
     setErrors({});
     setLoading(true);
 
+    const fullName = [parsed.data.first_name, parsed.data.middle_name, parsed.data.last_name]
+      .filter(Boolean)
+      .join(" ");
+
     try {
       const { data: inserted, error } = await supabase
         .from("cleaner_applications" as any)
         .insert([
           {
-            full_name: parsed.data.full_name,
+            full_name: fullName,
+            middle_name: parsed.data.middle_name || null,
             email: parsed.data.email,
             phone: parsed.data.phone,
             availability: parsed.data.availability,
             experience: parsed.data.experience,
             service_type: parsed.data.service_type,
-            message: parsed.data.message?.trim() || null,
+            has_license: parsed.data.has_license === "yes",
+            authorized_to_work: parsed.data.authorized_to_work === "yes",
+            reference_1: parsed.data.reference_1,
+            reference_2: parsed.data.reference_2,
+            reference_3: parsed.data.reference_3,
+            personality_bio: parsed.data.personality_bio,
+            message: parsed.data.personality_bio,
           },
         ] as any)
         .select("id")
@@ -113,7 +147,7 @@ const BecomeACleaner = () => {
       try {
         await notifyAdmins(
           "cleaner_application",
-          `New cleaner application from ${parsed.data.full_name}`,
+          `New cleaner application from ${fullName}`,
           (inserted as any)?.id,
           "cleaner_application",
         );
@@ -204,45 +238,40 @@ const BecomeACleaner = () => {
                 className="rounded-2xl border border-border bg-card p-6 md:p-8 space-y-5"
                 noValidate
               >
-                <div className="grid sm:grid-cols-2 gap-5">
+                {/* Name */}
+                <div className="grid sm:grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="full_name">Full Name *</Label>
-                    <Input
-                      id="full_name"
-                      value={form.full_name}
-                      onChange={update("full_name")}
-                      placeholder="Jane Doe"
-                      className="mt-1.5"
-                    />
-                    {errors.full_name && <p className="text-xs text-destructive mt-1">{errors.full_name}</p>}
+                    <Label htmlFor="first_name">First Name *</Label>
+                    <Input id="first_name" value={form.first_name} onChange={update("first_name")} className="mt-1.5" />
+                    {errors.first_name && <p className="text-xs text-destructive mt-1">{errors.first_name}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={form.email}
-                      onChange={update("email")}
-                      placeholder="you@email.com"
-                      className="mt-1.5"
-                    />
-                    {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
+                    <Label htmlFor="middle_name">Middle Name</Label>
+                    <Input id="middle_name" value={form.middle_name} onChange={update("middle_name")} className="mt-1.5" />
+                  </div>
+                  <div>
+                    <Label htmlFor="last_name">Last Name *</Label>
+                    <Input id="last_name" value={form.last_name} onChange={update("last_name")} className="mt-1.5" />
+                    {errors.last_name && <p className="text-xs text-destructive mt-1">{errors.last_name}</p>}
                   </div>
                 </div>
 
+                {/* Contact */}
                 <div className="grid sm:grid-cols-2 gap-5">
                   <div>
+                    <Label htmlFor="email">Email *</Label>
+                    <Input id="email" type="email" value={form.email} onChange={update("email")} placeholder="you@email.com" className="mt-1.5" />
+                    {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
+                  </div>
+                  <div>
                     <Label htmlFor="phone">Phone *</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={form.phone}
-                      onChange={update("phone")}
-                      placeholder="(555) 123-4567"
-                      className="mt-1.5"
-                    />
+                    <Input id="phone" type="tel" value={form.phone} onChange={update("phone")} placeholder="(555) 123-4567" className="mt-1.5" />
                     {errors.phone && <p className="text-xs text-destructive mt-1">{errors.phone}</p>}
                   </div>
+                </div>
+
+                {/* Availability + Experience */}
+                <div className="grid sm:grid-cols-2 gap-5">
                   <div>
                     <Label htmlFor="availability">Availability *</Label>
                     <select
@@ -260,33 +289,31 @@ const BecomeACleaner = () => {
                     </select>
                     {errors.availability && <p className="text-xs text-destructive mt-1">{errors.availability}</p>}
                   </div>
+                  <div>
+                    <Label htmlFor="experience">Years of Cleaning Experience *</Label>
+                    <select
+                      id="experience"
+                      value={form.experience}
+                      onChange={update("experience")}
+                      className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">Select experience…</option>
+                      <option value="None">None — willing to learn</option>
+                      <option value="Less than 1 year">Less than 1 year</option>
+                      <option value="1-2 years">1–2 years</option>
+                      <option value="3-5 years">3–5 years</option>
+                      <option value="5+ years">5+ years</option>
+                    </select>
+                    {errors.experience && <p className="text-xs text-destructive mt-1">{errors.experience}</p>}
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="experience">Years of Cleaning Experience *</Label>
-                  <select
-                    id="experience"
-                    value={form.experience}
-                    onChange={update("experience")}
-                    className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="">Select experience…</option>
-                    <option value="None">None — willing to learn</option>
-                    <option value="Less than 1 year">Less than 1 year</option>
-                    <option value="1-2 years">1–2 years</option>
-                    <option value="3-5 years">3–5 years</option>
-                    <option value="5+ years">5+ years</option>
-                  </select>
-                  {errors.experience && <p className="text-xs text-destructive mt-1">{errors.experience}</p>}
-                </div>
-
+                {/* Service type */}
                 <div>
                   <Label>What type of cleaning services are you applying for? *</Label>
                   <RadioGroup
                     value={form.service_type}
-                    onValueChange={(v) =>
-                      setForm((p) => ({ ...p, service_type: v as (typeof SERVICE_OPTIONS)[number] }))
-                    }
+                    onValueChange={(v) => setForm((p) => ({ ...p, service_type: v as (typeof SERVICE_OPTIONS)[number] }))}
                     className="mt-2 space-y-2"
                   >
                     {SERVICE_OPTIONS.map((opt) => (
@@ -303,20 +330,107 @@ const BecomeACleaner = () => {
                   {errors.service_type && <p className="text-xs text-destructive mt-1">{errors.service_type}</p>}
                 </div>
 
-                <div>
-                  <Label htmlFor="message">Tell us a bit about yourself (optional)</Label>
-                  <Textarea
-                    id="message"
-                    rows={4}
-                    value={form.message}
-                    onChange={update("message")}
-                    placeholder="Share your experience, certifications, or why you'd like to join."
-                    className="mt-1.5"
-                  />
-                  {errors.message && <p className="text-xs text-destructive mt-1">{errors.message}</p>}
+                {/* Yes/No: License + Work auth */}
+                <div className="grid sm:grid-cols-2 gap-5">
+                  <div>
+                    <Label>Do you have a Driver's License? *</Label>
+                    <RadioGroup
+                      value={form.has_license}
+                      onValueChange={(v) => setForm((p) => ({ ...p, has_license: v as "yes" | "no" }))}
+                      className="mt-2 flex gap-2"
+                    >
+                      {(["yes", "no"] as const).map((v) => (
+                        <label
+                          key={v}
+                          htmlFor={`lic-${v}`}
+                          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-background hover:bg-muted/50 px-3 py-2.5 cursor-pointer transition-colors capitalize"
+                        >
+                          <RadioGroupItem value={v} id={`lic-${v}`} />
+                          <span className="text-sm text-foreground">{v}</span>
+                        </label>
+                      ))}
+                    </RadioGroup>
+                    {errors.has_license && <p className="text-xs text-destructive mt-1">{errors.has_license}</p>}
+                  </div>
+                  <div>
+                    <Label>Authorized to work in the United States? *</Label>
+                    <RadioGroup
+                      value={form.authorized_to_work}
+                      onValueChange={(v) => setForm((p) => ({ ...p, authorized_to_work: v as "yes" | "no" }))}
+                      className="mt-2 flex gap-2"
+                    >
+                      {(["yes", "no"] as const).map((v) => (
+                        <label
+                          key={v}
+                          htmlFor={`auth-${v}`}
+                          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-background hover:bg-muted/50 px-3 py-2.5 cursor-pointer transition-colors capitalize"
+                        >
+                          <RadioGroupItem value={v} id={`auth-${v}`} />
+                          <span className="text-sm text-foreground">{v}</span>
+                        </label>
+                      ))}
+                    </RadioGroup>
+                    {errors.authorized_to_work && <p className="text-xs text-destructive mt-1">{errors.authorized_to_work}</p>}
+                  </div>
                 </div>
 
-                <Button type="submit" variant="hero" size="lg" disabled={loading} className="w-full sm:w-auto">
+                {/* References */}
+                <div className="space-y-3">
+                  <Label>Professional References *</Label>
+                  <div>
+                    <Input
+                      value={form.reference_1}
+                      onChange={update("reference_1")}
+                      placeholder="Reference 1 — Current or Former Supervisor (Name & Contact)"
+                    />
+                    {errors.reference_1 && <p className="text-xs text-destructive mt-1">{errors.reference_1}</p>}
+                  </div>
+                  <div>
+                    <Input
+                      value={form.reference_2}
+                      onChange={update("reference_2")}
+                      placeholder="Reference 2 — Professional Reference (Name & Contact)"
+                    />
+                    {errors.reference_2 && <p className="text-xs text-destructive mt-1">{errors.reference_2}</p>}
+                  </div>
+                  <div>
+                    <Input
+                      value={form.reference_3}
+                      onChange={update("reference_3")}
+                      placeholder="Reference 3 — Professional Reference (Name & Contact)"
+                    />
+                    {errors.reference_3 && <p className="text-xs text-destructive mt-1">{errors.reference_3}</p>}
+                  </div>
+                </div>
+
+                {/* Personality bio */}
+                <div>
+                  <Label htmlFor="personality_bio">Describe your personality in not more than 300 words *</Label>
+                  <Textarea
+                    id="personality_bio"
+                    rows={5}
+                    value={form.personality_bio}
+                    onChange={update("personality_bio")}
+                    placeholder="Tell us what makes you a great fit for our team."
+                    className="mt-1.5"
+                  />
+                  <div className="flex justify-between mt-1">
+                    {errors.personality_bio ? (
+                      <p className="text-xs text-destructive">{errors.personality_bio}</p>
+                    ) : <span />}
+                    <p className={`text-xs ${bioOverLimit ? "text-destructive" : "text-muted-foreground"}`}>
+                      {bioWordCount} / {MAX_BIO_WORDS} words
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  variant="hero"
+                  size="lg"
+                  disabled={loading || bioOverLimit}
+                  className="w-full sm:w-auto"
+                >
                   {loading ? "Submitting…" : "Submit Application"}
                 </Button>
               </form>
