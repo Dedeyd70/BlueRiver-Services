@@ -1,31 +1,22 @@
-# Fix: Become a Cleaner submission returns 401
+## Goal
+Produce a single consolidated SQL file containing every migration in `supabase/migrations/` in chronological order, so you can view and download the full schema in one place.
 
-## Root cause
-In `src/pages/BecomeACleaner.tsx` the public submit does:
+## Approach
+1. List all 53 `.sql` files in `supabase/migrations/` sorted ascending by filename (filenames are timestamp-prefixed, so lexical sort = chronological).
+2. Concatenate them into one file with a clear header before each migration:
+   ```
+   -- ============================================================
+   -- Migration: <filename>
+   -- ============================================================
+   ```
+3. Write the output to two locations:
+   - `schema_migration_dump.sql` at the project root (so it appears in the file tree as requested).
+   - `/mnt/documents/schema_migration_dump.sql` (so it shows up as a downloadable artifact in chat).
 
-```ts
-supabase.from("cleaner_applications").insert([...]).select("id").maybeSingle()
-```
+## Scope
+- No application code, frontend, or migration files are modified.
+- No database changes are run — this is pure file concatenation.
+- The dump preserves the original SQL verbatim, including extensions, tables, constraints, FKs, RLS policies, GRANTs, functions, triggers, and realtime publication statements exactly as written in each migration.
 
-The `.select("id")` makes PostgREST try to `RETURNING` the new row to the caller. That read is governed by RLS, and `cleaner_applications` only has a `SELECT` policy for admins / users with `can_manage_applications`. For an anonymous visitor there is no matching SELECT policy, so PostgREST rejects the response with a permission error that supabase-js surfaces as **401 Unauthorized**. The `if (error)` branch then fires and the user sees "Could not submit application."
-
-The INSERT itself is allowed (policy `"Anyone can submit cleaner applications"` with `WITH CHECK (true)` for `anon, authenticated`), and table grants are correct (`anon` has INSERT). The failure is purely the post-insert read.
-
-## Fix (frontend only, minimal)
-
-Edit `src/pages/BecomeACleaner.tsx` submit handler:
-
-1. Drop `.select("id").maybeSingle()` from the insert call so PostgREST does not try to return the row to the anon caller.
-2. Change the destructure to `const { error } = await supabase.from("cleaner_applications").insert([...])`.
-3. Update the `notifyAdmins(...)` call to pass `undefined` for the reference id (we no longer have the new row's id client-side). The notification message and routing still work; admins land on the Cleaner Applications inbox where the new row appears via realtime.
-
-No schema, RLS, grants, or admin-side changes are needed. Existing admin SELECT/UPDATE/DELETE policies and the realtime subscription on `cleaner_applications` keep working.
-
-## Verification
-- Submit the public form while logged out → toast shows "Application submitted!", success state renders, row appears in `Admin → Cleaner Applications`.
-- Admin notification bell shows the new "cleaner_application" entry and links to the inbox.
-- Existing admin actions (status change, delete) still work.
-
-## Out of scope
-- No changes to RLS policies, grants, table schema, or migrations.
-- No changes to the admin page, notification routing, navbar, or styling.
+## Deliverable
+A single `schema_migration_dump.sql` file (also offered as a download artifact) containing all 53 migrations in chronological order.
