@@ -24,17 +24,26 @@ type Status = "new" | "reviewed" | "contacted" | "archived";
 interface CleanerApplication {
   id: string;
   full_name: string;
+  middle_name: string | null;
   email: string;
   phone: string;
   availability: string;
   experience: string;
   service_type: string;
+  has_license: boolean | null;
+  authorized_to_work: boolean | null;
+  reference_1: string | null;
+  reference_2: string | null;
+  reference_3: string | null;
+  personality_bio: string | null;
   message: string | null;
   status: Status;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
 }
+
+const yesNo = (v: boolean | null) => (v === true ? "Yes" : v === false ? "No" : "—");
 
 const statusColors: Record<Status, string> = {
   new: "bg-amber-100 text-amber-800",
