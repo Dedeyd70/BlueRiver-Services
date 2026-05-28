@@ -1,0 +1,8 @@
+ALTER TABLE public.cleaner_applications
+  ADD COLUMN IF NOT EXISTS middle_name TEXT,
+  ADD COLUMN IF NOT EXISTS has_license BOOLEAN,
+  ADD COLUMN IF NOT EXISTS reference_1 TEXT,
+  ADD COLUMN IF NOT EXISTS reference_2 TEXT,
+  ADD COLUMN IF NOT EXISTS reference_3 TEXT,
+  ADD COLUMN IF NOT EXISTS authorized_to_work BOOLEAN,
+  ADD COLUMN IF NOT EXISTS personality_bio TEXT;
