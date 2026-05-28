@@ -1,87 +1,56 @@
-# Three Targeted Fixes + Save Legal Plan
 
-## 0. Save legal-pages plan for later
+# Become a Cleaner — Recruitment Feature
 
-- **New file:** `.lovable/plans/legal-pages-improvement.md` — verbatim copy of the prior approved Phase 1/Phase 2 legal-pages plan (problems by category A–D, Phase 1 DB fixes, Phase 2 app fixes, source-of-truth analysis, final recommendation).
+## 1. Navigation CTA
+- `src/components/Navbar.tsx`: Add a new "Become a Cleaner" button next to "Request a Quote" on desktop, using the existing `Button variant="nav"` styling (consistent design tokens, no new colors). Mirror it in the mobile drawer alongside the quote button. Routes to `/become-a-cleaner`.
 
-Planning artifact only; no code touched by this step.
+## 2. New Page: `/become-a-cleaner`
+- New file `src/pages/BecomeACleaner.tsx`, registered in `src/App.tsx` under `PublicLayout` routes.
+- Layout mirrors reference structure (hero header → intro copy → application form card) but uses BlueRiver tokens: hero gradient, `glass-surface` card, `font-display` heading, primary/foreground tokens.
+- Sections:
+  1. Hero: title "Join Our Cleaning Team", short tagline, `PageMeta` SEO.
+  2. "Why Join Us" 3-card grid (flexible schedule, fair pay, supportive team) — copy only, no image dependency.
+  3. Application form card (see §3).
 
----
+## 3. Application Form
+- Built with `react-hook-form` + `zod` (matching existing forms like `Contact.tsx` / `RequestQuote.tsx`).
+- Fields (all required unless noted):
+  - Full Name (text, 2–100 chars)
+  - Email (email)
+  - Phone (validated via existing `isValidUSPhone` from `validation.ts`)
+  - Availability (select: Full-time, Part-time, Weekdays, Weekends, Flexible)
+  - Years of Experience (select: None, <1, 1–2, 3–5, 5+)
+  - **Service Type** (required radio group): "House Cleaning Only" | "Roof Cleaning Only" | "Both House & Roof Cleaning"
+  - Short bio / why you want to join (textarea, optional, max 1000)
+- Uses shadcn `Input`, `Textarea`, `RadioGroup`, `Select`, `Label`, `Button` — no custom color classes.
+- Submit → insert into `cleaner_applications` table via Supabase client.
+- Success state: replace form card with a confirmation panel — heading "Application Submitted Successfully!" and the required body copy, plus a "Back to Home" button. Also fire a toast.
+- Rate limit: reuse the 30s client cooldown pattern used in `Contact.tsx` / `RequestQuote.tsx` (localStorage timestamp key).
 
-## 1. Invoice + Quote logo — use uploaded brand logo, not the "BR" placeholder
+## 4. Database (Lovable Cloud)
+New table `public.cleaner_applications`:
+- Fields: full_name, email, phone, availability, experience, service_type (text; CHECK constraint restricts to the 3 allowed values), message (nullable), status (text, default 'new'), created_at, updated_at.
+- GRANTs: `INSERT` to `anon` + `authenticated`; `SELECT/UPDATE/DELETE` to `authenticated` only; `ALL` to `service_role`.
+- RLS:
+  - Anyone (anon + auth) can `INSERT` (public form).
+  - Only admins (`has_role(auth.uid(), 'admin')` or holders of a new `can_manage_applications` permission, matching existing submissions patterns) can `SELECT/UPDATE/DELETE`.
+- Realtime: **append** `cleaner_applications` to the existing `supabase_realtime` publication using `ALTER PUBLICATION supabase_realtime ADD TABLE public.cleaner_applications`. **Do not drop, recreate, or overwrite the publication** — all currently-published tables (`bookings`, `quote_requests`, `contact_submissions`, `notifications`, etc.) must remain untouched. The migration must only `ADD TABLE`, never `DROP PUBLICATION` or `CREATE PUBLICATION supabase_realtime`.
 
-**Files**
-- `src/lib/invoicePdf.ts` — replace placeholder badge in `drawLetterhead`.
-- `src/lib/quotePdf.ts` — same replacement (identical letterhead with "BR" badge).
+## 5. Admin Inbox Entry
+- New route `/onpass-useradmin-blueriveracess052026/cleaner-applications` → `src/pages/admin/CleanerApplicationsAdmin.tsx`.
+- List view modeled on `Submissions.tsx`: filters (status: new/reviewed/contacted/archived), `CollapsibleRecordCard` per application showing all fields, status dropdown + delete.
+- Add link in `AdminLayout` sidebar under the existing Submissions group, gated by the new `can_manage_applications` permission (also accessible to admins).
+- **Notification badge aggregation:** wire `cleaner_applications` into the existing notifications pipeline (`src/lib/notifications.ts` + `NotificationBell`) so a new application inserts a row into `notifications` with `reference_type: 'cleaner_application'` and routes to the new admin page on click. The header bell's unread count already aggregates from the `notifications` table, so the new feed contributes to the same total — explicitly verify the badge equation is `unread(messages) + unread(quotes) + unread(bookings) + unread(invoices) + unread(cleaner_applications)` with no source double-counted or missed. Add `cleaner_application → /…/cleaner-applications` to the `referenceRoutes` map in `NotificationBell.tsx`.
 
-**Today's behavior**
-Both PDFs draw a colored rounded-rect with the literal text `"BR"` at top-left (`invoicePdf.ts:36-45`, `quotePdf.ts:67`). `DocumentsPdfSettings.tsx` already renders `branding.logo_url` when set and falls back to "BR" otherwise — but the PDFs never read `logo_url`.
-
-**Fix**
-1. Add async helper `loadLogoDataUrl(url)`:
-   - Fetch the image (Supabase storage public URL).
-   - Convert to data URL via `FileReader` / `blob.arrayBuffer()`.
-   - Return `null` on failure (network, CORS, missing).
-2. In `buildInvoiceDoc` / `buildQuoteDoc`, accept optional `logoDataUrl: string | null` parameter — keeps the build functions synchronous so existing serialization paths still work.
-3. Make public entry points async: `generateInvoicePdf`, `generateInvoicePdfBase64`, and the `quotePdf.ts` equivalents. They `await` the loader and pass `logoDataUrl` through.
-4. In `drawLetterhead`:
-   - If `logoDataUrl` present → `doc.addImage(logoDataUrl, 'PNG', badgeX, badgeY, badgeSize, badgeSize, undefined, 'FAST')`.
-   - Else → keep current "BR" fallback unchanged.
-5. Update every caller of `generateInvoicePdf*` / `generateQuotePdf*` to `await`.
-
-**Safety**
-- Fallback path preserved → no logo means current behavior.
-- Network/CORS failure → "BR" fallback.
-- Compression budget unchanged (single raster).
-- No DB or schema change.
-
----
-
-## 2. ZIP code — soft hide (Option A, reversible)
-
-ZIPs are **hidden, not deleted**. DB column stays NOT NULL; new rows insert `zip: ""`. Restoring later = re-add the input + swap city back to zip in displays. Existing historical ZIPs are preserved.
-
-| File | What's there | Action |
-|---|---|---|
-| `src/lib/validation.ts` | `ZIP_RE`, `isValidZip` | Remove both (no remaining imports). |
-| `src/components/admin/ServiceAreasSettings.tsx` | UI keyed entirely on ZIP | Refactor to **cities only**: drop ZIP input + ZIP column, sort by `city`, drop `^\d{5}$` validator, insert with `zip: ""`. |
-| `src/hooks/useServiceAreas.ts` | `.order("zip")`, `zip` in type | Change to `.order("city")`, mark `zip` optional. |
-| `src/components/Footer.tsx` (line 93) | "Serving Bellevue: 98004…" | Show deduped city list: "Serving Bellevue, Redmond, …". |
-| `src/pages/RequestQuote.tsx` (line 350) | Same ZIP-list string | Same — city list. |
-| `src/pages/BookService.tsx` (line 534) | Same | Same — city list. |
-| `src/pages/Contact.tsx` (line 319) | "ZIPs: 98004…" | Replace with "Cities: …". |
-| `src/components/LocalBusinessSchema.tsx` | `@type: PostalAddress` JSON-LD | **Keep** — schema.org structural type, not a postal code. |
-| `src/integrations/supabase/types.ts` | Auto-generated, contains `zip` column | Do not touch. |
-
-**Safety** — No customer-facing form collects ZIP; address fields are free-text and untouched; routing/RLS unaffected.
-
----
-
-## 3. `condition_settings` — soft hide (Option A, reversible)
-
-Table left intact, just unread/unwritten. Multiplier engine is already the live calculation path.
-
-**Files**
-- `src/lib/pricingEngine.ts` — remove `ConditionSetting` interface, `conditions` parameter from `computeQuote`, and the `void conditions;` line.
-- `src/pages/BookService.tsx` (lines 161–165, 297, 302) — drop the `conditionSettings` query and its `useMemo` / `computeQuote` usage.
-- `src/pages/admin/QuotesAdmin.tsx` (lines 216–219, 459, 473) — drop the `conditionSettings` query; stop passing it to `computeQuote`.
-- `src/components/admin/PricingSettings.tsx` — remove the entire "Condition Settings" UI: query (line 56), mutation (line 168), and rendered block. Multipliers UI keeps full control over the `condition` axis.
-- `src/lib/__tests__/pricingEngine.test.ts` — update the two legacy tests (lines 127, 146); since they exist to verify the legacy path is ignored, simplify or remove them now that the parameter is gone.
-
-**Safety** — No other table or RPC references `condition_settings`.
-
----
-
-## Out of scope (explicit)
-
-- No legal-pages code changes (plan saved separately for next session).
-- No Supabase schema migrations.
-- No design-system or token changes.
+## Technical notes
+- No design-system or token changes; reuse `hero-gradient`, `glass-surface`, `font-display`, `Button` variants.
+- All Zod messages use the project's existing tone.
+- No edge function needed — direct insert + RLS is sufficient (same as Contact/Quote).
+- Out of scope: file/resume uploads, email notifications to applicant, scheduling interviews.
 
 ## Order of execution
-
-1. Save the legal-pages plan file.
-2. Invoice + quote PDF logo (two files + callers).
-3. ZIP soft-hide sweep (8 files).
-4. `condition_settings` soft-hide (5 files + tests).
-5. Verify: build passes, vitest pricing suite passes, generated invoice logo matches the Documents & PDF preview.
+1. Migration: create `cleaner_applications` table + GRANTs + RLS + register `can_manage_applications` in `permission_registry` + **append** to `supabase_realtime` publication (no drop/recreate).
+2. Add Zod schema + form page + route.
+3. Update Navbar (desktop + mobile).
+4. Build admin list page + sidebar link + extend `NotificationBell` route map + insert-notification trigger on new applications.
+5. Verify: build passes; submit a test application; confirm it lands in admin inbox, fires a notification, and the bell badge increments by exactly 1.

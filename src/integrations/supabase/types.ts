@@ -257,6 +257,51 @@ export type Database = {
         }
         Relationships: []
       }
+      cleaner_applications: {
+        Row: {
+          admin_notes: string | null
+          availability: string
+          created_at: string
+          email: string
+          experience: string
+          full_name: string
+          id: string
+          message: string | null
+          phone: string
+          service_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          availability: string
+          created_at?: string
+          email: string
+          experience: string
+          full_name: string
+          id?: string
+          message?: string | null
+          phone: string
+          service_type: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          availability?: string
+          created_at?: string
+          email?: string
+          experience?: string
+          full_name?: string
+          id?: string
+          message?: string | null
+          phone?: string
+          service_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       condition_settings: {
         Row: {
           created_at: string
