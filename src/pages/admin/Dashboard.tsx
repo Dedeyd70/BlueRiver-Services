@@ -18,7 +18,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     const ch = supabase
-      .channel("dashboard-stats")
+      .channel(`dashboard-stats-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
         qc.invalidateQueries({ queryKey: ["admin-bookings-count"] });
         qc.invalidateQueries({ queryKey: ["admin-pending-bookings"] });
