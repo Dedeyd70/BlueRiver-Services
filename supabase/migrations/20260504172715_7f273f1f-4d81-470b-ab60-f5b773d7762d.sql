@@ -1,3 +1,6 @@
+-- ALTERATION GUARDS: Add original columns to FAQs table if they were missing
+ALTER TABLE public.faqs ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 0;
+ALTER TABLE public.faqs ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 
 -- Public stats RPC (counts only, no PII)
 CREATE OR REPLACE FUNCTION public.get_public_stats()

@@ -1,4 +1,16 @@
 
+CREATE TABLE IF NOT EXISTS public.pricing_multipliers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    service_type_id UUID,
+    axis TEXT,
+    key TEXT,
+    modifier_type TEXT,
+    value NUMERIC,
+    display_label TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- ============================================================
 -- 1. Public-read RLS on pricing_multipliers
 -- ============================================================
