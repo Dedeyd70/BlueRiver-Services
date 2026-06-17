@@ -22,6 +22,7 @@ import LiabilityDisclaimer from "./pages/LiabilityDisclaimer";
 import CancellationPolicy from "./pages/CancellationPolicy";
 import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/Login";
+import AdminSetup from "./pages/admin/AdminSetup";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
 import Submissions from "./pages/admin/Submissions";
@@ -72,6 +73,7 @@ const App = () => (
             {/* Admin routes */}
             <Route path="/onpass-useradmin-blueriveracess052026/login" element={<AdminLogin />} />
             <Route path="/onpass-useradmin-blueriveracess052026/reset-password" element={<ResetPassword />} />
+            <Route path="/onpass-useradmin-blueriveracess052026/setup" element={<AdminSetup />} />
             <Route path="/onpass-useradmin-blueriveracess052026" element={<AdminGuard><AdminLayout /></AdminGuard>}>
               <Route index element={<Dashboard />} />
               <Route path="submissions" element={<Submissions />} />

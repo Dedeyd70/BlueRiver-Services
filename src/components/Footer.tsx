@@ -86,14 +86,14 @@ const Footer = React.forwardRef<HTMLElement>((_props, ref) => {
               <a href={`mailto:${email}`} className="flex items-center gap-2 text-sm text-navy-foreground/70 hover:text-primary transition-colors">
                 <Mail className="w-4 h-4" /> {email}
               </a>
-              <span className="flex items-start gap-2 text-sm text-navy-foreground/70">
+            {/**<span className="flex items-start gap-2 text-sm text-navy-foreground/70">
                 <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>
                   {serviceAreas && serviceAreas.length > 0
                     ? `Serving ${Array.from(new Set(serviceAreas.map((a) => a.city))).join(", ")}`
                     : serviceArea}
                 </span>
-              </span>
+              </span> */}
             </div>
           </div>
         </div>
