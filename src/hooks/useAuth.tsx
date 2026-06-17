@@ -145,7 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const uid = user.id;
 
     const channel = supabase
-      .channel(`user-role-${uid}`)
+      .channel(`user-role-${uid}-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "user_roles", filter: `user_id=eq.${uid}` },
