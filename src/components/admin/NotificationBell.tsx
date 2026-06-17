@@ -37,7 +37,7 @@ const NotificationBell = () => {
   // Realtime subscription replaces the previous 30s polling firehose.
   useEffect(() => {
     const channel = supabase
-      .channel("admin-notifications-bell")
+      .channel(`admin-notifications-bell-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications" },
