@@ -1370,6 +1370,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      cleanup_old_records: {
+        Args: { p_days?: number; p_dry_run?: boolean }
+        Returns: Json
+      }
       confirm_invoice_payment: {
         Args: {
           p_amount: number
