@@ -67,9 +67,15 @@ const IndexPage = () => {
   const { data: testimonials, isLoading: testimonialsLoading } = useQuery({
     queryKey: ["public-testimonials"],
     queryFn: async () => {
-      const { data } = await supabase.from("testimonials").select("*").eq("is_active", true).order("display_order");
+      const { data } = await supabase
+        .from("testimonials")
+        .select("id, author_name, author_role, content, rating, display_order")
+        .eq("is_active", true)
+        .order("display_order");
       return data ?? [];
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
   const { data: publicReviews } = useQuery({
     queryKey: ["public-reviews"],
@@ -82,13 +88,15 @@ const IndexPage = () => {
         .limit(6);
       return data ?? [];
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
   const { data: beforeAfter } = useQuery({
     queryKey: ["public-before-after-home"],
     queryFn: async () => {
       const { data } = await supabase
         .from("gallery")
-        .select("*")
+        .select("id, image_url, caption, display_order, image_type, group_id")
         .eq("is_active", true)
         .neq("image_type", "single")
         .order("display_order");
@@ -110,6 +118,8 @@ const IndexPage = () => {
           caption: g.caption || "",
         }));
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
   const { data: homepageImages, isLoading } = useQuery({
     queryKey: ["public-homepage-images"],
@@ -121,6 +131,8 @@ const IndexPage = () => {
       });
       return map;
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   const heroImg = homepageImages?.hero ?? null;
