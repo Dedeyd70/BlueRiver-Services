@@ -43,6 +43,7 @@ import UserManagement from "./pages/admin/UserManagement";
 import PermissionsAdmin from "./pages/admin/PermissionsAdmin";
 import HomepageImagesAdmin from "./pages/admin/HomepageImagesAdmin";
 import SiteContentAdmin from "./pages/admin/SiteContentAdmin";
+import MaintenanceAdmin from "./pages/admin/MaintenanceAdmin";
 import LeaveReview from "./pages/LeaveReview";
 import LocalBusinessSchema from "./components/LocalBusinessSchema";
 import AdminGuard from "./components/admin/AdminGuard";
@@ -93,6 +94,7 @@ const App = () => (
               <Route path="invoices" element={<InvoicesAdmin />} />
               <Route path="cleaner-applications" element={<CleanerApplicationsAdmin />} />
               <Route path="availability" element={<SettingsAdmin />} />
+              <Route path="maintenance" element={<MaintenanceAdmin />} />
               <Route path="payment" element={<SettingsAdmin />} />
             </Route>
 

@@ -70,6 +70,7 @@ const InvoicesAdmin = () => {
       if (error) throw error;
       return data;
     },
+    staleTime: 60 * 1000,
   });
 
   const { getRef } = useFocusHighlight(!isLoading && !!invoices);
