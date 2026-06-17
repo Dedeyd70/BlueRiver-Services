@@ -45,9 +45,15 @@ const About = () => {
   const { data: faqs } = useQuery({
     queryKey: ["public-faqs"],
     queryFn: async () => {
-      const { data } = await supabase.from("faqs").select("*").eq("is_active", true).order("display_order");
+      const { data } = await supabase
+        .from("faqs")
+        .select("id, question, answer, display_order")
+        .eq("is_active", true)
+        .order("display_order");
       return data ?? [];
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
   const logoUrl = branding?.logo_url || defaultLogo;
 
