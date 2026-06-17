@@ -118,6 +118,7 @@ const BookingsAdmin = () => {
       if (error) throw error;
       return data;
     },
+    staleTime: 60 * 1000,
   });
 
   const { data: activityLogs } = useQuery({
