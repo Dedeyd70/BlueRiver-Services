@@ -53,6 +53,7 @@ export const NAV_PERMISSIONS: NavPermission[] = [
   { label: "Users", path: "/onpass-useradmin-blueriveracess052026/users", roles: ["admin"], group: "system" },
   { label: "Permissions", path: "/onpass-useradmin-blueriveracess052026/permissions", roles: ["admin"], group: "system" },
   { label: "Account", path: "/onpass-useradmin-blueriveracess052026/account", roles: ["admin", "manager", "staff"], group: "system" },
+  { label: "Maintenance", path: "/onpass-useradmin-blueriveracess052026/maintenance", roles: ["admin"], group: "system" },
 ];
 
 /** Visibility precedence:
