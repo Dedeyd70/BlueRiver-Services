@@ -156,6 +156,7 @@ const QuotesAdmin = () => {
       if (error) throw error;
       return data;
     },
+    staleTime: 60 * 1000,
   });
 
   const { getRef } = useFocusHighlight(!isLoading && !!quotes);
