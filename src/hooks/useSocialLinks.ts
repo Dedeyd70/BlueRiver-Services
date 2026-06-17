@@ -15,12 +15,14 @@ export const useSocialLinks = () => {
     queryFn: async (): Promise<SocialLink[]> => {
       const { data, error } = await supabase
         .from("social_links" as any)
-        .select("*")
+        .select("id, platform_name, url, display_order, is_active")
         .eq("is_active", true)
         .order("display_order", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as SocialLink[];
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 };
 

@@ -7,11 +7,13 @@ export const useServices = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("services")
-        .select("*")
+        .select("id, title, description, icon, features, price_starting, image_url, service_category, display_order")
         .eq("is_active", true)
         .order("display_order");
       return data ?? [];
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   const allServices = services ?? [];
