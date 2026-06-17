@@ -15,7 +15,8 @@ export const useSiteSettings = () => {
       });
       return map;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     retry: 2,
   });
 };

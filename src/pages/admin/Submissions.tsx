@@ -54,28 +54,40 @@ const Submissions = () => {
   const { data: bookings } = useQuery({
     queryKey: ["admin-bookings-sub"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("bookings").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("id, name, email, phone, status, service_type, created_at, booking_date, time_slot")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
+    staleTime: 60 * 1000,
   });
 
   const { data: quotes } = useQuery({
     queryKey: ["admin-quotes-sub"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("quote_requests").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("quote_requests")
+        .select("id, name, email, phone, status, service_type, created_at, description")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
+    staleTime: 60 * 1000,
   });
 
   const { data: contacts } = useQuery({
     queryKey: ["admin-submissions"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("contact_submissions").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("contact_submissions")
+        .select("id, name, email, phone, status, service_type, created_at, message")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
+    staleTime: 60 * 1000,
   });
 
   const entries: UnifiedEntry[] = [

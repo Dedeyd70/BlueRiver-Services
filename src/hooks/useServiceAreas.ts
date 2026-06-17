@@ -17,11 +17,12 @@ export const useServiceAreas = (activeOnly = true) =>
   useQuery({
     queryKey: ["service-areas", activeOnly],
     queryFn: async (): Promise<ServiceArea[]> => {
-      let q = (supabase as any).from("service_areas").select("*").order("city");
+      let q = (supabase as any).from("service_areas").select("id, zip, city, is_active").order("city");
       if (activeOnly) q = q.eq("is_active", true);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as ServiceArea[];
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });

@@ -26,11 +26,13 @@ const Gallery = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("gallery")
-        .select("*")
+        .select("id, image_url, caption, category, image_type, group_id, display_order")
         .eq("is_active", true)
         .order("display_order");
       return data ?? [];
     },
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
   const categories = ["All", ...new Set(servicesList.map((s) => s.title))];
 
