@@ -712,14 +712,7 @@ const QuotesAdmin = () => {
                           </p>
 
                           {q.attachment_url && (
-                            <a
-                              href={q.attachment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                            >
-                              <ExternalLink className="w-3 h-3" /> View Attachment
-                            </a>
+                            <QuoteAttachmentLink value={q.attachment_url} />
                           )}
 
                           {/* Itemized Breakdown — visible when a draft exists */}
