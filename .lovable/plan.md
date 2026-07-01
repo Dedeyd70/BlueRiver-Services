@@ -1,54 +1,28 @@
-# Fix `relation "receipts" does not exist` on remote push
+# Sync all RLS policies: dev → remote
 
-## Problem
-The migration `20260701215524_9e732593-0dd9-49ac-9534-aedfd0402a71.sql` fails at the `create_receipt` statement with:
-```
-ERROR: relation "receipts" does not exist (SQLSTATE 42P01)
-```
-`create_receipt` declares `existing_receipt receipts%ROWTYPE` and inserts into `receipts`. PL/pgSQL resolves those table references when the function is **created**, so the `receipts` table must already exist. It does not exist on your remote database because `receipts` (like `create_receipt` itself) was originally created via the SQL editor, never through a migration file. It has never appeared in any of the migration files.
+Bring the remote database's Row-Level Security fully in line with dev (dev is the source of truth) by generating one idempotent migration that re-enables RLS and recreates every current dev policy.
 
-## Fix
-Edit `supabase/migrations/20260701215524_9e732593-0dd9-49ac-9534-aedfd0402a71.sql` and insert an **idempotent** `receipts` table block right after the sequence (line 5), before `generate_receipt_number` / `create_receipt`. Using `CREATE TABLE IF NOT EXISTS` and `DROP POLICY IF EXISTS` makes it safe on the dev DB (where the table already exists) and on remote (where it's missing).
+## What the migration does
+1. **Enable RLS** on all 31 public tables that have policies (safe/no-op where already enabled):
+   availability_settings, blocked_dates, booking_activity_logs, bookings, branding_settings, cleaner_applications, condition_settings, contact_activity_logs, contact_submissions, faqs, gallery, homepage_images, invoices, notifications, page_content, permission_registry, pricing_multipliers, quote_drafts, quote_notes, quote_requests, receipts, reviews, service_areas, service_fields, service_pricing_rules, service_types, services, site_settings, social_links, testimonials, user_roles.
 
-The table definition mirrors the current dev schema exactly:
+2. **Recreate every policy** — for each of the **105 policies** currently on dev, emit:
+   ```sql
+   DROP POLICY IF EXISTS "<name>" ON public.<table>;
+   CREATE POLICY "<name>" ON public.<table> FOR <cmd> TO <roles>
+     USING (<qual>) WITH CHECK (<with_check>);
+   ```
+   The `DROP ... IF EXISTS` before each `CREATE` makes the whole script idempotent — it runs cleanly on remote (adds/updates missing or drifted policies) and on dev (recreates identical policies, no behavior change).
 
-```sql
-CREATE TABLE IF NOT EXISTS public.receipts (
-  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  receipt_number text,
-  invoice_id     uuid NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
-  payment_date   timestamp without time zone,
-  amount_paid    numeric,
-  line_items     jsonb DEFAULT '[]'::jsonb,
-  created_at     timestamp without time zone DEFAULT now()
-);
+Policy breakdown being synced: 37 `ALL`, 44 `SELECT`, 10 `INSERT`, 9 `UPDATE`, 5 `DELETE`.
 
--- receipts is written/read only by SECURITY DEFINER functions
--- (mark_invoice_paid / confirm_invoice_payment), never via PostgREST.
-GRANT ALL ON public.receipts TO service_role;
+## How it's delivered
+Created through the migration tool, so it runs against dev and is written as a proper migration file. You then `supabase db push` to apply it to remote. The generated SQL is taken verbatim from the live dev policy definitions (via `pg_policies`), so remote ends up an exact mirror.
 
-ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Admins can manage receipts" ON public.receipts;
-CREATE POLICY "Admins can manage receipts"
-ON public.receipts FOR ALL
-USING (public.has_role(auth.uid(), 'admin'::app_role))
-WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
-```
-
-This exactly matches the live table: columns `id, receipt_number, invoice_id, payment_date, amount_paid, line_items, created_at`, RLS enabled, admin-only access. The frontend never queries `receipts` directly (only through RPCs), so no `anon`/`authenticated` grants are needed.
-
-## Order in the file (after edit)
-1. `CREATE SEQUENCE IF NOT EXISTS public.receipt_number_seq` (existing, line 5)
-2. **NEW:** `CREATE TABLE IF NOT EXISTS public.receipts ...` + GRANT + RLS + policy
-3. `generate_receipt_number()` (existing)
-4. `create_receipt()` (existing — now compiles because the table exists)
-5. `REVOKE EXECUTE ... FROM anon` (existing)
-
-## Prerequisite / note
-- This assumes the `invoices` table already exists on remote (the FK references it, and `create_receipt` reads `invoices%ROWTYPE`). Your earlier errors were only about `receipts`, which indicates `invoices` is present. If the remote push then reports `invoices` missing, that's a separate, larger gap I'd address next.
-- No behavior change on dev: `IF NOT EXISTS` skips creation where the table already exists; the policy is re-created identically.
+## Important caveats
+- **Prerequisite:** every table and the functions the policies reference (`has_role`, `has_permission`) and the `app_role` enum must already exist on remote. If a table is missing remotely, its policy statements will fail — that means the table itself was created outside the migration chain (same class of issue as `receipts`) and needs a `CREATE TABLE` first. If the push errors on a specific table, tell me and I'll add its definition.
+- **Scope is `public` schema table policies only.** `storage.objects` policies (quote-attachments, site-images) are handled in your other security migration, not here. Table GRANTs and column-level changes are out of scope unless you want them added.
+- This does **not** delete remote-only policies that don't exist on dev. If you want remote to be an exact match (dropping any extra policies that exist only on remote), say so and I'll add explicit drops for known legacy policy names.
 
 ## Result
-- The migration runs cleanly on remote (table created, then function compiles).
-- No changes needed to the dev database — it's idempotent.
+After pushing, every public-table RLS policy on remote matches dev exactly, with RLS enabled everywhere it should be.
