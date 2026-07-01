@@ -1,77 +1,54 @@
-# Fix `create_receipt` migration failure on remote
+# Fix `relation "receipts" does not exist` on remote push
 
 ## Problem
-The migration fails with:
+The migration `20260701215524_9e732593-0dd9-49ac-9534-aedfd0402a71.sql` fails at the `create_receipt` statement with:
 ```
-ERROR: function public.create_receipt(uuid) does not exist (SQLSTATE 42883)
-At statement: ALTER FUNCTION public.create_receipt(p_invoice_id uuid) SET search_path = public
+ERROR: relation "receipts" does not exist (SQLSTATE 42P01)
 ```
-
-`create_receipt` was originally created via the SQL editor, not through a migration file. So it exists in the Lovable Cloud dev database but **does not exist** in the remote/production database you are migrating. `ALTER FUNCTION` requires the function to already exist, so it aborts the whole migration.
-
-Its helpers have the same risk: `generate_receipt_number()` and the sequence `receipt_number_seq` may also be missing remotely.
+`create_receipt` declares `existing_receipt receipts%ROWTYPE` and inserts into `receipts`. PL/pgSQL resolves those table references when the function is **created**, so the `receipts` table must already exist. It does not exist on your remote database because `receipts` (like `create_receipt` itself) was originally created via the SQL editor, never through a migration file. It has never appeared in any of the migration files.
 
 ## Fix
-Make the migration self-contained and idempotent by **defining** the function instead of altering it.
+Edit `supabase/migrations/20260701215524_9e732593-0dd9-49ac-9534-aedfd0402a71.sql` and insert an **idempotent** `receipts` table block right after the sequence (line 5), before `generate_receipt_number` / `create_receipt`. Using `CREATE TABLE IF NOT EXISTS` and `DROP POLICY IF EXISTS` makes it safe on the dev DB (where the table already exists) and on remote (where it's missing).
 
-In `supabase/migrations/20260701185243_c27ad89f-145a-4b5c-9882-3b641a917f66.sql`, replace section 5:
-
-```sql
--- BEFORE
-ALTER FUNCTION public.create_receipt(p_invoice_id uuid) SET search_path = public;
-```
-
-with a guaranteed-present definition of the sequence, the number generator, and the function itself — each with `SET search_path = public` built in:
+The table definition mirrors the current dev schema exactly:
 
 ```sql
--- Ensure dependencies exist
-CREATE SEQUENCE IF NOT EXISTS public.receipt_number_seq START 1;
+CREATE TABLE IF NOT EXISTS public.receipts (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  receipt_number text,
+  invoice_id     uuid NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+  payment_date   timestamp without time zone,
+  amount_paid    numeric,
+  line_items     jsonb DEFAULT '[]'::jsonb,
+  created_at     timestamp without time zone DEFAULT now()
+);
 
-CREATE OR REPLACE FUNCTION public.generate_receipt_number()
-RETURNS text
-LANGUAGE sql
-VOLATILE
-SET search_path TO 'public'
-AS $$
-  SELECT 'BR-RC-' || to_char(now(),'YYYY') || '-' ||
-         lpad(nextval('public.receipt_number_seq')::text, 4, '0');
-$$;
+-- receipts is written/read only by SECURITY DEFINER functions
+-- (mark_invoice_paid / confirm_invoice_payment), never via PostgREST.
+GRANT ALL ON public.receipts TO service_role;
 
-CREATE OR REPLACE FUNCTION public.create_receipt(p_invoice_id uuid)
-RETURNS jsonb
-LANGUAGE plpgsql
-SET search_path TO 'public'
-AS $$
-DECLARE
-  existing_receipt receipts%ROWTYPE;
-  invoice_record   invoices%ROWTYPE;
-  new_receipt_id   uuid;
-BEGIN
-  SELECT * INTO existing_receipt FROM receipts WHERE invoice_id = p_invoice_id;
-  IF FOUND THEN
-    RETURN to_jsonb(existing_receipt);
-  END IF;
+ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;
 
-  SELECT * INTO invoice_record FROM invoices WHERE id = p_invoice_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Invoice not found';
-  END IF;
-
-  INSERT INTO receipts (id, receipt_number, invoice_id, payment_date, amount_paid, created_at)
-  VALUES (gen_random_uuid(), generate_receipt_number(), invoice_record.id, now(), invoice_record.total, now())
-  RETURNING id INTO new_receipt_id;
-
-  RETURN (SELECT to_jsonb(r) FROM receipts r WHERE id = new_receipt_id);
-END;
-$$;
+DROP POLICY IF EXISTS "Admins can manage receipts" ON public.receipts;
+CREATE POLICY "Admins can manage receipts"
+ON public.receipts FOR ALL
+USING (public.has_role(auth.uid(), 'admin'::app_role))
+WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
 ```
 
-The later `REVOKE EXECUTE ON FUNCTION public.create_receipt(uuid) FROM anon;` (line 137) will now succeed too, since the function is guaranteed to exist by the time it runs.
+This exactly matches the live table: columns `id, receipt_number, invoice_id, payment_date, amount_paid, line_items, created_at`, RLS enabled, admin-only access. The frontend never queries `receipts` directly (only through RPCs), so no `anon`/`authenticated` grants are needed.
 
-## Notes / prerequisites
-- This assumes the `receipts` and `invoices` tables already exist on the remote DB. If `receipts` is also missing remotely, we'd need to add its `CREATE TABLE` (plus GRANTs and RLS) earlier in the migration — I can confirm whether `receipts` is defined in the migration chain before implementing.
-- The definition mirrors the current dev function exactly, so behavior is unchanged; it only guarantees existence + a fixed `search_path`.
+## Order in the file (after edit)
+1. `CREATE SEQUENCE IF NOT EXISTS public.receipt_number_seq` (existing, line 5)
+2. **NEW:** `CREATE TABLE IF NOT EXISTS public.receipts ...` + GRANT + RLS + policy
+3. `generate_receipt_number()` (existing)
+4. `create_receipt()` (existing — now compiles because the table exists)
+5. `REVOKE EXECUTE ... FROM anon` (existing)
+
+## Prerequisite / note
+- This assumes the `invoices` table already exists on remote (the FK references it, and `create_receipt` reads `invoices%ROWTYPE`). Your earlier errors were only about `receipts`, which indicates `invoices` is present. If the remote push then reports `invoices` missing, that's a separate, larger gap I'd address next.
+- No behavior change on dev: `IF NOT EXISTS` skips creation where the table already exists; the policy is re-created identically.
 
 ## Result
-- Migration runs cleanly on any database, whether or not `create_receipt` already existed.
-- The "mutable search_path" security finding for `create_receipt` is resolved.
+- The migration runs cleanly on remote (table created, then function compiles).
+- No changes needed to the dev database — it's idempotent.
