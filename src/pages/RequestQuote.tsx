@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { notifyAdmins } from "@/lib/notifications";
+
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ const RequestQuote = () => {
   const [consent, setConsent] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [attachmentPreview, setAttachmentPreview] = useState("");
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [form, setForm] = useState({
     name: "", email: "", phone: "", address: "",
@@ -135,14 +136,18 @@ const RequestQuote = () => {
       }
       const ext = file.name.split(".").pop();
       const fileName = `quotes/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from("site-images").upload(fileName, fileToUpload);
+      // Uploaded to a PRIVATE bucket. Only staff can open it via signed URLs.
+      const { error } = await supabase.storage.from("quote-attachments").upload(fileName, fileToUpload);
       if (error) {
         toast({ title: "Upload failed", description: error.message, variant: "destructive" });
       } else {
-        const { data: urlData } = supabase.storage.from("site-images").getPublicUrl(fileName);
-        setAttachmentUrl(urlData.publicUrl);
+        // Store the storage path (not a public URL) on the quote record.
+        setAttachmentUrl(fileName);
+        // Local preview only — no network read required.
+        setAttachmentPreview(file.type.startsWith("image/") ? URL.createObjectURL(fileToUpload) : "");
         toast({ title: "File uploaded successfully" });
       }
+
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     }
@@ -210,7 +215,7 @@ const RequestQuote = () => {
 
     try {
       const petCountNum = form.has_pets && form.pet_count ? parseInt(form.pet_count, 10) : null;
-      const { data: insertedQuote, error } = await supabase.from("quote_requests").insert({
+      const { error } = await supabase.from("quote_requests").insert({
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim() || null,
@@ -235,7 +240,7 @@ const RequestQuote = () => {
         custom_fields: customFields,
         status: "requested",
         ...typedPayload,
-      } as any).select("id").maybeSingle();
+      } as any);
 
       if (error) {
         const anyErr = error as any;
@@ -245,7 +250,8 @@ const RequestQuote = () => {
         return;
       }
 
-      await notifyAdmins("quote", `New quote request from ${form.name.trim()}`, insertedQuote?.id, "quote");
+      // Admin notification is created automatically by a database trigger.
+
 
       // Fire-and-forget: customer ack + admin alert.
       const quoteData = {
@@ -517,8 +523,8 @@ const RequestQuote = () => {
                       <span><Upload className="w-4 h-4 mr-2" /> {uploading ? "Uploading..." : attachmentUrl ? "Change Photo" : "Upload Photo"}</span>
                     </Button>
                   </label>
-                  {attachmentUrl && (
-                    <img src={attachmentUrl} alt="Attachment" className="mt-2 w-24 h-24 rounded-lg object-cover border border-border" />
+                  {attachmentPreview && (
+                    <img src={attachmentPreview} alt="Attachment" className="mt-2 w-24 h-24 rounded-lg object-cover border border-border" />
                   )}
                 </div>
                 <div className="flex items-start gap-2">

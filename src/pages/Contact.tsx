@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { notifyAdmins } from "@/lib/notifications";
+
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,8 +64,9 @@ const Contact = () => {
     }
 
     try {
-      // Wrapped in array to satisfy TS2769 overload requirements
-      const { data: insertedContact, error } = await supabase
+      // Wrapped in array to satisfy TS2769 overload requirements.
+      // Admin notifications are created automatically by a database trigger.
+      const { error } = await supabase
         .from("contact_submissions")
         .insert([
           {
@@ -75,18 +76,13 @@ const Contact = () => {
             service_type: form.service || null,
             message: form.message.trim(),
           },
-        ])
-        .select("id")
-        .maybeSingle();
+        ]);
 
       if (error) {
         toast({ title: "Message failed to send.", description: "Please try again later.", variant: "destructive" });
         return;
       }
 
-      try {
-        await notifyAdmins("contact", `New contact from ${form.name.trim()}`, insertedContact?.id, "contact");
-      } catch {}
 
       // Send branded acknowledgement email via Resend (fire-and-forget).
       const html = `
