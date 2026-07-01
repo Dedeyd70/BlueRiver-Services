@@ -11,7 +11,7 @@ import { CheckCircle, Sparkles, Clock, HeartHandshake, DollarSign } from "lucide
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
-import { notifyAdmins } from "@/lib/notifications";
+
 import PageMeta from "@/components/PageMeta";
 
 const SERVICE_OPTIONS = [
@@ -142,14 +142,8 @@ const BecomeACleaner = () => {
         return;
       }
 
-      try {
-        await notifyAdmins(
-          "cleaner_application",
-          `New cleaner application from ${fullName}`,
-          undefined,
-          "cleaner_application",
-        );
-      } catch {}
+      // Admin notification is created automatically by a database trigger.
+
 
       localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
       setSubmitted(true);

@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServices } from "@/hooks/useServices";
 import { format, isBefore, startOfDay, getDay } from "date-fns";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
-import { notifyAdmins } from "@/lib/notifications";
+
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServiceAreas } from "@/hooks/useServiceAreas";
 import PageMeta from "@/components/PageMeta";
@@ -382,7 +382,7 @@ const BookService = () => {
 
     try {
       const petCountNum = form.has_pets && form.pet_count ? parseInt(form.pet_count, 10) : null;
-      const { data: insertedBooking, error } = await supabase.from("bookings").insert({
+      const { error } = await supabase.from("bookings").insert({
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim() || null,
@@ -418,7 +418,7 @@ const BookService = () => {
         custom_fields: customFields,
         source: "manual",
         ...typedPayload,
-      } as any).select("id").single();
+      } as any);
 
       if (error) {
         const anyErr = error as any;
@@ -428,7 +428,9 @@ const BookService = () => {
         return;
       }
 
-      await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
+      // Admin notification is created automatically by a database trigger.
+
+
 
       // Fire-and-forget: customer "received" email + admin alert.
       const bookingData = {

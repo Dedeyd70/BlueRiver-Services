@@ -32,6 +32,47 @@ const statusColors: Record<string, string> = {
 
 const statusLabel = (s: string) => s.replace("_", " ");
 
+/**
+ * Renders a link to a quote attachment.
+ * New uploads are stored as paths in the PRIVATE "quote-attachments" bucket
+ * and must be opened via a short-lived signed URL. Legacy rows may still hold
+ * a full public URL (starts with http), which we open directly.
+ */
+function QuoteAttachmentLink({ value }: { value: string }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  const open = async () => {
+    if (/^https?:\/\//i.test(value)) {
+      window.open(value, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from("quote-attachments")
+        .createSignedUrl(value, 60);
+      if (error || !data?.signedUrl) throw error ?? new Error("No URL");
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      toast({ title: "Could not open attachment", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={open}
+      disabled={loading}
+      className="inline-flex items-center gap-1 text-sm text-primary hover:underline disabled:opacity-50"
+    >
+      <ExternalLink className="w-3 h-3" /> {loading ? "Opening..." : "View Attachment"}
+    </button>
+  );
+}
+
 interface DraftAddon {
   title: string;
   price: number | string;
@@ -671,14 +712,7 @@ const QuotesAdmin = () => {
                           </p>
 
                           {q.attachment_url && (
-                            <a
-                              href={q.attachment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                            >
-                              <ExternalLink className="w-3 h-3" /> View Attachment
-                            </a>
+                            <QuoteAttachmentLink value={q.attachment_url} />
                           )}
 
                           {/* Itemized Breakdown — visible when a draft exists */}
