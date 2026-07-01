@@ -121,9 +121,61 @@ CREATE TRIGGER trg_notify_new_application
   FOR EACH ROW EXECUTE FUNCTION public.notify_admins_on_submission();
 
 -- ============================================================
--- 5. Fix mutable search_path on create_receipt
+-- 5. Ensure receipts infra exists + fixed search_path on create_receipt
 -- ============================================================
-ALTER FUNCTION public.create_receipt(p_invoice_id uuid) SET search_path = public;
+CREATE SEQUENCE IF NOT EXISTS public.receipt_number_seq START 1;
+
+-- receipts table (originally created via SQL editor; may be missing on remote).
+-- Idempotent: no-op where it already exists.
+CREATE TABLE IF NOT EXISTS public.receipts (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  receipt_number text,
+  invoice_id     uuid NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+  payment_date   timestamp without time zone,
+  amount_paid    numeric,
+  line_items     jsonb DEFAULT '[]'::jsonb,
+  created_at     timestamp without time zone DEFAULT now()
+);
+
+-- receipts is written/read only by SECURITY DEFINER functions, never via PostgREST.
+GRANT ALL ON public.receipts TO service_role;
+
+ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage receipts" ON public.receipts;
+CREATE POLICY "Admins can manage receipts"
+ON public.receipts FOR ALL
+USING (public.has_role(auth.uid(), 'admin'::app_role))
+WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
+
+CREATE OR REPLACE FUNCTION public.generate_receipt_number()
+RETURNS text LANGUAGE sql VOLATILE SET search_path TO 'public'
+AS $$
+  SELECT 'BR-RC-' || to_char(now(),'YYYY') || '-' ||
+         lpad(nextval('public.receipt_number_seq')::text, 4, '0');
+$$;
+
+CREATE OR REPLACE FUNCTION public.create_receipt(p_invoice_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SET search_path TO 'public'
+AS $$
+DECLARE
+  existing_receipt receipts%ROWTYPE;
+  invoice_record   invoices%ROWTYPE;
+  new_receipt_id   uuid;
+BEGIN
+  SELECT * INTO existing_receipt FROM receipts WHERE invoice_id = p_invoice_id;
+  IF FOUND THEN RETURN to_jsonb(existing_receipt); END IF;
+
+  SELECT * INTO invoice_record FROM invoices WHERE id = p_invoice_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Invoice not found'; END IF;
+
+  INSERT INTO receipts (id, receipt_number, invoice_id, payment_date, amount_paid, created_at)
+  VALUES (gen_random_uuid(), generate_receipt_number(), invoice_record.id, now(), invoice_record.total, now())
+  RETURNING id INTO new_receipt_id;
+
+  RETURN (SELECT to_jsonb(r) FROM receipts r WHERE id = new_receipt_id);
+END;
+$$;
 
 -- ============================================================
 -- 6. Revoke anon EXECUTE on privileged SECURITY DEFINER functions
@@ -139,17 +191,16 @@ REVOKE EXECUTE ON FUNCTION public.create_receipt(uuid) FROM anon;
 -- ============================================================
 -- 7. Storage: stop public listing + protect quote attachments
 -- ============================================================
--- Remove broad public read (allowed enumeration/listing of the public bucket)
 DROP POLICY IF EXISTS "Anyone can view site images" ON storage.objects;
 DROP POLICY IF EXISTS "Public view for gallery" ON storage.objects;
--- Remove anon drop-off into the public bucket (quotes moved to a private bucket)
 DROP POLICY IF EXISTS "Public drop-off for quotes" ON storage.objects;
 
--- Private quote-attachments bucket policies
+DROP POLICY IF EXISTS "Public can upload quote attachments" ON storage.objects;
 CREATE POLICY "Public can upload quote attachments" ON storage.objects
   FOR INSERT TO anon, authenticated
   WITH CHECK (bucket_id = 'quote-attachments');
 
+DROP POLICY IF EXISTS "Staff can view quote attachments" ON storage.objects;
 CREATE POLICY "Staff can view quote attachments" ON storage.objects
   FOR SELECT TO authenticated
   USING (
@@ -157,6 +208,7 @@ CREATE POLICY "Staff can view quote attachments" ON storage.objects
     AND (has_role(auth.uid(), 'admin'::app_role) OR has_permission(auth.uid(), 'can_manage_quotes'::text))
   );
 
+DROP POLICY IF EXISTS "Staff can delete quote attachments" ON storage.objects;
 CREATE POLICY "Staff can delete quote attachments" ON storage.objects
   FOR DELETE TO authenticated
   USING (
@@ -166,8 +218,20 @@ CREATE POLICY "Staff can delete quote attachments" ON storage.objects
 
 -- ============================================================
 -- 8. Realtime: remove sensitive PII tables from broadcast feed
+--    (guarded so it won't error if a table isn't in the publication)
 -- ============================================================
-ALTER PUBLICATION supabase_realtime DROP TABLE public.bookings;
-ALTER PUBLICATION supabase_realtime DROP TABLE public.quote_requests;
-ALTER PUBLICATION supabase_realtime DROP TABLE public.contact_submissions;
-ALTER PUBLICATION supabase_realtime DROP TABLE public.cleaner_applications;
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['bookings','quote_requests','contact_submissions','cleaner_applications'] LOOP
+    IF EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime'
+        AND schemaname = 'public'
+        AND tablename = t
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime DROP TABLE public.%I', t);
+    END IF;
+  END LOOP;
+END $$;
