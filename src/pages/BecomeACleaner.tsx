@@ -85,10 +85,39 @@ const BecomeACleaner = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [resume, setResume] = useState<File | null>(null);
 
   const update = (key: keyof typeof initialForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((p) => ({ ...p, [key]: e.target.value }));
+
+  const handleResumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) {
+      setResume(null);
+      return;
+    }
+    const nameLower = file.name.toLowerCase();
+    const extOk = ALLOWED_RESUME_EXT.some((ext) => nameLower.endsWith(ext));
+    const typeOk = ALLOWED_RESUME_TYPES.includes(file.type) || extOk;
+    if (!typeOk) {
+      setErrors((p) => ({ ...p, resume: "Please upload a PDF, DOC, or DOCX file." }));
+      setResume(null);
+      e.target.value = "";
+      return;
+    }
+    if (file.size > MAX_RESUME_BYTES) {
+      setErrors((p) => ({ ...p, resume: "Resume must be 5MB or smaller." }));
+      setResume(null);
+      e.target.value = "";
+      return;
+    }
+    setErrors((p) => {
+      const { resume, ...rest } = p;
+      return rest;
+    });
+    setResume(file);
+  };
 
   const bioWordCount = useMemo(() => countWords(form.personality_bio), [form.personality_bio]);
   const bioOverLimit = bioWordCount > MAX_BIO_WORDS;
