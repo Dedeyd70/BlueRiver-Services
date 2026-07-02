@@ -30,6 +30,9 @@ const applicationSchema = z.object({
   last_name: z.string().trim().min(1, "Last name is required").max(60),
   email: z.string().trim().email("Please enter a valid email").max(255),
   phone: z.string().trim().min(7, "Please enter a valid phone").max(30),
+  address_street: z.string().trim().min(3, "Street address is required").max(200),
+  address_city: z.string().trim().min(2, "City is required").max(100),
+  address_state: z.string().trim().min(2, "State is required").max(60),
   availability: z.string().min(1, "Please select your availability"),
   experience: z.string().min(1, "Please select your experience level"),
   service_type: z.enum(SERVICE_OPTIONS, { errorMap: () => ({ message: "Please choose a service type" }) }),
@@ -37,13 +40,21 @@ const applicationSchema = z.object({
   authorized_to_work: z.enum(["yes", "no"], { errorMap: () => ({ message: "Please select an option" }) }),
   reference_1: z.string().trim().min(3, "Reference is required").max(255),
   reference_2: z.string().trim().min(3, "Reference is required").max(255),
-  reference_3: z.string().trim().min(3, "Reference is required").max(255),
   personality_bio: z
     .string()
     .trim()
     .min(1, "Please describe your personality")
     .refine((v) => countWords(v) <= MAX_BIO_WORDS, `Please keep this under ${MAX_BIO_WORDS} words`),
 });
+
+// Resume upload constraints
+const MAX_RESUME_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_RESUME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+const ALLOWED_RESUME_EXT = [".pdf", ".doc", ".docx"];
 
 const COOLDOWN_KEY = "cleaner_application_last_submit";
 const COOLDOWN_MS = 30_000;
