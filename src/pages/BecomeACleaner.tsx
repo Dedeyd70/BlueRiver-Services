@@ -65,6 +65,9 @@ const initialForm = {
   last_name: "",
   email: "",
   phone: "",
+  address_street: "",
+  address_city: "",
+  address_state: "",
   availability: "",
   experience: "",
   service_type: "" as (typeof SERVICE_OPTIONS)[number] | "",
@@ -72,7 +75,6 @@ const initialForm = {
   authorized_to_work: "" as "yes" | "no" | "",
   reference_1: "",
   reference_2: "",
-  reference_3: "",
   personality_bio: "",
 };
 
