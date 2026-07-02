@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CheckCircle, Sparkles, Clock, HeartHandshake, DollarSign } from "lucide-react";
+import { CheckCircle, Sparkles, Clock, HeartHandshake, DollarSign, Upload, FileText, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
+import { sendApplicationAcknowledgement } from "@/lib/applicantEmail";
 
 import PageMeta from "@/components/PageMeta";
 
