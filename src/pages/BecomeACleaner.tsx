@@ -158,7 +158,28 @@ const BecomeACleaner = () => {
       .filter(Boolean)
       .join(" ");
 
+    const fullAddress = [parsed.data.address_street, parsed.data.address_city, parsed.data.address_state]
+      .filter(Boolean)
+      .join(", ");
+
     try {
+      // Upload the resume to the private bucket first (optional).
+      let resumeUrl: string | null = null;
+      if (resume) {
+        const ext = resume.name.split(".").pop()?.toLowerCase() || "pdf";
+        const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const path = `applications/${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("cleaner-resumes")
+          .upload(path, resume, { contentType: resume.type || undefined, upsert: false });
+        if (uploadError) {
+          toast({ title: "Could not upload your resume.", description: "Please try again or submit without it.", variant: "destructive" });
+          setLoading(false);
+          return;
+        }
+        resumeUrl = path;
+      }
+
       const { error } = await supabase
         .from("cleaner_applications" as any)
         .insert([
@@ -167,6 +188,8 @@ const BecomeACleaner = () => {
             middle_name: parsed.data.middle_name || null,
             email: parsed.data.email,
             phone: parsed.data.phone,
+            address: fullAddress,
+            resume_url: resumeUrl,
             availability: parsed.data.availability,
             experience: parsed.data.experience,
             service_type: parsed.data.service_type,
@@ -174,7 +197,6 @@ const BecomeACleaner = () => {
             authorized_to_work: parsed.data.authorized_to_work === "yes",
             reference_1: parsed.data.reference_1,
             reference_2: parsed.data.reference_2,
-            reference_3: parsed.data.reference_3,
             personality_bio: parsed.data.personality_bio,
             message: parsed.data.personality_bio,
           },
@@ -186,11 +208,14 @@ const BecomeACleaner = () => {
       }
 
       // Admin notification is created automatically by a database trigger.
-
+      // Send the applicant an auto-acknowledgement (non-blocking).
+      sendApplicationAcknowledgement(parsed.data.email, parsed.data.first_name).catch((err) =>
+        console.error("[applicant-ack] failed:", err),
+      );
 
       localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
       setSubmitted(true);
-      toast({ title: "Application submitted!", description: "Our team will review your profile and get back to you shortly." });
+      toast({ title: "Application submitted!", description: "Check your inbox for a confirmation from info@blueriverservices.co. Our team will review your profile and get back to you shortly." });
     } catch {
       toast({ title: "Something went wrong.", description: "Please try again.", variant: "destructive" });
     } finally {
