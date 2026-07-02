@@ -330,7 +330,27 @@ const BecomeACleaner = () => {
                   </div>
                 </div>
 
-                {/* Availability + Experience */}
+                {/* Address */}
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="address_street">Street Address *</Label>
+                    <Input id="address_street" value={form.address_street} onChange={update("address_street")} placeholder="123 Main St, Apt 4" className="mt-1.5" />
+                    {errors.address_street && <p className="text-xs text-destructive mt-1">{errors.address_street}</p>}
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <div>
+                      <Label htmlFor="address_city">City *</Label>
+                      <Input id="address_city" value={form.address_city} onChange={update("address_city")} placeholder="Seattle" className="mt-1.5" />
+                      {errors.address_city && <p className="text-xs text-destructive mt-1">{errors.address_city}</p>}
+                    </div>
+                    <div>
+                      <Label htmlFor="address_state">State *</Label>
+                      <Input id="address_state" value={form.address_state} onChange={update("address_state")} placeholder="WA" className="mt-1.5" />
+                      {errors.address_state && <p className="text-xs text-destructive mt-1">{errors.address_state}</p>}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid sm:grid-cols-2 gap-5">
                   <div>
                     <Label htmlFor="availability">Availability *</Label>
