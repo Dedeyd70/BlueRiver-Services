@@ -473,15 +473,44 @@ const BecomeACleaner = () => {
                     />
                     {errors.reference_2 && <p className="text-xs text-destructive mt-1">{errors.reference_2}</p>}
                   </div>
-                  <div>
-                    <Input
-                      value={form.reference_3}
-                      onChange={update("reference_3")}
-                      placeholder="Reference 3 — Professional Reference (Name & Contact)"
-                    />
-                    {errors.reference_3 && <p className="text-xs text-destructive mt-1">{errors.reference_3}</p>}
-                  </div>
                 </div>
+
+                {/* Resume upload (optional) */}
+                <div>
+                  <Label htmlFor="resume">Resume <span className="text-muted-foreground font-normal">(optional — PDF, DOC, or DOCX, up to 5MB)</span></Label>
+                  {resume ? (
+                    <div className="mt-1.5 flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2.5">
+                      <span className="flex items-center gap-2 text-sm text-foreground truncate">
+                        <FileText className="w-4 h-4 text-primary shrink-0" />
+                        <span className="truncate">{resume.name}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setResume(null)}
+                        className="text-muted-foreground hover:text-destructive shrink-0"
+                        aria-label="Remove resume"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="resume"
+                      className="mt-1.5 flex items-center gap-2 rounded-lg border border-dashed border-border bg-background hover:bg-muted/50 px-3 py-2.5 cursor-pointer transition-colors text-sm text-muted-foreground"
+                    >
+                      <Upload className="w-4 h-4" /> Attach your resume
+                    </label>
+                  )}
+                  <input
+                    id="resume"
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={handleResumeChange}
+                    className="hidden"
+                  />
+                  {errors.resume && <p className="text-xs text-destructive mt-1">{errors.resume}</p>}
+                </div>
+
 
                 {/* Personality bio */}
                 <div>
