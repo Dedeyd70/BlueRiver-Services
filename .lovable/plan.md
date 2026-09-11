@@ -1,45 +1,56 @@
-# Fix: Cleaner application status won't update (400 error)
+# Admin Check-Up Guide: Booking & Scheduling
 
-## Root cause
-The `cleaner_applications` table still has an old validation rule that only allows these status values:
+A simple, click-through checklist so you can confirm everything works — no technical knowledge needed. Do this on the **live website** (not the preview). Have your own email handy so you can play the "customer" and see what they receive.
 
-```
-new, reviewed, contacted, archived
-```
+---
 
-The admin dashboard was upgraded to a hiring pipeline that uses new stages:
+## Part 1 — Book like a customer
 
-```
-new, reviewing, shortlisted, interview, hired, rejected
-```
+1. Open the website and go to **Book Service**.
+2. Look at the list of times. Each one should be a **single time** like "9:00 AM" — **not** a range like "9:00 AM – 11:00 AM".
+3. Check for the **red note** telling the customer the time may change and is just for scheduling. It should be easy to see.
+4. Fill in the form using **your own email**, pick a date and a time, and submit.
+5. You should see a **thank-you / success message**.
+6. Check your email inbox — you should get a **"we received your booking"** message.
 
-When you pick a new stage (e.g. "Reviewing", "Shortlisted", "Hired"), the database rejects it because the value isn't in the old allowed list. That rejection is the `400 ()` error you see, and the status silently fails to change.
+## Part 2 — See it as the admin
 
-The "expand card to see what the applicant filled in" feature already exists in the current code (click the chevron to expand full details, references, resume, etc.) — your preview is just showing the last saved version. Once the constraint is fixed and the app rebuilds, both the expand and the status updates will work.
+7. Log in to the **Admin** area and open **Bookings**.
+8. Your test booking should appear under **Active**, marked **pending**, showing the single time you chose.
+9. Check the **bell icon** (top of the admin) — there should be a new alert for it. You should also get an **admin email** about the new booking.
 
-## The change
-One database migration that replaces the outdated status validation rule with one that accepts the full pipeline plus the legacy values (so older rows still validate).
+## Part 3 — Confirm the booking
 
-### Technical details
-- Drop `cleaner_applications_status_check` if it exists, then recreate it allowing:
-  `new, reviewing, shortlisted, interview, hired, rejected, reviewed, contacted, archived`.
-- Written idempotently (`DROP CONSTRAINT IF EXISTS` + guarded `ADD CONSTRAINT`) so it runs cleanly on both the current database and a brand-new database.
+10. Open the booking and **Confirm** it. It should switch to **confirmed**.
+11. Check your inbox — the customer (you) should get a **"booking confirmed"** email with the right date and time.
 
-```sql
-ALTER TABLE public.cleaner_applications
-  DROP CONSTRAINT IF EXISTS cleaner_applications_status_check;
+## Part 4 — Reschedule it
 
-ALTER TABLE public.cleaner_applications
-  ADD CONSTRAINT cleaner_applications_status_check
-  CHECK (status IN (
-    'new','reviewing','shortlisted','interview','hired','rejected',
-    'reviewed','contacted','archived'
-  ));
-```
+12. On the confirmed booking, click **Reschedule**.
+13. The time field should let you **type any time** (e.g. "2:15 PM") — you're **not** forced to pick from a fixed list, and there are no blocked "buffer" times around other bookings.
+14. There should be a **"Notify customer by email"** checkbox that is **already ticked**, plus an optional box to type a short message/reason.
+15. Change the date/time, leave the box **ticked**, and save.
+16. Check your inbox — you should get a **"rescheduled"** email that clearly shows **the old time and the new time**, plus your message if you typed one.
 
-## What stays the same
-- No UI changes needed — the expandable card, status dropdown, references, resume viewer, and email response panel are all already built.
-- No changes to any other table, policy, or app functionality.
+## Part 5 — Reschedule quietly (optional)
 
-## Verification
-After the migration runs, change an application's status from the dropdown and confirm the "Status updated" toast appears and the badge changes with no 400 error.
+17. Reschedule the same booking again, but this time **untick** the notify box and save.
+18. The booking should update, but **no email** should arrive. (Use this for small corrections you don't want to bother the customer with.)
+
+## Part 6 — Cleaner applications
+
+19. Go to **Become a Cleaner** on the website and submit a test application using your email.
+20. You (the applicant) should get a **"we received your application"** email.
+21. As admin, you should get an **email alert** and a **bell notification** about the new application.
+22. In Admin → **Cleaner Applications**, open the new one and try moving it through the stages (New → Reviewing → Shortlisted → Interview → Hired/Rejected). Each change should save with **no error message**.
+
+---
+
+## Quick "all good" summary
+- Times are single times, no confusing ranges, and the red reminder note is showing.
+- New bookings, confirmations, and reschedules all send the right emails.
+- Reschedule lets you type any time and shows the customer the old → new change.
+- Cleaner applications notify both the applicant and you, and status changes save cleanly.
+
+## If anything looks wrong
+Just tell me the **step number** and what you saw (a screenshot helps). I'll look into it and fix it.
