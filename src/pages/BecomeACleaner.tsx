@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
 import { sendApplicationAcknowledgement } from "@/lib/applicantEmail";
+import { ADMIN_BASE } from "@/lib/permissions";
 
 import PageMeta from "@/components/PageMeta";
 
@@ -207,11 +208,35 @@ const BecomeACleaner = () => {
         return;
       }
 
-      // Admin notification is created automatically by a database trigger.
-      // Send the applicant an auto-acknowledgement (non-blocking).
-      sendApplicationAcknowledgement(parsed.data.email, parsed.data.first_name).catch((err) =>
-        console.error("[applicant-ack] failed:", err),
-      );
+      // The database trigger creates the in-app alert. Send both emails without
+      // delaying or invalidating the successfully saved application.
+      Promise.allSettled([
+        sendApplicationAcknowledgement(parsed.data.email, parsed.data.first_name),
+        supabase.functions.invoke("send-transactional-email", {
+          body: {
+            type: "admin_new_submission",
+            data: {
+              kind: "Cleaner Application",
+              name: fullName,
+              email: parsed.data.email,
+              phone: parsed.data.phone,
+              service: parsed.data.service_type,
+              dashboardUrl: `${window.location.origin}${ADMIN_BASE}/cleaner-applications`,
+            },
+          },
+        }),
+      ]).then((results) => {
+        const labels = ["applicant acknowledgement", "admin cleaner application alert"];
+        results.forEach((result, index) => {
+          if (result.status === "rejected") {
+            console.error(`[cleaner-application-email] ${labels[index]} failed:`, result.reason);
+            return;
+          }
+          if (result.value.error) {
+            console.error(`[cleaner-application-email] ${labels[index]} failed:`, result.value.error);
+          }
+        });
+      });
 
       localStorage.setItem(COOLDOWN_KEY, String(Date.now()));
       setSubmitted(true);
