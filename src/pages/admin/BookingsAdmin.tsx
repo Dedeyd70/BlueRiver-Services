@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -18,7 +19,7 @@ import { useFocusHighlight } from "@/hooks/useFocusHighlight";
 import { ChevronDown, ChevronUp, Clock, FileText, Send, Receipt as ReceiptIcon, CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
 import { generateInvoicePdf, generateInvoicePdfBase64 } from "@/lib/invoicePdf";
-import { configFromSettings, isSlotBlocked } from "@/lib/availability";
+
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { friendlyRpcError } from "@/lib/friendlyRpcError";
 import Paginator, { PAGE_SIZE, usePagedSlice } from "@/components/admin/Paginator";
@@ -27,17 +28,6 @@ import { recomputeFromLineItems, LineItem } from "@/lib/pricingEngine";
 
 import { useAdminUserNames } from "@/hooks/useAdminUserNames";
 
-const RESCHEDULE_TIME_SLOTS: string[] = (() => {
-  const out: string[] = [];
-  for (let m = 8 * 60; m <= 18 * 60; m += 30) {
-    const h = Math.floor(m / 60);
-    const mm = m % 60;
-    const ampm = h >= 12 ? "PM" : "AM";
-    const h12 = h % 12 || 12;
-    out.push(`${h12}:${mm.toString().padStart(2, "0")} ${ampm}`);
-  }
-  return out;
-})();
 
 const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -85,6 +75,8 @@ const BookingsAdmin = () => {
   const [rescheduleTarget, setRescheduleTarget] = useState<any>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleSlot, setRescheduleSlot] = useState("");
+  const [rescheduleNotify, setRescheduleNotify] = useState(true);
+  const [rescheduleReason, setRescheduleReason] = useState("");
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
@@ -96,16 +88,6 @@ const BookingsAdmin = () => {
   const [modifyItems, setModifyItems] = useState<LineItem[]>([]);
   const { data: siteSettings } = useSiteSettings();
 
-  // Booked slots for the date currently selected in the Reschedule modal — used
-  // to disable conflicting time options.
-  const { data: rescheduleBookedSlots } = useQuery({
-    queryKey: ["reschedule-booked-slots", rescheduleDate],
-    enabled: !!rescheduleDate,
-    queryFn: async () => {
-      const { data } = await (supabase as any).rpc("get_booked_slots", { p_date: rescheduleDate });
-      return (data ?? []).map((r: any) => r.time_slot) as string[];
-    },
-  });
 
   useEffect(() => {
     if (focusId) setExpandedId(focusId);
@@ -432,6 +414,8 @@ const BookingsAdmin = () => {
     setRescheduleTarget(b);
     setRescheduleDate(b.booking_date ?? "");
     setRescheduleSlot(b.time_slot ?? "");
+    setRescheduleNotify(true);
+    setRescheduleReason("");
   };
 
   const handleRescheduleConfirm = async () => {
@@ -453,15 +437,6 @@ const BookingsAdmin = () => {
         return;
       }
       // Time-range overlap check (excludes the booking being rescheduled).
-      const { data: overlaps } = await (supabase as any).rpc("check_slot_overlap", {
-        p_date: rescheduleDate,
-        p_time_slot: rescheduleSlot,
-        p_exclude_booking: rescheduleTarget.id,
-      });
-      if (overlaps === true) {
-        toast({ title: "Time slot overlaps an existing booking. Please pick a different time.", variant: "destructive" });
-        return;
-      }
       const { data, error } = await supabase
         .from("bookings")
         .update({ booking_date: rescheduleDate, time_slot: rescheduleSlot } as any)
@@ -470,12 +445,39 @@ const BookingsAdmin = () => {
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Update blocked by permissions or RLS");
+
+      const oldDate = rescheduleTarget.booking_date;
+      const oldSlot = rescheduleTarget.time_slot;
+      const customerEmail = rescheduleTarget.email;
+      const reason = rescheduleReason.trim();
+      const willNotify = rescheduleNotify && !!customerEmail;
+
       await logBookingActivity(rescheduleTarget.id, "rescheduled", {
-        details: `From ${rescheduleTarget.booking_date} ${rescheduleTarget.time_slot} → ${rescheduleDate} ${rescheduleSlot}`,
+        details: `From ${oldDate} ${oldSlot} → ${rescheduleDate} ${rescheduleSlot}${willNotify ? " (customer notified)" : ""}`,
       });
+
+      if (willNotify) {
+        supabase.functions.invoke("send-transactional-email", {
+          body: {
+            type: "booking_rescheduled",
+            to: customerEmail,
+            data: {
+              name: rescheduleTarget.name,
+              service: rescheduleTarget.service_type || "your booking",
+              oldDate: oldDate ? format(new Date(oldDate), "MMMM d, yyyy") : null,
+              oldTimeSlot: oldSlot,
+              newDate: rescheduleDate ? format(new Date(rescheduleDate), "MMMM d, yyyy") : null,
+              newTimeSlot: rescheduleSlot,
+              address: rescheduleTarget.address,
+              reason: reason || null,
+            },
+          },
+        }).catch((err) => console.error("Reschedule email failed:", err));
+      }
+
       qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       qc.invalidateQueries({ queryKey: ["admin-booking-activity"] });
-      toast({ title: "Booking rescheduled." });
+      toast({ title: willNotify ? "Booking rescheduled. Customer notified." : "Booking rescheduled." });
       setRescheduleTarget(null);
     } catch (e: any) {
       if (e?.code === "23505") {
@@ -978,31 +980,43 @@ const BookingsAdmin = () => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">New time slot</label>
-              <Select value={rescheduleSlot} onValueChange={setRescheduleSlot}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a time" />
-                </SelectTrigger>
-                <SelectContent>
-                  {RESCHEDULE_TIME_SLOTS.map((s) => {
-                    const cfg = configFromSettings(siteSettings);
-                    const isSame = rescheduleTarget?.booking_date === rescheduleDate && rescheduleTarget?.time_slot === s;
-                    const isBooked = !isSame && rescheduleBookedSlots?.includes(s);
-                    const isBlocked = !isSame && !isBooked && isSlotBlocked(s, rescheduleBookedSlots, cfg);
-                    const disabled = !!(isBooked || isBlocked);
-                    return (
-                      <SelectItem key={s} value={s} disabled={disabled}>
-                        <span className={disabled ? "line-through text-muted-foreground" : ""}>
-                          {s}{isBooked ? " — Booked" : isBlocked ? " — Buffer" : ""}
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">New time</label>
+              <Input
+                type="text"
+                placeholder="e.g. 9:00 AM"
+                value={rescheduleSlot}
+                onChange={(e) => setRescheduleSlot(e.target.value)}
+              />
               <p className="text-xs text-muted-foreground">
-                30-minute intervals from 8:00 AM to 6:00 PM. Slots in the {configFromSettings(siteSettings).bufferMinutes}-min buffer of an existing booking are disabled.
+                Enter any time. A time is unavailable only if it is already booked for the selected date.
               </p>
+            </div>
+            <div className="space-y-3 rounded-md border border-border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="reschedule-notify"
+                  checked={rescheduleNotify}
+                  onCheckedChange={(v) => setRescheduleNotify(v === true)}
+                  disabled={!rescheduleTarget?.email}
+                  className="mt-0.5"
+                />
+                <label htmlFor="reschedule-notify" className="text-sm leading-snug cursor-pointer">
+                  Notify customer by email
+                  <span className="block text-xs text-muted-foreground">
+                    {rescheduleTarget?.email
+                      ? `Sends the old → new time to ${rescheduleTarget.email}. Uncheck for silent corrections.`
+                      : "No email on file for this booking."}
+                  </span>
+                </label>
+              </div>
+              {rescheduleNotify && rescheduleTarget?.email && (
+                <Textarea
+                  rows={2}
+                  placeholder="Optional message to include (e.g. Rescheduled at your request)"
+                  value={rescheduleReason}
+                  onChange={(e) => setRescheduleReason(e.target.value)}
+                />
+              )}
             </div>
           </div>
           <DialogFooter>
