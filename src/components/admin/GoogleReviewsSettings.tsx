@@ -155,6 +155,19 @@ const GoogleReviewsSettings = () => {
           </Button>
         </div>
 
+        {notListed && (
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1">
+            <p className="text-sm font-medium text-foreground">
+              Google's business search doesn't return "{notListed}" yet
+            </p>
+            <p className="text-xs text-muted-foreground">
+              This usually means the business profile isn't verified or published yet. Once you verify it
+              with Google Business Profile, search it again here and the reviews will start coming in. Until
+              then, your website keeps showing the reviews customers leave on your own site.
+            </p>
+          </div>
+        )}
+
         {candidates && candidates.length > 0 && (
           <div className="space-y-2">
             {candidates.map((c) => (
