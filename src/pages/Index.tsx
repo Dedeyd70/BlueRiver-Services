@@ -92,12 +92,7 @@ const IndexPage = () => {
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
-  const { data: googleReviews } = useGoogleReviews();
-  const googleEnabled = settings?.google_reviews_enabled === "true";
-  const googleRating = settings?.google_rating || "";
-  const googleRatingCount = settings?.google_rating_count || "";
-  const googleMapsUri = settings?.google_maps_uri || "";
-  const allReviews = combineReviews(googleEnabled ? googleReviews : [], publicReviews as any);
+  const allReviews = combineReviews([], publicReviews as any);
   const { data: beforeAfter } = useQuery({
     queryKey: ["public-before-after-home"],
     queryFn: async () => {
