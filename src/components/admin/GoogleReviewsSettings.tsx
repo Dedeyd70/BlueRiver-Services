@@ -55,11 +55,16 @@ const GoogleReviewsSettings = () => {
 
   const handleLookup = async () => {
     setBusy("lookup");
+    setNotListed(null);
     try {
       const data = await call({ action: "lookup", query });
       setCandidates(data.candidates ?? []);
       if (!data.candidates?.length) {
-        toast({ title: "No matches", description: "Try the full business name with the city, or paste your Google Maps link." });
+        setNotListed(data.searched_for || query);
+        toast({
+          title: "Not found on Google",
+          description: "Google's public business search doesn't return this listing yet.",
+        });
       }
     } catch (e: any) {
       toast({ title: "Search failed", description: e.message, variant: "destructive" });
