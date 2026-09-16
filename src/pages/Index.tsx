@@ -24,7 +24,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServices } from "@/hooks/useServices";
-import { useGoogleReviews, combineReviews } from "@/hooks/useGoogleReviews";
+import { combineReviews } from "@/hooks/useGoogleReviews";
+import ElfsightReviews from "@/components/ElfsightReviews";
 import heroImgFallback from "@/assets/hero-cleaning.jpg";
 
 const iconMap: Record<string, any> = {
