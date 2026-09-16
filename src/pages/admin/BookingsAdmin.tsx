@@ -259,10 +259,22 @@ const BookingsAdmin = () => {
         const serviceLabel = b.service_type || "cleaning";
         const dateLabel = b.booking_date ? format(new Date(b.booking_date), "MMM d, yyyy") : null;
         const reviewSubject = `How was your BlueRiver ${serviceLabel}${dateLabel ? ` on ${dateLabel}` : ""}?`;
+
+        const { data: googleSetting } = await supabase
+          .from("site_settings")
+          .select("setting_value")
+          .eq("setting_key", "google_maps_uri")
+          .maybeSingle();
+        const googleUri = googleSetting?.setting_value || "";
+        const googleButton = googleUri
+          ? `<p style="margin:12px 0 20px;"><a href="${googleUri}" style="background:#fff;border:1px solid #1e40af;color:#1e40af;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Review us on Google</a></p>`
+          : "";
+
         const reviewHtml = `
           <p>Hi ${b.name || "there"},</p>
           <p>Thanks for choosing BlueRiver Services for your <strong>${serviceLabel}</strong>${dateLabel ? ` on <strong>${dateLabel}</strong>` : ""}! We'd love to hear how it went.</p>
-          <p style="margin:20px 0;"><a href="${reviewLink}" style="background:#1e40af;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Leave a Review</a></p>
+          <p style="margin:20px 0 0;"><a href="${reviewLink}" style="background:#1e40af;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Leave a review on our site</a></p>
+          ${googleButton}
           <p>It only takes a minute and really helps our small team.</p>
           <p>— The BlueRiver Team</p>
           <p style="font-size:12px;color:#94a3b8;margin-top:24px;">Prefer not to receive review or marketing emails? Reply <strong>UNSUBSCRIBE</strong> to this message and we'll remove you.</p>`;
