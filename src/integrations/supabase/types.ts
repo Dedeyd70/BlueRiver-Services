@@ -544,6 +544,48 @@ export type Database = {
         }
         Relationships: []
       }
+      google_reviews: {
+        Row: {
+          author_name: string
+          author_photo_url: string | null
+          author_uri: string | null
+          created_at: string
+          id: string
+          publish_time: string | null
+          rating: number
+          relative_time: string | null
+          review_key: string
+          text: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_name: string
+          author_photo_url?: string | null
+          author_uri?: string | null
+          created_at?: string
+          id?: string
+          publish_time?: string | null
+          rating: number
+          relative_time?: string | null
+          review_key: string
+          text?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string
+          author_photo_url?: string | null
+          author_uri?: string | null
+          created_at?: string
+          id?: string
+          publish_time?: string | null
+          rating?: number
+          relative_time?: string | null
+          review_key?: string
+          text?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       homepage_images: {
         Row: {
           created_at: string
