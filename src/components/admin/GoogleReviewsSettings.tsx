@@ -119,7 +119,8 @@ const GoogleReviewsSettings = () => {
         <div>
           <h3 className="font-display font-semibold text-foreground">Your Google listing</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Search for your business, or paste the link to your listing on Google Maps.
+            Search for your business, or paste any link to your listing on Google Maps — the short
+            "maps.app.goo.gl" kind works too.
           </p>
         </div>
 
