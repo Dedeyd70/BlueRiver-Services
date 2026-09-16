@@ -24,7 +24,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServices } from "@/hooks/useServices";
-import { useGoogleReviews, combineReviews } from "@/hooks/useGoogleReviews";
+import { combineReviews } from "@/hooks/useGoogleReviews";
+import ElfsightReviews from "@/components/ElfsightReviews";
 import heroImgFallback from "@/assets/hero-cleaning.jpg";
 
 const iconMap: Record<string, any> = {
@@ -92,12 +93,7 @@ const IndexPage = () => {
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
-  const { data: googleReviews } = useGoogleReviews();
-  const googleEnabled = settings?.google_reviews_enabled === "true";
-  const googleRating = settings?.google_rating || "";
-  const googleRatingCount = settings?.google_rating_count || "";
-  const googleMapsUri = settings?.google_maps_uri || "";
-  const allReviews = combineReviews(googleEnabled ? googleReviews : [], publicReviews as any);
+  const allReviews = combineReviews([], publicReviews as any);
   const { data: beforeAfter } = useQuery({
     queryKey: ["public-before-after-home"],
     queryFn: async () => {
@@ -484,7 +480,7 @@ const IndexPage = () => {
       )}
 
       {/* Customer Reviews */}
-      {allReviews.length > 0 && (
+      {(
         <section className="py-20 md:py-28">
           <div className="container">
             <SectionHeading
@@ -493,32 +489,13 @@ const IndexPage = () => {
               description="Real feedback from real customers after their cleanings."
             />
 
-            {googleEnabled && googleRating && (
-              <div className="flex flex-wrap items-center justify-center gap-3 mb-10 -mt-4">
-                <div className="flex gap-1">
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <Star
-                      key={j}
-                      className={`w-4 h-4 ${j < Math.round(Number(googleRating)) ? "fill-primary text-primary" : "text-muted-foreground/40"}`}
-                    />
-                  ))}
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {googleRating} on Google{googleRatingCount ? ` · ${googleRatingCount} ratings` : ""}
-                </span>
-                {googleMapsUri && (
-                  <a
-                    href={googleMapsUri}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium text-primary hover:underline"
-                  >
-                    See all reviews on Google
-                  </a>
-                )}
-              </div>
-            )}
+            <ElfsightReviews />
 
+            {allReviews.length > 0 && (
+            <>
+            <h3 className="font-display font-semibold text-foreground text-lg mt-14 mb-6 text-center">
+              Reviews left on our site
+            </h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {allReviews.slice(0, 6).map((r, i) => (
                 <motion.div
@@ -555,6 +532,8 @@ const IndexPage = () => {
                 </motion.div>
               ))}
             </div>
+            </>
+            )}
           </div>
         </section>
       )}
