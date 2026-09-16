@@ -531,6 +531,8 @@ const IndexPage = () => {
                 </motion.div>
               ))}
             </div>
+            </>
+            )}
           </div>
         </section>
       )}
