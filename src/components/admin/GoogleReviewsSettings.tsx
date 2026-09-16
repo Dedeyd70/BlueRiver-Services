@@ -7,17 +7,14 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Search, RefreshCw, Star, CheckCircle2 } from "lucide-react";
-
-type Candidate = { id: string; name: string; address: string; rating: number | null; rating_count: number | null };
+import { RefreshCw, Star, CheckCircle2, Save } from "lucide-react";
 
 const GoogleReviewsSettings = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [query, setQuery] = useState("");
-  const [candidates, setCandidates] = useState<Candidate[] | null>(null);
-  const [notListed, setNotListed] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"lookup" | "sync" | null>(null);
+  const [input, setInput] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"save" | "sync" | null>(null);
 
   const { data: settings } = useQuery({
     queryKey: ["admin-settings"],
@@ -47,41 +44,32 @@ const GoogleReviewsSettings = () => {
     const { data, error } = await supabase.functions.invoke("google-reviews-sync", { body });
     if (error) {
       const details = (error as any)?.context?.text ? await (error as any).context.text() : error.message;
-      throw new Error(details || error.message);
+      let message = details || error.message;
+      try {
+        const parsed = JSON.parse(details);
+        if (parsed?.error) message = parsed.error;
+      } catch {
+        /* keep raw text */
+      }
+      throw new Error(message);
     }
     if ((data as any)?.error) throw new Error((data as any).error);
     return data as any;
   };
 
-  const handleLookup = async () => {
-    setBusy("lookup");
-    setNotListed(null);
+  const handleSave = async () => {
+    setBusy("save");
+    setProblem(null);
     try {
-      const data = await call({ action: "lookup", query });
-      setCandidates(data.candidates ?? []);
-      if (!data.candidates?.length) {
-        setNotListed(data.searched_for || query);
-        toast({
-          title: "Not found on Google",
-          description: "Google's public business search doesn't return this listing yet.",
-        });
-      }
-    } catch (e: any) {
-      toast({ title: "Search failed", description: e.message, variant: "destructive" });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleSelect = async (id: string) => {
-    setBusy("sync");
-    try {
-      const data = await call({ action: "sync", place_id: id });
-      setCandidates(null);
-      setQuery("");
+      const data = await call({ action: "save", input });
+      setInput("");
       refresh();
-      toast({ title: "Connected", description: `${data.place_name} — ${data.synced} review(s) pulled in.` });
+      toast({
+        title: "Listing connected",
+        description: `${data.place_name || "Your listing"} — ${data.synced} review(s) pulled in.`,
+      });
     } catch (e: any) {
+      setProblem(e.message);
       toast({ title: "Could not connect that listing", description: e.message, variant: "destructive" });
     } finally {
       setBusy(null);
@@ -90,11 +78,13 @@ const GoogleReviewsSettings = () => {
 
   const handleSync = async () => {
     setBusy("sync");
+    setProblem(null);
     try {
       const data = await call({ action: "sync" });
       refresh();
       toast({ title: "Reviews refreshed", description: `${data.synced} review(s) up to date.` });
     } catch (e: any) {
+      setProblem(e.message);
       toast({ title: "Refresh failed", description: e.message, variant: "destructive" });
     } finally {
       setBusy(null);
@@ -119,8 +109,8 @@ const GoogleReviewsSettings = () => {
         <div>
           <h3 className="font-display font-semibold text-foreground">Your Google listing</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Search for your business, or paste any link to your listing on Google Maps — the short
-            "maps.app.goo.gl" kind works too.
+            Paste the link to your listing on Google Maps, or your Place ID (it starts with "ChI"). Saving
+            pulls your star rating, total number of ratings, and the latest reviews straight from Google.
           </p>
         </div>
 
@@ -145,45 +135,19 @@ const GoogleReviewsSettings = () => {
 
         <div className="flex gap-2">
           <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Business name and city, or a Google Maps link"
-            onKeyDown={(e) => e.key === "Enter" && query.trim() && handleLookup()}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="https://maps.app.goo.gl/… or ChIJ…"
+            onKeyDown={(e) => e.key === "Enter" && input.trim() && handleSave()}
           />
-          <Button onClick={handleLookup} disabled={!query.trim() || busy !== null}>
-            <Search className="w-4 h-4 mr-2" /> Search
+          <Button onClick={handleSave} disabled={!input.trim() || busy !== null}>
+            <Save className="w-4 h-4 mr-2" /> Save &amp; pull reviews
           </Button>
         </div>
 
-        {notListed && (
-          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1">
-            <p className="text-sm font-medium text-foreground">
-              Google's business search doesn't return "{notListed}" yet
-            </p>
-            <p className="text-xs text-muted-foreground">
-              This usually means the business profile isn't verified or published yet. Once you verify it
-              with Google Business Profile, search it again here and the reviews will start coming in. Until
-              then, your website keeps showing the reviews customers leave on your own site.
-            </p>
-          </div>
-        )}
-
-        {candidates && candidates.length > 0 && (
-          <div className="space-y-2">
-            {candidates.map((c) => (
-              <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{c.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {c.address}
-                    {c.rating ? ` · ${c.rating} stars (${c.rating_count ?? 0})` : ""}
-                  </p>
-                </div>
-                <Button size="sm" onClick={() => handleSelect(c.id)} disabled={busy !== null}>
-                  This is us
-                </Button>
-              </div>
-            ))}
+        {problem && (
+          <div className="rounded-lg border border-border bg-muted/40 p-3">
+            <p className="text-sm text-foreground">{problem}</p>
           </div>
         )}
       </Card>
