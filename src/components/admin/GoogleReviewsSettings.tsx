@@ -147,7 +147,7 @@ const GoogleReviewsSettings = () => {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="BlueRiver Services, Seattle WA — or a Google Maps link"
+            placeholder="Business name and city, or a Google Maps link"
             onKeyDown={(e) => e.key === "Enter" && query.trim() && handleLookup()}
           />
           <Button onClick={handleLookup} disabled={!query.trim() || busy !== null}>
