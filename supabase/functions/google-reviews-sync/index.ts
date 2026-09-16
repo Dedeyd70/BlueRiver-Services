@@ -112,20 +112,34 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action ?? "");
 
-    // Scheduled sync uses a cron secret instead of a user session.
+    // The scheduled job runs in cron mode: no session, sync only, and it can
+    // never hit Google more than once every 12 hours no matter who calls it.
     const isCron = body.cron === true;
 
-    if (!isCron) {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader) return json({ error: "Sign in required." }, 401);
-      const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-      const { data: { user } } = await caller.auth.getUser();
-      if (!user) return json({ error: "Sign in required." }, 401);
-      const { data: roleRow } = await admin
-        .from("user_roles").select("role, permissions").eq("user_id", user.id).maybeSingle();
-      const allowed = roleRow?.role === "admin" || roleRow?.permissions?.can_manage_settings === true;
-      if (!allowed) return json({ error: "You need settings permission to manage Google reviews." }, 403);
+    if (isCron) {
+      if (action !== "sync") return json({ error: "Scheduled runs can only sync." }, 400);
+      const enabled = await readSetting(admin, "google_reviews_enabled");
+      if (enabled !== "true") return json({ skipped: "disabled" });
+      const last = await readSetting(admin, "google_reviews_synced_at");
+      if (last && Date.now() - new Date(last).getTime() < 12 * 60 * 60 * 1000) {
+        return json({ skipped: "recently synced" });
+      }
+      const placeId = await readSetting(admin, "google_place_id");
+      if (!placeId) return json({ skipped: "no listing" });
+      const out = await syncReviews(admin, placeId);
+      if (out.errorResponse) return out.errorResponse;
+      return json(out.result);
     }
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json({ error: "Sign in required." }, 401);
+    const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await caller.auth.getUser();
+    if (!user) return json({ error: "Sign in required." }, 401);
+    const { data: roleRow } = await admin
+      .from("user_roles").select("role, permissions").eq("user_id", user.id).maybeSingle();
+    const allowed = roleRow?.role === "admin" || roleRow?.permissions?.can_manage_settings === true;
+    if (!allowed) return json({ error: "You need settings permission to manage Google reviews." }, 403);
 
     if (action === "lookup") {
       const query = String(body.query ?? "").trim().slice(0, 200);
