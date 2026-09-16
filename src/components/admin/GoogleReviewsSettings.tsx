@@ -16,6 +16,7 @@ const GoogleReviewsSettings = () => {
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+  const [notListed, setNotListed] = useState<string | null>(null);
   const [busy, setBusy] = useState<"lookup" | "sync" | null>(null);
 
   const { data: settings } = useQuery({
