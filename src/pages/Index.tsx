@@ -24,6 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServices } from "@/hooks/useServices";
+import { useGoogleReviews, combineReviews } from "@/hooks/useGoogleReviews";
 import heroImgFallback from "@/assets/hero-cleaning.jpg";
 
 const iconMap: Record<string, any> = {
@@ -91,6 +92,12 @@ const IndexPage = () => {
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
+  const { data: googleReviews } = useGoogleReviews();
+  const googleEnabled = settings?.google_reviews_enabled === "true";
+  const googleRating = settings?.google_rating || "";
+  const googleRatingCount = settings?.google_rating_count || "";
+  const googleMapsUri = settings?.google_maps_uri || "";
+  const allReviews = combineReviews(googleEnabled ? googleReviews : [], publicReviews as any);
   const { data: beforeAfter } = useQuery({
     queryKey: ["public-before-after-home"],
     queryFn: async () => {
