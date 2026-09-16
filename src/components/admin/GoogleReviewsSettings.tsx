@@ -16,6 +16,7 @@ const GoogleReviewsSettings = () => {
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+  const [notListed, setNotListed] = useState<string | null>(null);
   const [busy, setBusy] = useState<"lookup" | "sync" | null>(null);
 
   const { data: settings } = useQuery({
@@ -54,11 +55,16 @@ const GoogleReviewsSettings = () => {
 
   const handleLookup = async () => {
     setBusy("lookup");
+    setNotListed(null);
     try {
       const data = await call({ action: "lookup", query });
       setCandidates(data.candidates ?? []);
       if (!data.candidates?.length) {
-        toast({ title: "No matches", description: "Try the full business name with the city, or paste your Google Maps link." });
+        setNotListed(data.searched_for || query);
+        toast({
+          title: "Not found on Google",
+          description: "Google's public business search doesn't return this listing yet.",
+        });
       }
     } catch (e: any) {
       toast({ title: "Search failed", description: e.message, variant: "destructive" });
@@ -113,7 +119,8 @@ const GoogleReviewsSettings = () => {
         <div>
           <h3 className="font-display font-semibold text-foreground">Your Google listing</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Search for your business, or paste the link to your listing on Google Maps.
+            Search for your business, or paste any link to your listing on Google Maps — the short
+            "maps.app.goo.gl" kind works too.
           </p>
         </div>
 
@@ -140,13 +147,26 @@ const GoogleReviewsSettings = () => {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="BlueRiver Services, Seattle WA — or a Google Maps link"
+            placeholder="Business name and city, or a Google Maps link"
             onKeyDown={(e) => e.key === "Enter" && query.trim() && handleLookup()}
           />
           <Button onClick={handleLookup} disabled={!query.trim() || busy !== null}>
             <Search className="w-4 h-4 mr-2" /> Search
           </Button>
         </div>
+
+        {notListed && (
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1">
+            <p className="text-sm font-medium text-foreground">
+              Google's business search doesn't return "{notListed}" yet
+            </p>
+            <p className="text-xs text-muted-foreground">
+              This usually means the business profile isn't verified or published yet. Once you verify it
+              with Google Business Profile, search it again here and the reviews will start coming in. Until
+              then, your website keeps showing the reviews customers leave on your own site.
+            </p>
+          </div>
+        )}
 
         {candidates && candidates.length > 0 && (
           <div className="space-y-2">
