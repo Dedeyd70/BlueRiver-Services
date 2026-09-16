@@ -481,7 +481,7 @@ const IndexPage = () => {
       )}
 
       {/* Customer Reviews */}
-      {allReviews.length > 0 && (
+      {(
         <section className="py-20 md:py-28">
           <div className="container">
             <SectionHeading
@@ -490,8 +490,16 @@ const IndexPage = () => {
               description="Real feedback from real customers after their cleanings."
             />
 
+            <div className="mb-12">
+              <ElfsightReviews />
+            </div>
+
+            {siteReviews.length > 0 && (
+              <h3 className="font-display font-semibold text-foreground mb-6">Reviews left on our site</h3>
+            )}
+
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allReviews.slice(0, 6).map((r, i) => (
+              {siteReviews.slice(0, 6).map((r, i) => (
                 <motion.div
                   key={r.id}
                   {...fadeUp}
