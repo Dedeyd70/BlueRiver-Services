@@ -24,9 +24,50 @@ const gatewayHeaders = (extra: Record<string, string> = {}) => ({
 
 /** Pull a place ID out of a pasted Google Maps URL, if present. */
 const placeIdFromUrl = (value: string): string | null => {
+  const direct = value.trim().match(/^(ChI[A-Za-z0-9_-]{10,})$/);
+  if (direct) return direct[1];
   const m = value.match(/place_id[:=]([A-Za-z0-9_-]+)/) ?? value.match(/!1s(ChI[A-Za-z0-9_-]+)/);
   return m ? m[1] : null;
 };
+
+/** Expand a maps.app.goo.gl / goo.gl/maps short link into its full URL. */
+async function expandShortLink(value: string): Promise<string | null> {
+  const m = value.match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps)\/[A-Za-z0-9_-]+/);
+  if (!m) return null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(m[0], { method: "GET", redirect: "follow", signal: controller.signal });
+    clearTimeout(timer);
+    // Drain the body so the connection is released.
+    await res.text().catch(() => "");
+    return res.url || null;
+  } catch (e) {
+    console.error("[google-reviews] short link expansion failed:", e);
+    return null;
+  }
+}
+
+/** Read business name and coordinates out of a long-form Google Maps URL. */
+function parseMapsUrl(url: string): { name: string | null; lat: number | null; lng: number | null } {
+  let name: string | null = null;
+  const nameMatch = url.match(/\/maps\/place\/([^/@]+)/);
+  if (nameMatch) {
+    try {
+      name = decodeURIComponent(nameMatch[1].replace(/\+/g, " ")).trim();
+    } catch {
+      name = nameMatch[1].replace(/\+/g, " ").trim();
+    }
+  }
+  const at = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const d = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+  const coords = d ?? at;
+  return {
+    name,
+    lat: coords ? Number(coords[1]) : null,
+    lng: coords ? Number(coords[2]) : null,
+  };
+}
 
 async function readSetting(admin: any, key: string): Promise<string | null> {
   const { data } = await admin.from("site_settings").select("setting_value").eq("setting_key", key).maybeSingle();
@@ -142,10 +183,20 @@ Deno.serve(async (req) => {
     if (!allowed) return json({ error: "You need settings permission to manage Google reviews." }, 403);
 
     if (action === "lookup") {
-      const query = String(body.query ?? "").trim().slice(0, 200);
+      const query = String(body.query ?? "").trim().slice(0, 300);
       if (!query) return json({ error: "Enter a business name or Google Maps link." }, 400);
 
-      const direct = placeIdFromUrl(query);
+      // Short links hide the real URL — open them first.
+      const expanded = await expandShortLink(query);
+      const looksShort = /(?:maps\.app\.goo\.gl|goo\.gl\/maps)/.test(query);
+      if (looksShort && !expanded) {
+        return json({
+          error: "That Google Maps short link could not be opened. Open it in your browser and paste the full link from the address bar.",
+        }, 400);
+      }
+      const source = expanded ?? query;
+
+      const direct = placeIdFromUrl(source);
       if (direct) {
         const res = await fetch(`${GATEWAY_URL}/places/v1/places/${encodeURIComponent(direct)}`, {
           headers: gatewayHeaders({
@@ -160,13 +211,23 @@ Deno.serve(async (req) => {
         }] });
       }
 
+      // No usable place ID: search by the name in the link, biased to its coordinates.
+      const parsed = source.includes("/maps/") ? parseMapsUrl(source) : { name: null, lat: null, lng: null };
+      const textQuery = (parsed.name ?? query).slice(0, 200);
+      const searchBody: Record<string, unknown> = { textQuery, pageSize: 5 };
+      if (parsed.lat !== null && parsed.lng !== null && !Number.isNaN(parsed.lat) && !Number.isNaN(parsed.lng)) {
+        searchBody.locationBias = {
+          circle: { center: { latitude: parsed.lat, longitude: parsed.lng }, radius: 20000 },
+        };
+      }
+
       const res = await fetch(`${GATEWAY_URL}/places/v1/places:searchText`, {
         method: "POST",
         headers: gatewayHeaders({
           "X-Goog-FieldMask":
             "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount",
         }),
-        body: JSON.stringify({ textQuery: query, pageSize: 5 }),
+        body: JSON.stringify(searchBody),
       });
       if (!res.ok) return await handleGatewayError(res);
       const data = await res.json();
@@ -177,6 +238,14 @@ Deno.serve(async (req) => {
         rating: p.rating ?? null,
         rating_count: p.userRatingCount ?? null,
       }));
+
+      if (candidates.length === 0) {
+        return json({
+          candidates: [],
+          not_listed: true,
+          searched_for: textQuery,
+        });
+      }
       return json({ candidates });
     }
 
