@@ -24,6 +24,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServices } from "@/hooks/useServices";
+import { combineReviews } from "@/hooks/useGoogleReviews";
+import ElfsightReviews from "@/components/ElfsightReviews";
 import heroImgFallback from "@/assets/hero-cleaning.jpg";
 
 const iconMap: Record<string, any> = {
@@ -91,6 +93,7 @@ const IndexPage = () => {
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
+  const siteReviews = combineReviews([], publicReviews as any);
   const { data: beforeAfter } = useQuery({
     queryKey: ["public-before-after-home"],
     queryFn: async () => {
@@ -184,10 +187,13 @@ const IndexPage = () => {
               </p>
               <div className="flex flex-wrap gap-4">
                 <Button variant="hero" size="xl" asChild>
-                  <Link to="/quote">Get a Free Quote</Link>
+                  <Link to="/quote">Request a Quote</Link>
                 </Button>
                 <Button variant="hero-outline" size="xl" asChild>
                   <Link to="/book">Book Now</Link>
+                </Button>
+                <Button variant="hero-outline" size="xl" asChild>
+                  <Link to="/become-a-cleaner">Become a Cleaner</Link>
                 </Button>
               </div>
             </motion.div>
@@ -474,7 +480,7 @@ const IndexPage = () => {
       )}
 
       {/* Customer Reviews */}
-      {(publicReviews ?? []).length > 0 && (
+      {(
         <section className="py-20 md:py-28">
           <div className="container">
             <SectionHeading
@@ -482,21 +488,48 @@ const IndexPage = () => {
               title="What Our Customers Say"
               description="Real feedback from real customers after their cleanings."
             />
+
+            <div className="mb-12">
+              <ElfsightReviews />
+            </div>
+
+            {siteReviews.length > 0 && (
+              <h3 className="font-display font-semibold text-foreground mb-6">Reviews left on our site</h3>
+            )}
+
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {publicReviews!.map((r: any, i: number) => (
+              {siteReviews.slice(0, 6).map((r, i) => (
                 <motion.div
                   key={r.id}
                   {...fadeUp}
                   transition={{ duration: 0.5, delay: i * 0.1 }}
                   className="p-6 rounded-2xl bg-card border border-border"
                 >
-                  <div className="flex gap-1 mb-3">
-                    {Array.from({ length: r.rating }).map((_, j) => (
-                      <Star key={j} className="w-4 h-4 fill-primary text-primary" />
-                    ))}
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex gap-1">
+                      {Array.from({ length: r.rating }).map((_, j) => (
+                        <Star key={j} className="w-4 h-4 fill-primary text-primary" />
+                      ))}
+                    </div>
+                    <span className="text-[11px] uppercase tracking-wide font-medium text-muted-foreground rounded-full border border-border px-2 py-0.5">
+                      {r.source === "google" ? "Google" : "Verified customer"}
+                    </span>
                   </div>
-                  {r.comment && <p className="text-muted-foreground text-sm leading-relaxed mb-4">"{r.comment}"</p>}
-                  <p className="font-display font-semibold text-card-foreground text-sm">{r.customer_name}</p>
+                  {r.text && <p className="text-muted-foreground text-sm leading-relaxed mb-4">"{r.text}"</p>}
+                  <div className="flex items-center gap-3">
+                    {r.photo && (
+                      <img
+                        src={r.photo}
+                        alt={r.name}
+                        loading="lazy"
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    )}
+                    <div>
+                      <p className="font-display font-semibold text-card-foreground text-sm">{r.name}</p>
+                      {r.when && <p className="text-xs text-muted-foreground">{r.when}</p>}
+                    </div>
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -521,7 +554,7 @@ const IndexPage = () => {
                 className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
                 asChild
               >
-                <Link to="/quote">Get a Free Quote</Link>
+                <Link to="/quote">Request a Quote</Link>
               </Button>
               <Button variant="hero-outline" size="xl" asChild>
                 <Link to="/book">Book Now</Link>

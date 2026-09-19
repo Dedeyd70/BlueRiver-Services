@@ -13,13 +13,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useServices } from "@/hooks/useServices";
 import { format, isBefore, startOfDay, getDay } from "date-fns";
 import { isValidEmail, isValidUSPhone } from "@/lib/validation";
-import { notifyAdmins } from "@/lib/notifications";
+import { ADMIN_BASE } from "@/lib/permissions";
+
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useServiceAreas } from "@/hooks/useServiceAreas";
 import PageMeta from "@/components/PageMeta";
 import DynamicField from "@/components/DynamicField";
 import { computeQuote } from "@/lib/pricingEngine";
-import { configFromSettings, isSlotBlocked } from "@/lib/availability";
+
 
 const COMMERCIAL_PROPERTY_TYPES = ["Office", "Schools", "Medical", "Retail", "Other"];
 const RESIDENTIAL_PROPERTY_TYPES = ["House", "Apartment", "Townhome", "Other"];
@@ -229,15 +230,12 @@ const BookService = () => {
     for (let m = startMin; m + slotDuration <= endMin; m += slotDuration) {
       const h = Math.floor(m / 60);
       const mm = m % 60;
-      const endSlotM = m + slotDuration;
-      const eh = Math.floor(endSlotM / 60);
-      const em = endSlotM % 60;
       const fmt = (hr: number, mi: number) => {
         const ampm = hr >= 12 ? "PM" : "AM";
         const h12 = hr % 12 || 12;
         return `${h12}:${mi.toString().padStart(2, "0")} ${ampm}`;
       };
-      slots.push(`${fmt(h, mm)} - ${fmt(eh, em)}`);
+      slots.push(fmt(h, mm));
     }
     return slots;
   };
@@ -346,17 +344,7 @@ const BookService = () => {
         toast({ title: "This time slot was just booked. Please select another.", variant: "destructive" });
         return;
       }
-      // Range-overlap check (e.g. 7-11 AM vs 9:00) via SECURITY DEFINER RPC.
-      const { data: overlaps } = await (supabase as any).rpc("check_slot_overlap", {
-        p_date: dateStr,
-        p_time_slot: selectedSlot,
-        p_exclude_booking: null,
-      });
-      if (overlaps === true) {
-        setLoading(false);
-        toast({ title: "Time slot overlaps an existing booking. Please pick a different time.", variant: "destructive" });
-        return;
-      }
+
     } catch { /* proceed if check fails */ }
     // Manual confirmation: every public booking starts as Pending. Auto-approve removed.
     const initialStatus = "pending";
@@ -382,7 +370,7 @@ const BookService = () => {
 
     try {
       const petCountNum = form.has_pets && form.pet_count ? parseInt(form.pet_count, 10) : null;
-      const { data: insertedBooking, error } = await supabase.from("bookings").insert({
+      const { error } = await supabase.from("bookings").insert({
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim() || null,
@@ -418,7 +406,7 @@ const BookService = () => {
         custom_fields: customFields,
         source: "manual",
         ...typedPayload,
-      } as any).select("id").single();
+      } as any);
 
       if (error) {
         const anyErr = error as any;
@@ -428,7 +416,9 @@ const BookService = () => {
         return;
       }
 
-      await notifyAdmins("booking", `New booking from ${form.name.trim()} for ${format(selectedDate, "MMM d, yyyy")}`, insertedBooking?.id, "booking");
+      // Admin notification is created automatically by a database trigger.
+
+
 
       // Fire-and-forget: customer "received" email + admin alert.
       const bookingData = {
@@ -449,7 +439,7 @@ const BookService = () => {
           body: {
             type: "admin_new_submission",
             to: "info@blueriverservices.co",
-            data: { ...bookingData, kind: "Booking", dashboardUrl: `${window.location.origin}/admin/bookings` },
+            data: { ...bookingData, kind: "Booking", dashboardUrl: `${window.location.origin}${ADMIN_BASE}/bookings` },
           },
         }),
       ]).then((results) => {
@@ -722,31 +712,29 @@ const BookService = () => {
                       <label className="text-sm font-medium text-foreground mb-1.5 block">Select Time *</label>
                       <div className="grid grid-cols-2 gap-2">
                         {timeSlots.map((slot) => {
-                          const cfg = configFromSettings(siteSettings);
                           const isBooked = bookedSlots?.includes(slot);
-                          const isBlocked = !isBooked && isSlotBlocked(slot, bookedSlots, cfg);
-                          const disabled = isBooked || isBlocked;
                           return (
                             <button
                               key={slot}
                               type="button"
-                              onClick={() => !disabled && setSelectedSlot(slot)}
-                              disabled={disabled}
-                              title={isBlocked ? `Within ${cfg.bufferMinutes}-min buffer of another booking` : undefined}
+                              onClick={() => !isBooked && setSelectedSlot(slot)}
+                              disabled={isBooked}
                               className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                                disabled
+                                isBooked
                                   ? "bg-muted border-border text-muted-foreground cursor-not-allowed line-through opacity-60"
                                   : selectedSlot === slot
                                     ? "bg-primary text-primary-foreground border-primary"
                                     : "bg-card border-border text-foreground hover:border-primary/50"
                               }`}
                             >
-                              {slot}{isBooked ? " (Booked)" : isBlocked ? " (Buffer)" : ""}
+                              {slot}{isBooked ? " (Booked)" : ""}
                             </button>
                           );
                         })}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1.5">Slots adjacent to existing bookings are reserved as travel/setup buffer.</p>
+                      <p className="text-sm font-medium text-destructive mt-2 leading-snug">
+                        Please note: choosing a time is required to complete your booking, but it is for scheduling purposes only. Your selected time is <strong>not guaranteed</strong> — our team will contact you to confirm the final appointment time, which may change.
+                      </p>
                     </div>
                   )}
                   {selectedDate && timeSlots.length === 0 && (
