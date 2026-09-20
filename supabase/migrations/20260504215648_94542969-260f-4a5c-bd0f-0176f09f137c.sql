@@ -1,3 +1,5 @@
+-- ALTERATION GUARDS: Ensure contact_submissions has the admin_notes column
+ALTER TABLE public.contact_submissions ADD COLUMN IF NOT EXISTS admin_notes TEXT;
 
 CREATE TABLE IF NOT EXISTS public.contact_activity_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

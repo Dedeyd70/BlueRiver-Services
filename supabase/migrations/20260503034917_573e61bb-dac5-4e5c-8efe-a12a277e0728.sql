@@ -1,3 +1,7 @@
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS line_items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS line_items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS total NUMERIC DEFAULT 0;
+
 
 -- 1. Allow anon/auth to call the rate-limit RPC (fixes Contact 403)
 GRANT EXECUTE ON FUNCTION public.check_recent_submission(text, text) TO anon, authenticated;

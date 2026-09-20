@@ -1,3 +1,9 @@
+CREATE TABLE IF NOT EXISTS public.faqs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
 
 -- 1. Receipt number generator (missing function referenced by create_receipt RPC)
 CREATE SEQUENCE IF NOT EXISTS public.receipt_number_seq START 1;

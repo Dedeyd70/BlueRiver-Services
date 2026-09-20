@@ -76,6 +76,8 @@ END;
 $function$;
 
 -- 3. Fix convert_quote_to_booking — tag source='quote' on creation
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
+
 CREATE OR REPLACE FUNCTION public.convert_quote_to_booking(p_quote_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
